@@ -2,6 +2,8 @@
 
 import os
 import re
+import stat
+from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 from dotenv import load_dotenv
@@ -26,6 +28,69 @@ STUDENT_WRITE_TOOL_NAMES = frozenset({
     "comment_on_my_submission",
     "mark_module_item_done",
 })
+
+
+class CanvasTokenFileError(RuntimeError):
+    """Raised when the per-user Canvas token file is present but unsafe."""
+
+
+def _canvas_token_file_path() -> Path:
+    """Return the conventional per-user Canvas token file path."""
+    return Path.home() / ".canvas-mcp"
+
+
+def _read_canvas_api_token() -> str:
+    """Resolve the stdio Canvas token, preferring ``~/.canvas-mcp``.
+
+    The file contains the token itself (with an optional trailing newline), not
+    a dotenv assignment. If it exists, it must be a regular, non-symlink file
+    with mode 0600. An unsafe or malformed file fails closed instead of falling
+    back to ``CANVAS_API_TOKEN`` and silently defeating the file's precedence.
+    """
+    token_path = _canvas_token_file_path()
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+
+    try:
+        fd = os.open(token_path, flags)
+    except FileNotFoundError:
+        return os.getenv("CANVAS_API_TOKEN", "")
+    except OSError as exc:
+        raise CanvasTokenFileError(
+            f"Cannot safely open Canvas token file {token_path}: {exc.strerror}"
+        ) from exc
+
+    try:
+        file_stat = os.fstat(fd)
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise CanvasTokenFileError(
+                f"Canvas token file {token_path} must be a regular file"
+            )
+
+        mode = stat.S_IMODE(file_stat.st_mode)
+        if mode != 0o600:
+            raise CanvasTokenFileError(
+                f"Canvas token file {token_path} must have permissions 0600 "
+                f"(found {mode:04o})"
+            )
+
+        with os.fdopen(fd, encoding="utf-8") as token_file:
+            fd = -1
+            token = token_file.read().strip()
+    except UnicodeDecodeError as exc:
+        raise CanvasTokenFileError(
+            f"Canvas token file {token_path} must contain UTF-8 text"
+        ) from exc
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+    if not token:
+        raise CanvasTokenFileError(f"Canvas token file {token_path} is empty")
+    if any(character.isspace() for character in token):
+        raise CanvasTokenFileError(
+            f"Canvas token file {token_path} must contain only the token"
+        )
+    return token
 
 
 def _parse_keys(raw: str) -> frozenset[str]:
@@ -236,7 +301,7 @@ class Config:
 
     def __init__(self) -> None:
         # Required configuration
-        self.canvas_api_token = os.getenv("CANVAS_API_TOKEN", "")
+        self.canvas_api_token = _read_canvas_api_token()
         # Keep the configured (pre-normalization) value so validate_config()
         # can report the normalization delta from the same read that produced
         # canvas_api_url. Whitespace-trimmed, matching the normalizer's input.
@@ -434,8 +499,11 @@ def validate_config() -> bool:
     }
 
     if not config.canvas_api_token:
-        log_error("CANVAS_API_TOKEN environment variable is required")
-        log_error("Please set CANVAS_API_TOKEN in your .env file")
+        log_error("A Canvas API token is required")
+        log_error(
+            "Set CANVAS_API_TOKEN in your .env file or put the raw token in "
+            "~/.canvas-mcp with permissions 0600"
+        )
         return False
 
     if not config.canvas_api_url:

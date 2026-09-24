@@ -8,7 +8,8 @@ assignment handling, discussion facilitation, student analytics, and personal
 academic tracking.
 
 Supports two transport modes:
-- stdio (default): Local process communication, credentials from .env
+- stdio (default): Local process communication, credentials from
+  ~/.canvas-mcp or CANVAS_API_TOKEN
 - streamable-http: HTTP server, per-request token via X-Canvas-Token header;
   the Canvas API URL is pinned by server config (CANVAS_API_URL), not the client.
 """
@@ -25,7 +26,12 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from .core.config import get_config, validate_canvas_url_scheme, validate_config
+from .core.config import (
+    CanvasTokenFileError,
+    get_config,
+    validate_canvas_url_scheme,
+    validate_config,
+)
 from .core.credentials import (
     RequestCredentials,
     clear_http_request_context,
@@ -599,7 +605,11 @@ def main() -> None:
     args = parser.parse_args()
     is_http = args.transport == "streamable-http"
 
-    config = get_config()
+    try:
+        config = get_config()
+    except CanvasTokenFileError as exc:
+        log_error(str(exc))
+        sys.exit(1)
 
     # Admin access-approval commands talk only to the overlay store (Azure, via
     # az login) — not Canvas — so dispatch them before the Canvas-credential /
@@ -616,8 +626,8 @@ def main() -> None:
         if not config.canvas_api_url:
             log_error("CANVAS_API_URL is required in HTTP mode (the Canvas API URL is server-pinned)")
             sys.exit(1)
-        # HTTP mode never calls validate_config() (that path is stdio's .env
-        # check), so the cleartext-URL rejection has to be applied here too.
+        # HTTP mode never calls validate_config() (that path is stdio's local
+        # credential check), so the cleartext-URL rejection has to be applied here too.
         # It matters more here than in stdio: the URL is server-pinned, so one
         # http:// typo leaks every caller's token, not just the operator's.
         if not validate_canvas_url_scheme():
@@ -665,7 +675,7 @@ def main() -> None:
                 )
                 sys.exit(1)
     else:
-        # stdio mode: .env credentials are required (single-user, env-based auth)
+        # stdio mode: local credentials are required (single-user auth)
         if not validate_config():
             log_error("Please check your .env file configuration")
             log_error("Use the env.template file as a reference")

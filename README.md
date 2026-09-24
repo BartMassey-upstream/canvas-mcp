@@ -343,10 +343,21 @@ pip install -e .
 cp env.template .env
 
 # Edit with your Canvas credentials
-# Required: CANVAS_API_TOKEN, CANVAS_API_URL
+# Required: CANVAS_API_URL and either CANVAS_API_TOKEN or ~/.canvas-mcp
 ```
 
 Get your Canvas API token from: **Canvas → Account → Settings → New Access Token**
+
+For local stdio use, you can keep the token out of the environment. Put the raw
+token (and nothing else) in `~/.canvas-mcp`, then restrict the file to its owner:
+
+```bash
+chmod 600 ~/.canvas-mcp
+```
+
+When this file is present it takes precedence over `CANVAS_API_TOKEN`; an unsafe
+permission mode or malformed file stops startup instead of falling back to the
+environment.
 
 > **Some institutions gate token creation.** Where self-service is disabled, the
 > "New Access Token" button is missing or errors out, and tokens are issued through an

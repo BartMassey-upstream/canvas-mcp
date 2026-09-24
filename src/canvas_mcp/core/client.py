@@ -380,7 +380,7 @@ async def canvas_authenticated_client() -> AsyncIterator[httpx.AsyncClient]:
       caller's token.
     - No per-request credentials but an HTTP request is active -> raise
       PermissionError (never fall back to the server's own token).
-    - Otherwise (stdio mode) -> the shared global client (env-based token).
+    - Otherwise (stdio mode) -> the shared global client (local configured token).
     """
     from .config import get_config
 
