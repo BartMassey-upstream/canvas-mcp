@@ -712,6 +712,22 @@
       ]
     },
     {
+      "name": "get_announcement",
+      "category": "educator",
+      "description": "Get one announcement through the announcement-only collection",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "announcement_id", "type": "string | integer", "required": true}],
+      "returns": "The fenced announcement title, body, and publication settings",
+      "examples": ["Show announcement 7 in ENG 101"]
+    },
+    {
+      "name": "update_announcement",
+      "category": "educator",
+      "description": "Update an ID verified through the announcement-only collection",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "announcement_id", "type": "string | integer", "required": true}],
+      "returns": "The updated announcement",
+      "examples": ["Update announcement 7 with the revised schedule"]
+    },
+    {
       "name": "list_courses",
       "category": "shared",
       "description": "List all enrolled courses",

@@ -60,6 +60,44 @@ def _is_permission_error(error_text: str) -> bool:
     return any(marker.lower() in lowered for marker in _PERMISSION_ERROR_MARKERS)
 
 
+async def _find_announcement(
+    course_id: str | int, announcement_id: str | int
+) -> dict[str, Any] | str:
+    """Resolve an ID only through Canvas's announcement-only collection."""
+    announcements = await fetch_all_paginated_results(
+        f"/courses/{course_id}/discussion_topics",
+        {"only_announcements": True, "per_page": 100},
+    )
+    if isinstance(announcements, dict) and "error" in announcements:
+        return f"Error fetching announcements: {announcements['error']}"
+    for announcement in announcements or []:
+        if str(announcement.get("id")) == str(announcement_id):
+            return announcement
+    return f"Announcement {announcement_id} was not found in this course."
+
+
+def _format_announcement(announcement: dict[str, Any]) -> str:
+    """Format instructor-authored announcement fields with provenance fences."""
+    return "\n".join(
+        [
+            f"ID: {announcement.get('id')}",
+            "Title:\n"
+            + fence_untrusted(
+                announcement.get("title") or "Untitled announcement",
+                "announcement title",
+            ),
+            "Message:\n"
+            + fence_untrusted(
+                announcement.get("message") or "", "announcement message"
+            ),
+            f"Published: {announcement.get('published', False)}",
+            f"Posted: {format_date(announcement.get('posted_at'))}",
+            f"Delayed until: {format_date(announcement.get('delayed_post_at'))}",
+            f"Locked after: {format_date(announcement.get('lock_at'))}",
+        ]
+    )
+
+
 def register_shared_discussion_tools(mcp: FastMCP) -> None:
     """Register discussion tools accessible to both students and educators."""
 
@@ -1093,6 +1131,72 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         return result
 
     # ===== ANNOUNCEMENT TOOLS =====
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def get_announcement(
+        course_identifier: str | int, announcement_id: str | int
+    ) -> str:
+        """Get one announcement without permitting access to discussions."""
+        course_id = await get_course_id(course_identifier)
+        announcement = await _find_announcement(course_id, announcement_id)
+        if isinstance(announcement, str):
+            return announcement
+        return _format_announcement(announcement)
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
+    @validate_params
+    async def update_announcement(
+        course_identifier: str | int,
+        announcement_id: str | int,
+        title: str | None = None,
+        message: str | None = None,
+        published: bool | None = None,
+        delayed_post_at: str | None = None,
+        lock_at: str | None = None,
+    ) -> str:
+        """Update a verified announcement, never an ordinary discussion."""
+        if (title is not None and contains_fence_markers(title)) or (
+            message is not None and contains_fence_markers(message)
+        ):
+            return FENCE_LEAK_ERROR
+
+        data: dict[str, str | bool] = {}
+        if title is not None:
+            data["title"] = title
+        if message is not None:
+            data["message"] = message
+        if published is not None:
+            data["published"] = published
+        for field, value in (
+            ("delayed_post_at", delayed_post_at),
+            ("lock_at", lock_at),
+        ):
+            if value is not None:
+                parsed = parse_date(value)
+                if not parsed:
+                    return f"Invalid date format for {field}: '{value}'. Use ISO 8601 format."
+                data[field] = parsed.isoformat()
+        if not data:
+            return "No announcement fields were provided to update."
+
+        course_id = await get_course_id(course_identifier)
+        announcement = await _find_announcement(course_id, announcement_id)
+        if isinstance(announcement, str):
+            return announcement
+        response = await make_canvas_request(
+            "put",
+            f"/courses/{course_id}/discussion_topics/{announcement_id}",
+            data=data,
+        )
+        if "error" in response:
+            return f"Error updating announcement: {response['error']}"
+        if response.get("is_announcement") is False:
+            return (
+                "Canvas returned a non-announcement after the update; the requested "
+                "announcement state could not be confirmed."
+            )
+        return "Announcement updated:\n\n" + _format_announcement(response)
 
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
     @validate_params

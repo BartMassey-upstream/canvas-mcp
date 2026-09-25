@@ -74,7 +74,6 @@ SELF_IDENTITY_TOOLS = {"get_my_enrollments", "get_my_profile"}
 CREATOR_TOOLS = {
     "add_module_item",
     "associate_rubric",
-    "bulk_delete_announcements",
     "bulk_update_pages",
     "create_announcement",
     "create_assignment",
@@ -86,7 +85,6 @@ CREATOR_TOOLS = {
     "create_quiz_question",
     "create_rubric",
     "create_rubric_from_csv",
-    "delete_announcement_with_confirmation",
     "delete_assignment_group",
     "delete_announcements_by_criteria",
     "delete_assignment_with_confirmation",
@@ -101,6 +99,7 @@ CREATOR_TOOLS = {
     "fix_accessibility_issues",
     "format_accessibility_summary",
     "get_assignment_details",
+    "get_announcement",
     "get_content_migration_status",
     "get_course_content_overview",
     "get_course_details",
@@ -131,6 +130,7 @@ CREATOR_TOOLS = {
     "search_canvas_tools",
     "update_assignment",
     "update_assignment_group",
+    "update_announcement",
     "update_course_navigation",
     "update_module",
     "update_module_item",
@@ -303,4 +303,4 @@ class TestRoleFiltering:
         mcp = FastMCP(name="test-educator")
         register_all_tools(mcp, role="educator")
         tools = await _get_tool_names(mcp)
-        assert 90 <= len(tools) <= 110, f"Expected ~105 educator tools, got {len(tools)}: {sorted(tools)}"
+        assert 95 <= len(tools) <= 115, f"Expected ~109 educator tools, got {len(tools)}: {sorted(tools)}"

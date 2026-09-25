@@ -1,6 +1,6 @@
 # Canvas MCP
 
-> Canvas MCP is an open-source Model Context Protocol (MCP) server that bridges AI assistants with Canvas Learning Management System (LMS). It provides up to 118 tools for students, educators, and developers to interact with Canvas using natural language. It is designed for MCP-compatible clients and includes optional privacy controls for FERPA-conscious workflows.
+> Canvas MCP is an open-source Model Context Protocol (MCP) server that bridges AI assistants with Canvas Learning Management System (LMS). It provides up to 120 tools for students, educators, and developers to interact with Canvas using natural language. It is designed for MCP-compatible clients and includes optional privacy controls for FERPA-conscious workflows.
 
 Canvas MCP enables AI assistants to query courses, assignments, grades, discussions, and more through the Canvas API. Its code execution API can process bulk operations locally without loading every item into the model's context.
 

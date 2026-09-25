@@ -385,6 +385,19 @@ any student quiz activity.
 
 ---
 
+#### Announcement detail tools
+
+- `get_announcement`: read one announcement's body and settings
+- `update_announcement`: edit only an ID verified through Canvas's
+  announcement-only collection
+
+The creator profile omits the older ID-based single and bulk announcement
+delete tools because those Canvas endpoints also address ordinary discussion
+topics. Criteria-based announcement deletion remains available because it
+starts from the announcement-only collection.
+
+---
+
 #### `list_submissions`
 View student submissions for an assignment.
 

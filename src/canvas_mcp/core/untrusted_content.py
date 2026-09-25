@@ -74,6 +74,7 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     ),
     "get_assignment_analytics": _fenced("fence_untrusted_inline"),
     "get_assignment_details": _fenced("fence_untrusted"),
+    "get_announcement": _fenced("_format_announcement"),
     "get_conversation_details": _fenced("_fence_conversation_fields"),
     "get_course_content_overview": _fenced("fence_untrusted"),
     "get_content_migration_status": _fenced("fence_untrusted"),

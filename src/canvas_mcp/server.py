@@ -431,6 +431,8 @@ _CREATOR_EXCLUDED_TOOLS = frozenset({
     # Conversations and discussion participation can contain student-authored
     # messages, names, and other identifiers. Announcements remain available
     # because only instructors can author them.
+    "bulk_delete_announcements",
+    "delete_announcement_with_confirmation",
     "get_conversation_details",
     "get_discussion_entry_details",
     "get_discussion_topic_details",
@@ -626,7 +628,7 @@ def main() -> None:
         default=None,
         help=(
             "Tool profile: student (~37 tools), creator (course content only), "
-            "educator (~107 tools), all (default: all)"
+            "educator (~109 tools), all (default: all)"
         )
     )
     parser.add_argument(
