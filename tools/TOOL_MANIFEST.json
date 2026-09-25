@@ -291,6 +291,22 @@
       "examples": ["Delete question 9 from Classic Quiz 7"]
     },
     {
+      "name": "list_course_navigation",
+      "category": "educator",
+      "description": "List course navigation tabs, positions, and visibility",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}],
+      "returns": "Navigation tab IDs, labels, types, positions, and visibility",
+      "examples": ["Show the course navigation for ENG 101"]
+    },
+    {
+      "name": "update_course_navigation",
+      "category": "educator",
+      "description": "Reorder or show and hide a course navigation tab",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "tab_id", "type": "string", "required": true}],
+      "returns": "The updated navigation tab",
+      "examples": ["Move Modules to position 2 and make it visible"]
+    },
+    {
       "name": "list_submissions",
       "category": "educator",
       "description": "View student submissions for an assignment",

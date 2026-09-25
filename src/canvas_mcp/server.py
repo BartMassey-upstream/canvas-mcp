@@ -52,6 +52,7 @@ from .tools import (
     register_educator_module_tools,
     register_educator_page_crud_tools,
     register_enrollment_tools,
+    register_navigation_tools,
     register_page_tools,
     register_peer_review_comment_tools,
     register_peer_review_tools,
@@ -495,6 +496,7 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
         register_educator_discussion_tools(mcp)
         register_educator_module_tools(mcp)
         register_educator_file_tools(mcp)
+        register_navigation_tools(mcp)
         register_page_tools(mcp)
         register_educator_page_crud_tools(mcp)
         register_quiz_tools(mcp)
@@ -624,7 +626,7 @@ def main() -> None:
         default=None,
         help=(
             "Tool profile: student (~37 tools), creator (course content only), "
-            "educator (~105 tools), all (default: all)"
+            "educator (~107 tools), all (default: all)"
         )
     )
     parser.add_argument(

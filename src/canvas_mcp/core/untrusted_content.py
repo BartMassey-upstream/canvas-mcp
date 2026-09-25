@@ -120,6 +120,7 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     "list_code_api_modules": _safe(
         "Returns metadata from bundled local TypeScript modules, not Canvas content."
     ),
+    "list_course_navigation": _fenced("_format_tab"),
     "list_conversations": _fenced("_fence_conversation_fields"),
     "list_course_files": _fenced("fence_untrusted_inline"),
     "list_courses": _deferred(
