@@ -82,6 +82,8 @@ CREATOR_TOOLS = {
     "create_content_migration",
     "create_module",
     "create_page",
+    "create_quiz",
+    "create_quiz_question",
     "create_rubric",
     "create_rubric_from_csv",
     "delete_announcement_with_confirmation",
@@ -91,6 +93,8 @@ CREATOR_TOOLS = {
     "delete_module",
     "delete_module_item",
     "delete_page",
+    "delete_quiz",
+    "delete_quiz_question",
     "download_course_file",
     "edit_page_content",
     "fetch_ufixit_report",
@@ -106,6 +110,7 @@ CREATOR_TOOLS = {
     "get_my_profile",
     "get_page_content",
     "get_page_details",
+    "get_quiz",
     "get_rubric",
     "get_syllabus",
     "list_announcements",
@@ -116,6 +121,8 @@ CREATOR_TOOLS = {
     "list_module_items",
     "list_modules",
     "list_pages",
+    "list_quiz_questions",
+    "list_quizzes",
     "list_rubrics",
     "parse_ufixit_violations",
     "read_course_file",
@@ -126,6 +133,8 @@ CREATOR_TOOLS = {
     "update_module",
     "update_module_item",
     "update_page_settings",
+    "update_quiz",
+    "update_quiz_question",
     "update_rubric",
     "update_syllabus",
     "upload_course_file",
@@ -292,4 +301,4 @@ class TestRoleFiltering:
         mcp = FastMCP(name="test-educator")
         register_all_tools(mcp, role="educator")
         tools = await _get_tool_names(mcp)
-        assert 75 <= len(tools) <= 100, f"Expected ~96 educator tools, got {len(tools)}: {sorted(tools)}"
+        assert 90 <= len(tools) <= 110, f"Expected ~105 educator tools, got {len(tools)}: {sorted(tools)}"

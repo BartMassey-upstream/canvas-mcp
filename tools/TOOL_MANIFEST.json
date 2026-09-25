@@ -219,6 +219,78 @@
       "examples": ["Delete Old Quizzes and move its assignments to Quizzes"]
     },
     {
+      "name": "list_quizzes",
+      "category": "educator",
+      "description": "List Classic Quiz definitions without student activity",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}],
+      "returns": "Quiz IDs, titles, types, points, question counts, and dates",
+      "examples": ["List the Classic Quizzes in ENG 101"]
+    },
+    {
+      "name": "get_quiz",
+      "category": "educator",
+      "description": "Get one Classic Quiz definition without student activity",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}],
+      "returns": "Quiz definition and fenced description",
+      "examples": ["Show the settings for Classic Quiz 7"]
+    },
+    {
+      "name": "create_quiz",
+      "category": "educator",
+      "description": "Create a Classic Quiz, unpublished by default",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "title", "type": "string", "required": true}],
+      "returns": "The created quiz definition",
+      "examples": ["Create an unpublished Midterm Classic Quiz"]
+    },
+    {
+      "name": "update_quiz",
+      "category": "educator",
+      "description": "Update a Classic Quiz definition and publication state",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}],
+      "returns": "The updated quiz definition",
+      "examples": ["Give Classic Quiz 7 a 45 minute time limit"]
+    },
+    {
+      "name": "delete_quiz",
+      "category": "educator",
+      "description": "Delete a Classic Quiz after preview and confirmation",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}],
+      "returns": "A preview and confirmation token, then deletion status",
+      "examples": ["Delete Classic Quiz 7"]
+    },
+    {
+      "name": "list_quiz_questions",
+      "category": "educator",
+      "description": "List Classic Quiz question definitions without student responses",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}],
+      "returns": "Question IDs, names, types, points, and fenced question text",
+      "examples": ["List the questions in Classic Quiz 7"]
+    },
+    {
+      "name": "create_quiz_question",
+      "category": "educator",
+      "description": "Add a question definition to a Classic Quiz",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "question_name", "type": "string", "required": true}, {"name": "question_text", "type": "string", "required": true}, {"name": "question_type", "type": "string", "required": true}],
+      "returns": "The created question definition",
+      "examples": ["Add a multiple-choice question to Classic Quiz 7"]
+    },
+    {
+      "name": "update_quiz_question",
+      "category": "educator",
+      "description": "Update a Classic Quiz question definition",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "question_id", "type": "string | integer", "required": true}],
+      "returns": "The updated question definition",
+      "examples": ["Make question 9 worth two points"]
+    },
+    {
+      "name": "delete_quiz_question",
+      "category": "educator",
+      "description": "Delete a Classic Quiz question after preview and confirmation",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "question_id", "type": "string | integer", "required": true}],
+      "returns": "A preview and confirmation token, then deletion status",
+      "examples": ["Delete question 9 from Classic Quiz 7"]
+    },
+    {
       "name": "list_submissions",
       "category": "educator",
       "description": "View student submissions for an assignment",

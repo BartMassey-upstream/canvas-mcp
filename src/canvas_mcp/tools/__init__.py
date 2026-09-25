@@ -29,6 +29,7 @@ from .modules import register_educator_module_tools, register_shared_module_tool
 from .pages import register_educator_page_crud_tools, register_page_tools
 from .peer_review_comments import register_peer_review_comment_tools
 from .peer_reviews import register_peer_review_tools
+from .quizzes import register_quiz_tools
 from .rubrics import register_rubric_tools
 from .self_identity import register_self_identity_tools
 from .student_tools import register_student_tools
@@ -53,6 +54,7 @@ __all__ = [
     'register_page_tools',
     'register_peer_review_comment_tools',
     'register_peer_review_tools',
+    'register_quiz_tools',
     'register_rubric_tools',
     'register_self_identity_tools',
     'register_shared_assignment_tools',

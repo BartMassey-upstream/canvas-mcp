@@ -57,7 +57,7 @@ Use this — not [`check_enrollment`](#check_enrollment) — for any question ab
 ## Creator Profile
 
 Set `CANVAS_ROLE=creator` to expose course-construction tools without tools
-that read student records. The profile supports assignments, assignment groups, syllabus, pages,
+that read student records. The profile supports assignments, assignment groups, Classic Quizzes, syllabus, pages,
 modules, course files, rubrics, announcements, content migrations, and
 accessibility review. It excludes rosters, submissions, grading, analytics,
 peer reviews, conversations, discussions, messaging,
@@ -359,6 +359,21 @@ Get detailed information about a specific assignment.
 - `update_assignment_group`: change its name, position, or weight
 - `delete_assignment_group`: preview and confirm deletion while moving every
   assignment to another active group; it never deletes the assignments
+
+---
+
+#### Classic Quiz authoring tools
+
+- `list_quizzes` and `get_quiz`: read quiz definitions without attempts,
+  submissions, responses, or statistics
+- `create_quiz` and `update_quiz`: author Classic Quiz settings
+- `delete_quiz`: preview and confirm deletion
+- `list_quiz_questions`, `create_quiz_question`, and
+  `update_quiz_question`: author question definitions and answer choices
+- `delete_quiz_question`: preview and confirm question deletion
+
+These tools target Canvas Classic Quizzes. They do not expose New Quizzes or
+any student quiz activity.
 
 ---
 
