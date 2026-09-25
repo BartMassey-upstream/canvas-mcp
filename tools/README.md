@@ -57,7 +57,7 @@ Use this — not [`check_enrollment`](#check_enrollment) — for any question ab
 ## Creator Profile
 
 Set `CANVAS_ROLE=creator` to expose course-construction tools without tools
-that read student records. The profile supports assignments, syllabus, pages,
+that read student records. The profile supports assignments, assignment groups, syllabus, pages,
 modules, course files, rubrics, announcements, content migrations, and
 accessibility review. It excludes rosters, submissions, grading, analytics,
 peer reviews, conversations, discussions, messaging,
@@ -347,6 +347,18 @@ Get detailed information about a specific assignment.
 ```
 "Show me details for Assignment 3"
 ```
+
+---
+
+#### Assignment-group tools
+
+- `list_assignment_groups`: list IDs, names, positions, and weights without
+  requesting assignments, submissions, or scores
+- `create_assignment_group`: create a named group with optional position and
+  weight
+- `update_assignment_group`: change its name, position, or weight
+- `delete_assignment_group`: preview and confirm deletion while moving every
+  assignment to another active group; it never deletes the assignments
 
 ---
 

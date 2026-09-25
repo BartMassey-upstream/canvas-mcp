@@ -2,6 +2,7 @@
 
 from .accessibility import register_accessibility_tools
 from .admin_tools import register_admin_tools
+from .assignment_groups import register_assignment_group_tools
 from .assignments import (
     register_educator_assignment_tools,
     register_shared_assignment_tools,
@@ -36,6 +37,7 @@ from .student_write import register_student_write_tools
 __all__ = [
     'register_accessibility_tools',
     'register_admin_tools',
+    'register_assignment_group_tools',
     'register_code_execution_tools',
     'register_content_migration_tools',
     'register_course_tools',

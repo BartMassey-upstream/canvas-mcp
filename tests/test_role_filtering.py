@@ -78,12 +78,14 @@ CREATOR_TOOLS = {
     "bulk_update_pages",
     "create_announcement",
     "create_assignment",
+    "create_assignment_group",
     "create_content_migration",
     "create_module",
     "create_page",
     "create_rubric",
     "create_rubric_from_csv",
     "delete_announcement_with_confirmation",
+    "delete_assignment_group",
     "delete_announcements_by_criteria",
     "delete_assignment_with_confirmation",
     "delete_module",
@@ -107,6 +109,7 @@ CREATOR_TOOLS = {
     "get_rubric",
     "get_syllabus",
     "list_announcements",
+    "list_assignment_groups",
     "list_assignments",
     "list_course_files",
     "list_courses",
@@ -119,6 +122,7 @@ CREATOR_TOOLS = {
     "scan_course_content_accessibility",
     "search_canvas_tools",
     "update_assignment",
+    "update_assignment_group",
     "update_module",
     "update_module_item",
     "update_page_settings",
@@ -288,4 +292,4 @@ class TestRoleFiltering:
         mcp = FastMCP(name="test-educator")
         register_all_tools(mcp, role="educator")
         tools = await _get_tool_names(mcp)
-        assert 75 <= len(tools) <= 95, f"Expected ~88 educator tools, got {len(tools)}: {sorted(tools)}"
+        assert 75 <= len(tools) <= 100, f"Expected ~96 educator tools, got {len(tools)}: {sorted(tools)}"

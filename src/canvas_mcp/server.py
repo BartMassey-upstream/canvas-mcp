@@ -39,6 +39,7 @@ from .resources import register_resources_and_prompts
 from .tools import (
     register_accessibility_tools,
     register_admin_tools,
+    register_assignment_group_tools,
     register_code_execution_tools,
     register_content_migration_tools,
     register_course_tools,
@@ -486,6 +487,7 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
     # construction tools, then removes mixed-group operations that can read
     # student records. Entirely student-facing groups are never registered.
     if role in ("creator", "educator", "all"):
+        register_assignment_group_tools(mcp)
         register_educator_assignment_tools(mcp)
         register_educator_course_tools(mcp)
         register_content_migration_tools(mcp)
@@ -620,7 +622,7 @@ def main() -> None:
         default=None,
         help=(
             "Tool profile: student (~37 tools), creator (course content only), "
-            "educator (~88 tools), all (default: all)"
+            "educator (~96 tools), all (default: all)"
         )
     )
     parser.add_argument(

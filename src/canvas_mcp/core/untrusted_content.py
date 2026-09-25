@@ -114,6 +114,7 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     ),
     "identify_problematic_peer_reviews": _fenced("fence_untrusted_fields"),
     "list_announcements": _fenced("fence_untrusted"),
+    "list_assignment_groups": _fenced("_format_group"),
     "list_assignments": _fenced("fence_untrusted_inline"),
     "list_code_api_modules": _safe(
         "Returns metadata from bundled local TypeScript modules, not Canvas content."

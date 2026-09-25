@@ -187,6 +187,38 @@
       ]
     },
     {
+      "name": "list_assignment_groups",
+      "category": "educator",
+      "description": "List assignment groups without assignments, submissions, or scores",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}],
+      "returns": "Assignment group IDs, names, positions, and weights",
+      "examples": ["List the assignment groups in ENG 101"]
+    },
+    {
+      "name": "create_assignment_group",
+      "category": "educator",
+      "description": "Create an assignment group",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "name", "type": "string", "required": true}],
+      "returns": "The created assignment group",
+      "examples": ["Create a Projects assignment group"]
+    },
+    {
+      "name": "update_assignment_group",
+      "category": "educator",
+      "description": "Update an assignment group's name, position, or weight",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "assignment_group_id", "type": "string | integer", "required": true}],
+      "returns": "The updated assignment group",
+      "examples": ["Make Projects worth 30 percent"]
+    },
+    {
+      "name": "delete_assignment_group",
+      "category": "educator",
+      "description": "Delete an assignment group after confirmation and move its assignments",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "assignment_group_id", "type": "string | integer", "required": true}, {"name": "move_assignments_to", "type": "string | integer", "required": true}],
+      "returns": "A preview and confirmation token, then deletion status",
+      "examples": ["Delete Old Quizzes and move its assignments to Quizzes"]
+    },
+    {
       "name": "list_submissions",
       "category": "educator",
       "description": "View student submissions for an assignment",
