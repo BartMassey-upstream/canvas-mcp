@@ -367,10 +367,12 @@ Get detailed information about a specific assignment.
 - `list_quizzes` and `get_quiz`: read quiz definitions without attempts,
   submissions, responses, or statistics
 - `create_quiz` and `update_quiz`: author Classic Quiz settings
-- `delete_quiz`: preview and confirm deletion
+- `delete_quiz`: refuse when student work exists unless
+  `allow_deleting_student_work=true`, then preview and confirm deletion
 - `list_quiz_questions`, `create_quiz_question`, and
   `update_quiz_question`: author question definitions and answer choices
-- `delete_quiz_question`: preview and confirm question deletion
+- `delete_quiz_question`: apply the same student-work opt-in before previewing
+  and confirming question deletion
 
 These tools target Canvas Classic Quizzes. They do not expose New Quizzes or
 any student quiz activity.
@@ -501,6 +503,8 @@ Delete an assignment. **Permanent, and it takes every submission and grade with 
 - `course_identifier`: Course code or ID
 - `assignment_id`: Assignment ID to delete
 - `require_name_match` (optional): Only delete if the assignment name matches this string exactly
+- `allow_deleting_student_work` (optional, default `false`): Required when
+  Canvas reports submissions or grades for the assignment
 - `confirmation_token` (optional): Token from the preview call; omit to preview
 
 **Example:**
@@ -508,7 +512,9 @@ Delete an assignment. **Permanent, and it takes every submission and grade with 
 "Delete the duplicate 'Homework 1' assignment, but show me first"
 ```
 
-**Returns:** Preview with name, due date, points and whether submissions exist (no token), then the deletion result.
+**Returns:** An error when student work exists without explicit permission;
+otherwise a preview with name, due date, points, and submission impact, then
+the deletion result after confirmation.
 
 ---
 

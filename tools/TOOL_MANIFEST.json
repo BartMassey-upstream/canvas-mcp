@@ -254,8 +254,8 @@
       "name": "delete_quiz",
       "category": "educator",
       "description": "Delete a Classic Quiz after preview and confirmation",
-      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}],
-      "returns": "A preview and confirmation token, then deletion status",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "allow_deleting_student_work", "type": "boolean", "required": false, "default": false}],
+      "returns": "An error if student work exists without explicit permission; otherwise a preview and confirmation token, then deletion status",
       "examples": ["Delete Classic Quiz 7"]
     },
     {
@@ -286,8 +286,8 @@
       "name": "delete_quiz_question",
       "category": "educator",
       "description": "Delete a Classic Quiz question after preview and confirmation",
-      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "question_id", "type": "string | integer", "required": true}],
-      "returns": "A preview and confirmation token, then deletion status",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "question_id", "type": "string | integer", "required": true}, {"name": "allow_deleting_student_work", "type": "boolean", "required": false, "default": false}],
+      "returns": "An error if student work exists without explicit permission; otherwise a preview and confirmation token, then deletion status",
       "examples": ["Delete question 9 from Classic Quiz 7"]
     },
     {
@@ -2923,13 +2923,20 @@
           "description": "Only delete if the assignment name matches this string exactly"
         },
         {
+          "name": "allow_deleting_student_work",
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Must be true when Canvas reports existing submissions or grades"
+        },
+        {
           "name": "confirmation_token",
           "type": "string",
           "required": false,
           "description": "Token from the preview call; omit to preview. Single-use, expires in 5 minutes, stops matching if the target changes."
         }
       ],
-      "returns": "First call (no token): a preview of exactly what would be deleted plus a confirmation token, nothing deleted. Second call with the token: the deletion result.",
+      "returns": "An error if student work exists without explicit permission. Otherwise, the first call returns a preview and confirmation token; the second call with the token returns deletion status.",
       "examples": [
         "Delete the duplicate 'Homework 1' assignment, but show me first"
       ],

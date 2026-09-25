@@ -114,6 +114,112 @@ async def test_delete_quiz_requires_matching_confirmation():
 
 
 @pytest.mark.asyncio
+async def test_delete_quiz_blocks_existing_student_work_without_opt_in():
+    quiz = {
+        "id": 7,
+        "title": "Midterm",
+        "question_count": 12,
+        "published": True,
+        "unpublishable": False,
+    }
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(return_value=quiz),
+    ) as request:
+        result = await (await _tools())["delete_quiz"]("ENG101", 7)
+
+    assert "Error:" in result
+    assert "allow_deleting_student_work=true" in result
+    assert all(call.args[0] != "delete" for call in request.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_delete_quiz_allows_preview_after_explicit_student_work_opt_in():
+    quiz = {
+        "id": 7,
+        "title": "Midterm",
+        "question_count": 12,
+        "published": True,
+        "unpublishable": False,
+    }
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(return_value=quiz),
+    ):
+        result = await (await _tools())["delete_quiz"](
+            "ENG101", 7, allow_deleting_student_work=True
+        )
+
+    assert "PREVIEW" in result
+    assert "authorized: yes" in result
+
+
+@pytest.mark.asyncio
+async def test_delete_quiz_question_checks_parent_quiz_for_student_work():
+    quiz = {
+        "id": 7,
+        "title": "Midterm",
+        "published": True,
+        "unpublishable": False,
+    }
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(return_value=quiz),
+    ) as request:
+        result = await (await _tools())["delete_quiz_question"]("ENG101", 7, 9)
+
+    assert "Error:" in result
+    assert request.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_quiz_question_allows_confirmed_explicit_opt_in():
+    quiz = {
+        "id": 7,
+        "title": "Midterm",
+        "published": True,
+        "unpublishable": False,
+    }
+    question = {
+        "id": 9,
+        "question_name": "Old question",
+        "question_text": "Remove me",
+        "points_possible": 1,
+    }
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(side_effect=[quiz, question, quiz, question, question]),
+    ) as request:
+        delete = (await _tools())["delete_quiz_question"]
+        preview = await delete(
+            "ENG101", 7, 9, allow_deleting_student_work=True
+        )
+        token = re.search(r"Confirmation token: (\S+)", preview).group(1)
+        result = await delete(
+            "ENG101",
+            7,
+            9,
+            allow_deleting_student_work=True,
+            confirmation_token=token,
+        )
+
+    assert "authorized: yes" in preview
+    assert "deleted" in result
+    assert request.await_args.args == (
+        "delete",
+        "/courses/42/quizzes/7/questions/9",
+    )
+
+
+@pytest.mark.asyncio
 async def test_list_question_output_fences_name_and_text():
     with patch(
         "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")

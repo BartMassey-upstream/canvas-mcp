@@ -96,7 +96,7 @@ Course management, grading, and analytics. Requires instructor/TA role.
 | `get_assignment_analytics` | Performance statistics |
 | `create_assignment` | Create new assignment with due date, submission types, peer reviews |
 | `update_assignment` | Update existing assignment (name, due date, points, published, etc.) |
-| `delete_assignment_with_confirmation` | Delete an assignment (two-step: preview, then confirm with the token) |
+| `delete_assignment_with_confirmation` | Delete an assignment; existing student work additionally requires `allow_deleting_student_work=true`, followed by preview and confirmation |
 | `create_content_migration` | Preview target occupancy, then request a full course-copy migration after explicit confirmation |
 | `get_content_migration_status` | Poll one migration once and review terminal migration issues |
 | `get_student_analytics` | Individual student performance |
@@ -284,9 +284,13 @@ Is it a simple query?
 
 The token expires in 5 minutes and stops matching if the target changed in between
 (retitled, different criteria match set), so the deletion is always the one previewed.
+Assignment, quiz, and quiz-question deletion additionally refuse when Canvas
+reports existing student work unless `allow_deleting_student_work=true` is
+passed in both the preview and confirmation calls.
 Applies to: delete_announcement_with_confirmation, bulk_delete_announcements,
 delete_announcements_by_criteria, delete_page, delete_module, delete_module_item,
-delete_assignment_with_confirmation. There is no un-tokened delete tool.
+delete_assignment_with_confirmation, delete_assignment_group, delete_quiz, and
+delete_quiz_question. There is no un-tokened delete tool.
 ```
 
 ### Educator: Write the Syllabus

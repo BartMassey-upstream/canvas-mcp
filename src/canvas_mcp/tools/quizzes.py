@@ -27,6 +27,19 @@ _DELETE_QUESTION_GUARD = ConfirmationGuard(
 )
 
 
+def _has_student_quiz_work(quiz: dict[str, Any]) -> bool:
+    """Use Canvas's no-unpublish signal without fetching attempts or responses."""
+    return quiz.get("published") is True and quiz.get("unpublishable") is False
+
+
+def _student_work_delete_error(what: str) -> str:
+    return (
+        f"Error: this {what} has existing student work. It was not deleted. "
+        "Pass allow_deleting_student_work=true only if deleting or invalidating "
+        "student attempts and grades is intentional."
+    )
+
+
 def _format_quiz(quiz: dict[str, Any], *, include_description: bool = False) -> str:
     lines = [
         f"ID: {quiz.get('id')}",
@@ -284,15 +297,19 @@ def register_quiz_tools(mcp: FastMCP) -> None:
     async def delete_quiz(
         course_identifier: str | int,
         quiz_id: str | int,
+        allow_deleting_student_work: bool = False,
         confirmation_token: str | None = None,
     ) -> str:
-        """Delete a Classic Quiz after a preview and explicit confirmation."""
+        """Delete a Classic Quiz after safety checks and confirmation."""
         course_id = await get_course_id(course_identifier)
         quiz = await make_canvas_request(
             "get", f"/courses/{course_id}/quizzes/{quiz_id}"
         )
         if "error" in quiz:
             return f"Error fetching quiz: {quiz['error']}"
+        has_student_work = _has_student_quiz_work(quiz)
+        if has_student_work and not allow_deleting_student_work:
+            return _student_work_delete_error("quiz")
         title = quiz.get("title") or "Untitled quiz"
         shown_title = fence_untrusted_inline(title, "quiz title")
         fingerprint = _DELETE_QUIZ_GUARD.fingerprint(
@@ -302,12 +319,16 @@ def register_quiz_tools(mcp: FastMCP) -> None:
             title,
             str(quiz.get("question_count")),
             str(quiz.get("published")),
+            str(quiz.get("unpublishable")),
+            str(allow_deleting_student_work),
         )
         if not confirmation_token:
             preview = (
                 f"Would delete Classic Quiz **{shown_title}** (ID: {quiz_id}).\n"
                 f"Questions: {quiz.get('question_count', 'unknown')}\n"
                 f"Published: {quiz.get('published', False)}\n"
+                f"Student-work deletion authorized: "
+                f"{'yes' if allow_deleting_student_work else 'not needed'}\n"
                 "Deleting a graded quiz also removes its linked assignment and "
                 "may remove associated submissions and grades."
             )
@@ -420,10 +441,19 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         course_identifier: str | int,
         quiz_id: str | int,
         question_id: str | int,
+        allow_deleting_student_work: bool = False,
         confirmation_token: str | None = None,
     ) -> str:
-        """Delete a Classic Quiz question after preview and confirmation."""
+        """Delete a quiz question after student-work checks and confirmation."""
         course_id = await get_course_id(course_identifier)
+        quiz = await make_canvas_request(
+            "get", f"/courses/{course_id}/quizzes/{quiz_id}"
+        )
+        if "error" in quiz:
+            return f"Error fetching quiz: {quiz['error']}"
+        has_student_work = _has_student_quiz_work(quiz)
+        if has_student_work and not allow_deleting_student_work:
+            return _student_work_delete_error("quiz")
         question = await make_canvas_request(
             "get",
             f"/courses/{course_id}/quizzes/{quiz_id}/questions/{question_id}",
@@ -440,11 +470,15 @@ def register_quiz_tools(mcp: FastMCP) -> None:
             name,
             str(question.get("question_text")),
             str(question.get("points_possible")),
+            str(quiz.get("unpublishable")),
+            str(allow_deleting_student_work),
         )
         if not confirmation_token:
             preview = (
                 f"Would delete quiz question **{shown_name}** "
-                f"(ID: {question_id}) from Classic Quiz {quiz_id}."
+                f"(ID: {question_id}) from Classic Quiz {quiz_id}.\n"
+                f"Student-work deletion authorized: "
+                f"{'yes' if allow_deleting_student_work else 'not needed'}"
             )
             return preview_with_token(
                 _DELETE_QUESTION_GUARD,

@@ -949,6 +949,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         course_identifier: str | int,
         assignment_id: str | int,
         require_name_match: str | None = None,
+        allow_deleting_student_work: bool = False,
         confirmation_token: str | None = None
     ) -> str:
         """Delete an assignment. Two-step: preview first, then confirm with the token.
@@ -960,6 +961,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             course_identifier: Course code or Canvas ID
             assignment_id: Assignment ID to delete
             require_name_match: Only delete if the assignment name matches this string exactly
+            allow_deleting_student_work: Must be true when submissions or grades exist
             confirmation_token: Token from the preview call; omit to preview
         """
         course_id = await get_course_id(course_identifier)
@@ -981,6 +983,15 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
         has_submissions = bool(assignment.get("has_submitted_submissions"))
         needs_grading = assignment.get("needs_grading_count")
+        has_student_work = has_submissions or (
+            isinstance(needs_grading, int | float) and needs_grading > 0
+        )
+        if has_student_work and not allow_deleting_student_work:
+            return (
+                "Error: this assignment has existing student work. It was not "
+                "deleted. Pass allow_deleting_student_work=true only if deleting "
+                "its submissions and grades is intentional."
+            )
         course_display = await get_course_code(course_id) or course_identifier
         # Everything the preview shows to identify the target is bound, so a
         # due-date or points edit between preview and confirm stops matching.
@@ -988,6 +999,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             "delete_assignment_with_confirmation", str(course_id), str(assignment_id),
             name, str(assignment.get("due_at")), str(assignment.get("points_possible")),
             str(has_submissions), str(needs_grading),
+            str(allow_deleting_student_work),
         )
         if not confirmation_token:
             preview = (
@@ -997,6 +1009,8 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
                 f"  Points: {assignment.get('points_possible')}\n"
                 f"  Submissions: {'yes' if has_submissions else 'none'}"
                 f"{f', needs grading: {needs_grading}' if needs_grading is not None else ''}\n"
+                f"  Student-work deletion authorized: "
+                f"{'yes' if allow_deleting_student_work else 'not needed'}\n"
                 "  ⚠️  Deleting an assignment also deletes all of its submissions and grades."
             )
             return preview_with_token(
