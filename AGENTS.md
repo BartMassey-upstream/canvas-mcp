@@ -15,14 +15,17 @@ All tools require a valid Canvas API token.
 > **Note:** The public hosted server (`mcp.illinihunt.org`) has been **retired** — a public MCP endpoint without an access gate would expose the code-execution tool. Use local (self-hosted) mode below. The HTTP/streamable transport remains supported for self-hosting behind your own authentication; for a shared institutional deployment, see [deploy/azure/](deploy/azure/).
 
 ### Local (Self-Hosted)
-Put general settings in `~/.config/canvas-mcp/env` (or
-`$XDG_CONFIG_HOME/canvas-mcp/env`):
+Use the platform config directory: `$XDG_CONFIG_HOME/canvas-mcp` (Linux,
+falling back to `~/.config/canvas-mcp`),
+`~/Library/Application Support/canvas-mcp` (macOS), or
+`%APPDATA%\canvas-mcp` (Windows). Put general settings in its `env` file:
 ```
 CANVAS_API_URL=https://your-institution.instructure.com/api/v1
 ```
-Put only the raw Canvas token in `~/.canvas-mcp` and run
-`chmod 600 ~/.canvas-mcp`. The token file takes precedence over
-`CANVAS_API_TOKEN`; a project-local `.env` remains a compatibility fallback.
+Put only the raw Canvas token in the sibling `token` file. POSIX requires mode
+`0600`; Windows requires a private DACL. The token file takes precedence over
+`CANVAS_API_TOKEN`; `~/.canvas-mcp` and project-local `.env` remain migration
+fallbacks.
 
 Students and educators use the same server but have access to different tools based on Canvas API permissions.
 
@@ -30,7 +33,7 @@ Students and educators use the same server but have access to different tools ba
 Reduce tool overhead by setting a role-based profile. Only tools relevant to the selected role are registered:
 
 ```
-# In ~/.config/canvas-mcp/env:
+# In the platform config directory's env file:
 CANVAS_ROLE=student    # ~37 tools (student + shared)
 CANVAS_ROLE=educator   # 92 tools (educator + shared)
 CANVAS_ROLE=all        # Default profile; 98 tools by default, 103 with all feature-gated tools enabled

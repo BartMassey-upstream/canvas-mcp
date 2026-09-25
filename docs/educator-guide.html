@@ -135,13 +135,9 @@ pip install -e .</code></pre>
                         </div>
 
                         <h3>3. Configure Environment</h3>
-                        <pre><code>mkdir -p ~/.config/canvas-mcp
-cp env.template ~/.config/canvas-mcp/env
-chmod 600 ~/.config/canvas-mcp/env
-# Put only the raw token in ~/.canvas-mcp, then:
-chmod 600 ~/.canvas-mcp</code></pre>
+                        <p>Create <code>env</code> and <code>token</code> in the platform config directory: <code>$XDG_CONFIG_HOME/canvas-mcp</code> or <code>~/.config/canvas-mcp</code> on Linux, <code>~/Library/Application Support/canvas-mcp</code> on macOS, and <code>%APPDATA%\canvas-mcp</code> on Windows. The token file contains only the raw token. Use mode <code>0600</code> on Linux/macOS; Canvas MCP validates its Windows ACL.</p>
 
-                        <p>Edit <code>~/.config/canvas-mcp/env</code>:</p>
+                        <p>Edit the <code>env</code> file:</p>
                         <pre><code><span class="code-comment"># Canvas API Configuration</span>
 CANVAS_API_URL=https://canvas.youruniversity.edu
 
@@ -390,7 +386,7 @@ This will:
 
                         <h3>"Connection failed" or "Authentication error"</h3>
                         <ul>
-                            <li>Check the raw Canvas API token in <code>~/.canvas-mcp</code> and verify the file mode is <code>0600</code></li>
+                            <li>Check the raw token in the platform config directory's <code>token</code> file and verify its POSIX mode or Windows ACL</li>
                             <li>Verify Canvas URL is correct</li>
                             <li>Ensure token has instructor permissions</li>
                         </ul>
@@ -404,7 +400,7 @@ This will:
 
                         <h3>Anonymization Not Working</h3>
                         <ul>
-                            <li>Set <code>ENABLE_DATA_ANONYMIZATION=true</code> in <code>~/.config/canvas-mcp/env</code></li>
+                            <li>Set <code>ENABLE_DATA_ANONYMIZATION=true</code> in the per-user <code>env</code> file</li>
                             <li>Restart Canvas MCP server</li>
                             <li>Check <code>local_maps/</code> folder is created</li>
                         </ul>

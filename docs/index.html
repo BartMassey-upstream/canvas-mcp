@@ -1932,12 +1932,11 @@ pip install -e .
                     <div class="step-number">2</div>
                     <div class="step-content">
                         <h3>Configure Environment</h3>
-                        <p>Copy the template to the user config directory and store the token separately.</p>
+                        <p>Create <code>env</code> and <code>token</code> in the native config directory: XDG config on Linux, Application Support on macOS, or APPDATA on Windows.</p>
                         <div class="step-code">
-mkdir -p ~/.config/canvas-mcp<br>
-cp env.template ~/.config/canvas-mcp/env<br>
-# Put CANVAS_API_URL in that file; put the raw token in ~/.canvas-mcp<br>
-chmod 600 ~/.canvas-mcp
+env: CANVAS_API_URL and general settings<br>
+token: raw Canvas token only<br>
+chmod 600 &lt;config-directory&gt;/env &lt;config-directory&gt;/token # Linux/macOS
                         </div>
                     </div>
                 </div>

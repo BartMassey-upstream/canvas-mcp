@@ -9,8 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Environment Setup
 - Install uv package manager: `pip install uv`
 - Install dependencies: `uv pip install -e .`
-- Put `CANVAS_API_URL` and other settings in `~/.config/canvas-mcp/env`
-- Put the raw Canvas token in `~/.canvas-mcp` and set its mode to `0600`
+- Put `CANVAS_API_URL` and other settings in the platform config directory's `env`
+- Put the raw Canvas token in its sibling `token`; use `0600` on POSIX
 - Server installed as CLI command: `canvas-mcp-server`
 
 ## Commands
@@ -32,7 +32,7 @@ canvas-mcp/
 ├── docs/                 # GitHub Pages site + guides
 ├── tools/                # Tool documentation (README.md, TOOL_MANIFEST.json)
 ├── archive/              # Legacy code (git-ignored)
-└── env.template          # Template for ~/.config/canvas-mcp/env
+└── env.template          # Template for the per-user env file
 ```
 
 ## Architecture Overview

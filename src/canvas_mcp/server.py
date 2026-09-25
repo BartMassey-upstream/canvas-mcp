@@ -8,8 +8,8 @@ assignment handling, discussion facilitation, student analytics, and personal
 academic tracking.
 
 Supports two transport modes:
-- stdio (default): Local process communication, credentials from
-  ~/.canvas-mcp or CANVAS_API_TOKEN
+- stdio (default): Local process communication, credentials from the native
+  per-user config directory or CANVAS_API_TOKEN
 - streamable-http: HTTP server, per-request token via X-Canvas-Token header;
   the Canvas API URL is pinned by server config (CANVAS_API_URL), not the client.
 """
@@ -677,7 +677,7 @@ def main() -> None:
     else:
         # stdio mode: local credentials are required (single-user auth)
         if not validate_config():
-            log_error("Please check ~/.config/canvas-mcp/env or your environment")
+            log_error("Please check your per-user Canvas MCP config or environment")
             log_error("Use env.template as a reference")
             sys.exit(1)
 

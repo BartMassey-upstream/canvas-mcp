@@ -19,7 +19,7 @@ def register_admin_tools(mcp: FastMCP) -> None:
     async def get_anonymization_status() -> str:
         """Get current data anonymization status and statistics."""
         from ..core.anonymization import get_anonymization_stats
-        from ..core.config import get_config
+        from ..core.config import _canvas_env_file_path, get_config
 
         config = get_config()
         stats = get_anonymization_stats()
@@ -48,7 +48,7 @@ def register_admin_tools(mcp: FastMCP) -> None:
             result += "⚠️ **ANONYMIZATION DISABLED** - Tool output may include student identifiers\n\n"
             result += "🚨 **PRIVACY RISK**: Real student names and data may be sent to the AI client\n"
             result += "⚖️ **COMPLIANCE**: Review your institution's FERPA and data-handling requirements\n\n"
-            result += "💡 **Recommendation**: Enable anonymization in ~/.config/canvas-mcp/env:\n"
+            result += f"💡 **Recommendation**: Enable anonymization in {_canvas_env_file_path()}:\n"
             result += "   ENABLE_DATA_ANONYMIZATION=true\n"
 
         return result

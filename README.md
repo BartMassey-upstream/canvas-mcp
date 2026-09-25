@@ -15,7 +15,7 @@ MCP server for Canvas LMS with **up to 103 tools** and **8 agent skills**. Desig
 **1. Install the MCP server** (everything else, including the skills, needs it running):
 
 - **Claude Desktop:** download `canvas-mcp.mcpb` from the [latest release](https://github.com/vishalsachdev/canvas-mcp/releases/latest) and double-click it. It prompts for your Canvas URL and token; no terminal needed. [Details](#install-as-a-claude-desktop-extension-easiest).
-- **Cursor, Zed, Windsurf, Continue, Claude Code and other clients:** install with `uv tool install canvas-mcp`, configure `~/.config/canvas-mcp/env` plus `~/.canvas-mcp`, and point your client at the `canvas-mcp-server` binary. [Local Installation](#local-installation) has the per-client config blocks.
+- **Cursor, Zed, Windsurf, Continue, Claude Code and other clients:** install with `uv tool install canvas-mcp`, add `env` and `token` to the platform config directory below, and point your client at the `canvas-mcp-server` binary. [Local Installation](#local-installation) has the per-client config blocks.
 
 **2. Verify:** `canvas-mcp-server --test` should report a successful Canvas connection. Then restart your client.
 
@@ -289,7 +289,7 @@ When `ENABLE_DATA_ANONYMIZATION=true` is enabled, supported identity fields are 
 ### For Students: Data Scope & Privacy
 
 - **Canvas-scoped access**: Student-specific tools use Canvas's "self" endpoints; shared course-content tools follow the permissions Canvas grants your account
-- **No shared-server credential storage**: Local mode reads your Canvas token from `~/.canvas-mcp` (or your own environment/config file). In authenticated institutional HTTP deployments, each request supplies the user's Canvas token and the server does not store it.
+- **No shared-server credential storage**: Local mode reads your Canvas token from the native per-user config directory (or the environment). In authenticated institutional HTTP deployments, each request supplies the user's Canvas token and the server does not store it.
 - **No built-in product analytics**: Canvas MCP does not add telemetry; Canvas and your AI client still apply their own logging and data policies
 - **Optional anonymization**: Student tools are scoped to your own Canvas data, but your AI client's privacy policy still applies
 
@@ -338,33 +338,38 @@ pip install -e .
 
 ### 2. Configure Environment
 
-```bash
-# Create the per-user configuration directory
-mkdir -p ~/.config/canvas-mcp
-cp env.template ~/.config/canvas-mcp/env
-chmod 600 ~/.config/canvas-mcp/env
+Canvas MCP uses the native per-user configuration directory:
 
-# Edit with your Canvas credentials
-# Required: CANVAS_API_URL and either CANVAS_API_TOKEN or ~/.canvas-mcp
+| Platform | Configuration directory |
+|---|---|
+| Linux | `$XDG_CONFIG_HOME/canvas-mcp`, or `~/.config/canvas-mcp` when unset |
+| macOS | `~/Library/Application Support/canvas-mcp` |
+| Windows | `%APPDATA%\canvas-mcp` |
+
+Create two files there:
+
+- `env`: dotenv-format general settings, including `CANVAS_API_URL`
+- `token`: only the raw Canvas token, with no key name
+
+On Linux or macOS, restrict both files to the current user:
+
+```bash
+chmod 600 "<config-directory>/env" "<config-directory>/token"
 ```
 
-Canvas MCP reads `~/.config/canvas-mcp/env` from any working directory. If
-`XDG_CONFIG_HOME` is set, it reads `$XDG_CONFIG_HOME/canvas-mcp/env` instead.
-Real process environment variables take precedence, followed by this user file.
-A project-local `.env` remains a lowest-precedence compatibility fallback.
+On Windows, files inherit the private ACL of the user's AppData directory.
+Canvas MCP verifies that the token is owned by the current user and grants
+access only to that user, SYSTEM, and Administrators.
+
+Real process environment variables take precedence over `env`. A project-local
+`.env` remains a lowest-precedence compatibility fallback.
 
 Get your Canvas API token from: **Canvas → Account → Settings → New Access Token**
 
-For local stdio use, you can keep the token out of the environment. Put the raw
-token (and nothing else) in `~/.canvas-mcp`, then restrict the file to its owner:
-
-```bash
-chmod 600 ~/.canvas-mcp
-```
-
-When this file is present it takes precedence over `CANVAS_API_TOKEN`; an unsafe
-permission mode or malformed file stops startup instead of falling back to the
-environment.
+For local stdio use, the `token` file takes precedence over
+`CANVAS_API_TOKEN`. An unsafe permission mode or ACL, or malformed content,
+stops startup instead of falling back to the environment. The original
+`~/.canvas-mcp` location remains a migration fallback.
 
 > **Some institutions gate token creation.** Where self-service is disabled, the
 > "New Access Token" button is missing or errors out, and tokens are issued through an
@@ -425,8 +430,9 @@ Codex can launch the server as a local stdio MCP server. Add this entry to `~/.c
 command = "/absolute/path/to/canvas-mcp/.venv/bin/canvas-mcp-server"
 ```
 
-The server reads `~/.config/canvas-mcp/env`, so its working directory does not
-affect configuration discovery. Alternatively, register the command with the Codex CLI:
+The server reads its native per-user config directory, so its working directory
+does not affect configuration discovery. Alternatively, register the command
+with the Codex CLI:
 
 ```bash
 codex mcp add canvas-api -- /absolute/path/to/canvas-mcp/.venv/bin/canvas-mcp-server
@@ -648,7 +654,7 @@ Built on **FastMCP** with async `httpx`, `pydantic` validation, and `python-dote
 
 If you encounter issues:
 
-1. **Server Won't Start** - Verify your [Local Installation](#local-installation) setup: `~/.config/canvas-mcp/env`, executable path, and dependencies
+1. **Server Won't Start** - Verify your [Local Installation](#local-installation) setup: native config directory, token permissions, executable path, and dependencies
 2. **Authentication Errors** - Check your Canvas API token validity and permissions
 3. **Connection Issues** - Verify Canvas API URL correctness and network access
 4. **Debugging** - Check your MCP client's console logs (e.g., Claude Desktop's developer console) or run server manually for error output

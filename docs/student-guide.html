@@ -132,15 +132,9 @@ pip install -e .</code></pre>
                         <h2>Configuration</h2>
 
                         <h3>4. Configure Canvas MCP</h3>
-                        <pre><code><span class="code-comment"># Create the user configuration</span>
-mkdir -p ~/.config/canvas-mcp
-cp env.template ~/.config/canvas-mcp/env
-chmod 600 ~/.config/canvas-mcp/env
+                        <p>Create <code>env</code> and <code>token</code> in the platform config directory: <code>$XDG_CONFIG_HOME/canvas-mcp</code> or <code>~/.config/canvas-mcp</code> on Linux, <code>~/Library/Application Support/canvas-mcp</code> on macOS, and <code>%APPDATA%\canvas-mcp</code> on Windows. The token file contains only the raw token. Use mode <code>0600</code> on Linux/macOS; Canvas MCP validates its Windows ACL.</p>
 
-<span class="code-comment"># Put only the raw token in ~/.canvas-mcp, then:</span>
-chmod 600 ~/.canvas-mcp</code></pre>
-
-                        <p>Your <code>~/.config/canvas-mcp/env</code> file should include:</p>
+                        <p>Your <code>env</code> file should include:</p>
                         <pre><code><span class="code-comment"># Canvas API Configuration</span>
 CANVAS_API_URL=https://canvas.youruniversity.edu/api/v1
 
@@ -349,7 +343,7 @@ ENABLE_DATA_ANONYMIZATION=false</code></pre>
 
                         <h3>"Connection failed" or "Authentication error"</h3>
                         <ul>
-                            <li>Check the raw Canvas API token in <code>~/.canvas-mcp</code> and verify the file mode is <code>0600</code></li>
+                            <li>Check the raw token in the platform config directory's <code>token</code> file and verify its POSIX mode or Windows ACL</li>
                             <li>Verify your Canvas URL is correct (should match your browser's Canvas URL)</li>
                             <li>Make sure your token hasn't expired</li>
                         </ul>
