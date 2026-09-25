@@ -677,8 +677,8 @@ def main() -> None:
     else:
         # stdio mode: local credentials are required (single-user auth)
         if not validate_config():
-            log_error("Please check your .env file configuration")
-            log_error("Use the env.template file as a reference")
+            log_error("Please check ~/.config/canvas-mcp/env or your environment")
+            log_error("Use env.template as a reference")
             sys.exit(1)
 
     # Handle special commands

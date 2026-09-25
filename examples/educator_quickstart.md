@@ -5,7 +5,8 @@ This guide shows the most common tasks educators use Canvas MCP for.
 ## Setup
 
 1. Install Canvas MCP following the [README](../README.md#installation)
-2. Configure your `.env` file with Canvas API token
+2. Put your Canvas URL in `~/.config/canvas-mcp/env`, and the raw token in
+   `~/.canvas-mcp` with permissions `0600`
 3. **For FERPA-conscious data handling**, add:
    ```
    ENABLE_DATA_ANONYMIZATION=true
@@ -154,7 +155,7 @@ Use the bulk grading code API to grade all submissions for Assignment 6
 - Mention "use bulk grading" in your request to your AI assistant
 
 **"Anonymization isn't working"**
-- Verify `ENABLE_DATA_ANONYMIZATION=true` in your `.env`
+- Verify `ENABLE_DATA_ANONYMIZATION=true` in `~/.config/canvas-mcp/env`
 - Restart your MCP client after changing settings
 
 Need help? Check the [Educator Guide](https://canvas-mcp.illinihunt.org/educator-guide.html) or [open an issue](https://github.com/vishalsachdev/canvas-mcp/issues).

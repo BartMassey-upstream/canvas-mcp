@@ -9,7 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Environment Setup
 - Install uv package manager: `pip install uv`
 - Install dependencies: `uv pip install -e .`
-- Create `.env` file with `CANVAS_API_TOKEN` and `CANVAS_API_URL`
+- Put `CANVAS_API_URL` and other settings in `~/.config/canvas-mcp/env`
+- Put the raw Canvas token in `~/.canvas-mcp` and set its mode to `0600`
 - Server installed as CLI command: `canvas-mcp-server`
 
 ## Commands
@@ -31,7 +32,7 @@ canvas-mcp/
 ├── docs/                 # GitHub Pages site + guides
 ├── tools/                # Tool documentation (README.md, TOOL_MANIFEST.json)
 ├── archive/              # Legacy code (git-ignored)
-└── .env                  # Configuration (CANVAS_API_TOKEN, CANVAS_API_URL)
+└── env.template          # Template for ~/.config/canvas-mcp/env
 ```
 
 ## Architecture Overview
@@ -61,8 +62,9 @@ This repo has branch protection on `main` (PR + status checks required), but adm
 This repo often has several agents/sessions working at once. The primary checkout
 (`/Users/vishal/code/canvas-mcp`) stays on `main`, clean — treat it as read-only (triage,
 review, reading). All branch work happens in a sibling worktree named `canvas-mcp-<slug>`
-on branch `fix/NNN-slug`, created from `origin/main` (gitignored files like `.env` don't
-carry over — symlink them). Never repurpose a worktree for a different issue; remove it
+on branch `fix/NNN-slug`, created from `origin/main` (gitignored project-local files do
+not carry over; Canvas MCP's user configuration already lives outside the checkout).
+Never repurpose a worktree for a different issue; remove it
 after its PR merges and delete the branch (local + remote). After any sibling PR merges,
 rebase surviving worktree branches onto `main` and rerun tests there. Full lifecycle:
 global `worktree-pr` skill.

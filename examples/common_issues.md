@@ -45,7 +45,7 @@ uv pip install -e .
 2. Scroll to "Approved Integrations"
 3. Delete the old token if present
 4. Create a new access token (see below if your institution gates this)
-5. Update your `.env` file with the new token
+5. Replace the raw token in `~/.canvas-mcp` and verify `chmod 600 ~/.canvas-mcp`
 6. Restart your MCP client
 
 Note that many institutions now issue short-lived tokens — Instructure pushed a 30-day
@@ -53,7 +53,7 @@ default in 2026 — so "it worked last month" does not mean the token is still v
 
 ### "Canvas API URL is invalid"
 
-**Problem**: Wrong URL format in `.env`.
+**Problem**: Wrong URL format in `~/.config/canvas-mcp/env`.
 
 **Solution**:
 Your Canvas API URL should look like:
@@ -168,7 +168,8 @@ Most institutions will enable this for legitimate educational purposes.
 **Problem**: Seeing old information.
 
 **Solution**:
-Canvas MCP caches some data for performance. The cache TTL is set in your `.env`:
+Canvas MCP caches some data for performance. The cache TTL is set in
+`~/.config/canvas-mcp/env`:
 
 ```bash
 CACHE_TTL=300  # 5 minutes (default)
@@ -290,13 +291,14 @@ Show me all students and all their submissions
    }
    ```
 
-3. **Check environment variables**: Your MCP client might not have access to your `.env`
-   - Make sure `.env` is in the canvas-mcp directory
-   - Or set `CANVAS_API_TOKEN` and `CANVAS_API_URL` as system environment variables
+3. **Check configuration**:
+   - Put general settings in `~/.config/canvas-mcp/env`
+   - Put only the raw token in `~/.canvas-mcp` and run `chmod 600 ~/.canvas-mcp`
+   - If `XDG_CONFIG_HOME` is set, use `$XDG_CONFIG_HOME/canvas-mcp/env`
 
 ## Getting More Help
 
-1. **Enable debug mode** in your `.env`:
+1. **Enable debug mode** in `~/.config/canvas-mcp/env`:
    ```bash
    DEBUG=true
    LOG_API_REQUESTS=true
@@ -321,7 +323,8 @@ Show me all students and all their submissions
 
 Run through this list:
 
-- [ ] `.env` file exists and has `CANVAS_API_TOKEN` and `CANVAS_API_URL`
+- [ ] `~/.config/canvas-mcp/env` has `CANVAS_API_URL`
+- [ ] `~/.canvas-mcp` contains only the raw token and has mode `0600`
 - [ ] Canvas API token is valid (test in Canvas web UI)
 - [ ] `canvas-mcp-server --test` succeeds
 - [ ] Claude Desktop config includes canvas-mcp

@@ -10,8 +10,27 @@ from dotenv import load_dotenv
 
 from .logging import log_error, log_info, log_warning
 
-# Load environment variables from .env file
-load_dotenv()
+
+def _canvas_env_file_path() -> Path:
+    """Return the explicit per-user dotenv-style configuration path."""
+    config_home = os.getenv("XDG_CONFIG_HOME", "").strip()
+    base = Path(config_home).expanduser() if config_home else Path.home() / ".config"
+    return base / "canvas-mcp" / "env"
+
+
+def _load_environment_files() -> None:
+    """Load user configuration, then fill gaps from a legacy ``.env`` file.
+
+    ``override=False`` preserves variables already supplied by the process.
+    Loading the explicit user file first gives it precedence over the old
+    implicit python-dotenv search while retaining compatibility for source
+    checkouts that still keep a project-local ``.env``.
+    """
+    load_dotenv(dotenv_path=_canvas_env_file_path(), override=False)
+    load_dotenv(override=False)
+
+
+_load_environment_files()
 
 _INVALID_INT_ENV_VARS: dict[str, str] = {}
 _INVALID_FLOAT_ENV_VARS: dict[str, str] = {}

@@ -1932,10 +1932,12 @@ pip install -e .
                     <div class="step-number">2</div>
                     <div class="step-content">
                         <h3>Configure Environment</h3>
-                        <p>Copy the template and add your Canvas API credentials.</p>
+                        <p>Copy the template to the user config directory and store the token separately.</p>
                         <div class="step-code">
-cp env.template .env<br>
-# Edit .env with your CANVAS_API_TOKEN and CANVAS_API_URL
+mkdir -p ~/.config/canvas-mcp<br>
+cp env.template ~/.config/canvas-mcp/env<br>
+# Put CANVAS_API_URL in that file; put the raw token in ~/.canvas-mcp<br>
+chmod 600 ~/.canvas-mcp
                         </div>
                     </div>
                 </div>

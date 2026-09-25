@@ -115,9 +115,8 @@ python3 -m venv .venv
 <span class="code-comment"># Install</span>
 pip install -e .</code></pre>
 
-                        <p>Configure <code>.env</code>:</p>
-                        <pre><code>CANVAS_API_TOKEN=your_token_here
-CANVAS_API_URL=https://canvas.youruniversity.edu</code></pre>
+                        <p>Configure <code>~/.config/canvas-mcp/env</code>, and put only the raw token in <code>~/.canvas-mcp</code> with mode <code>0600</code>:</p>
+                        <pre><code>CANVAS_API_URL=https://canvas.youruniversity.edu</code></pre>
 
                         <p>Add to your MCP client config &mdash; most clients read this exact entry and differ only in where the file lives:</p>
                         <pre><code>{

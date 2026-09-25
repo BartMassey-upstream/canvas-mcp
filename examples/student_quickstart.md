@@ -5,7 +5,8 @@ This guide shows common tasks students can accomplish with Canvas MCP.
 ## Setup
 
 1. Install Canvas MCP following the [README](../README.md#installation)
-2. Make sure your `.env` file has your Canvas API token
+2. Put your Canvas URL in `~/.config/canvas-mcp/env`, and the raw token in
+   `~/.canvas-mcp` with permissions `0600`
 3. Restart your MCP client (e.g., Claude Desktop, Cursor, Zed, etc.)
 
 ## Common Tasks
@@ -93,7 +94,7 @@ Show me my final grades in all courses and any missing assignments
 ## Troubleshooting
 
 **"I don't see my courses"**
-- Make sure your `.env` file is configured correctly
+- Check `~/.config/canvas-mcp/env` and `~/.canvas-mcp`
 - Verify your Canvas API token is valid
 - Try: `canvas-mcp-server --test`
 

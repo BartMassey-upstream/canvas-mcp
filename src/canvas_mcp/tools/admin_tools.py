@@ -48,7 +48,7 @@ def register_admin_tools(mcp: FastMCP) -> None:
             result += "⚠️ **ANONYMIZATION DISABLED** - Tool output may include student identifiers\n\n"
             result += "🚨 **PRIVACY RISK**: Real student names and data may be sent to the AI client\n"
             result += "⚖️ **COMPLIANCE**: Review your institution's FERPA and data-handling requirements\n\n"
-            result += "💡 **Recommendation**: Enable anonymization in your .env file:\n"
+            result += "💡 **Recommendation**: Enable anonymization in ~/.config/canvas-mcp/env:\n"
             result += "   ENABLE_DATA_ANONYMIZATION=true\n"
 
         return result
