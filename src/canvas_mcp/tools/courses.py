@@ -185,10 +185,10 @@ def register_course_tools(mcp: FastMCP) -> None:
             include_all: Include all enrollments instead of only current active ones.
         """
 
-        params = {
-            "include[]": ["term", "teachers", "total_students"],
-            "per_page": 100
-        }
+        role = get_config().canvas_role
+        params: dict[str, Any] = {"include[]": ["term"], "per_page": 100}
+        if role != "creator":
+            params["include[]"].extend(["teachers", "total_students"])
 
         if not include_all:
             # Scope to the user's *current* enrollments. enrollment_state="active"
@@ -196,11 +196,11 @@ def register_course_tools(mcp: FastMCP) -> None:
             # below cannot distinguish current from past at institutions that
             # never flip finished courses to workflow_state="completed".
             params["enrollment_state"] = "active"
-            # Educators keep teacher-only scoping (unchanged behavior). Students
-            # and the "all" profile see every active enrollment, which is what a
-            # Shared tool should return — the old unconditional teacher filter
+            # Educators and creators keep teacher-only scoping. Students and
+            # the "all" profile see every active enrollment, which is what a
+            # shared tool should return — the old unconditional teacher filter
             # returned nothing for students.
-            if get_config().canvas_role == "educator":
+            if role in ("creator", "educator"):
                 params["enrollment_type"] = "teacher"
 
         if include_concluded:

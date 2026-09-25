@@ -10,6 +10,7 @@ from mcp.types import ToolAnnotations
 
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
+from ..core.config import get_config
 from ..core.dates import format_date, parse_date
 from ..core.path import canvas_path
 from ..core.untrusted_content import (
@@ -46,10 +47,9 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
         """
         course_id = await get_course_id(course_identifier)
 
-        params = {
-            "per_page": 100,
-            "include[]": ["all_dates", "submission"]
-        }
+        params: dict[str, Any] = {"per_page": 100}
+        if get_config().canvas_role != "creator":
+            params["include[]"] = ["all_dates", "submission"]
 
         all_assignments = await fetch_all_paginated_results(canvas_path('courses', course_id, 'assignments'), params)
 

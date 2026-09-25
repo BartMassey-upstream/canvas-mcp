@@ -214,6 +214,15 @@ def test_anonymization_enabled_by_default(monkeypatch):
     assert config_module.get_config().enable_data_anonymization is True
 
 
+def test_creator_is_a_valid_role(monkeypatch):
+    monkeypatch.setenv("CANVAS_ROLE", "creator")
+    monkeypatch.setenv("CANVAS_API_TOKEN", "test-token")
+    monkeypatch.setenv("CANVAS_API_URL", "https://canvas.school.edu/api/v1")
+    config_module.reset_config()
+    assert config_module.validate_config() is True
+    assert config_module.get_config().canvas_role == "creator"
+
+
 def test_http_startup_path_also_rejects_cleartext(monkeypatch):
     """The scheme check must not depend on validate_config().
 

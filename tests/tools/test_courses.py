@@ -107,6 +107,14 @@ class TestListCoursesParams:
         assert params.get("enrollment_state") == "active"
 
     @pytest.mark.asyncio
+    async def test_creator_role_omits_teacher_and_student_count_includes(self):
+        """Creator discovers owned courses without requesting people metadata."""
+        params = await self._call_and_get_params(role="creator")
+        assert params.get("enrollment_type") == "teacher"
+        assert params.get("enrollment_state") == "active"
+        assert params["include[]"] == ["term"]
+
+    @pytest.mark.asyncio
     async def test_include_all_returns_full_history(self):
         """include_all=True drops role/active scoping; state[] still defaults to
         ['available'] (use include_concluded to also surface past courses)."""

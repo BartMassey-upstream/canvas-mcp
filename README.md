@@ -276,6 +276,15 @@ Claude Code skills are located in `.claude/skills/` and can be customized for yo
 
 ## 🔒 Privacy & Data Protection
 
+### Course Creation Without Student Records
+
+Set `CANVAS_ROLE=creator` (or pass `--role creator`) to expose 53 tools for
+building assignments, syllabi, pages, modules, course files, rubrics,
+announcements, migrations, and accessible content without registering tools
+that read student records. The profile excludes rosters, submissions,
+grading, analytics, peer reviews, conversations, discussions,
+messaging, anonymization maps, and arbitrary TypeScript execution.
+
 ### For Educators: FERPA-Conscious Data Handling
 
 Canvas MCP provides optional privacy controls that can support an institution's FERPA obligations. Compliance still depends on your deployment, configuration, institutional policy, and AI provider:

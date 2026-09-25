@@ -1,5 +1,8 @@
 """Tests for role-based tool filtering."""
 
+from types import SimpleNamespace
+from unittest.mock import patch
+
 import pytest
 from fastmcp import FastMCP
 
@@ -65,6 +68,64 @@ SHARED_TOOLS = {
 # These two answer only about the authenticated caller, so unlike
 # check_enrollment they must be available under EVERY profile.
 SELF_IDENTITY_TOOLS = {"get_my_enrollments", "get_my_profile"}
+
+# Exact, fail-closed profile for course construction without student records.
+# Any future change to this set must be reviewed as a data-access decision.
+CREATOR_TOOLS = {
+    "add_module_item",
+    "associate_rubric",
+    "bulk_delete_announcements",
+    "bulk_update_pages",
+    "create_announcement",
+    "create_assignment",
+    "create_content_migration",
+    "create_module",
+    "create_page",
+    "create_rubric",
+    "create_rubric_from_csv",
+    "delete_announcement_with_confirmation",
+    "delete_announcements_by_criteria",
+    "delete_assignment_with_confirmation",
+    "delete_module",
+    "delete_module_item",
+    "delete_page",
+    "download_course_file",
+    "edit_page_content",
+    "fetch_ufixit_report",
+    "fix_accessibility_issues",
+    "format_accessibility_summary",
+    "get_assignment_details",
+    "get_content_migration_status",
+    "get_course_content_overview",
+    "get_course_details",
+    "get_course_structure",
+    "get_front_page",
+    "get_my_enrollments",
+    "get_my_profile",
+    "get_page_content",
+    "get_page_details",
+    "get_rubric",
+    "get_syllabus",
+    "list_announcements",
+    "list_assignments",
+    "list_course_files",
+    "list_courses",
+    "list_module_items",
+    "list_modules",
+    "list_pages",
+    "list_rubrics",
+    "parse_ufixit_violations",
+    "read_course_file",
+    "scan_course_content_accessibility",
+    "search_canvas_tools",
+    "update_assignment",
+    "update_module",
+    "update_module_item",
+    "update_page_settings",
+    "update_rubric",
+    "update_syllabus",
+    "upload_course_file",
+}
 
 # A sample of educator-only tools to check (not exhaustive, just representative)
 EDUCATOR_ONLY_SAMPLE = {
@@ -137,6 +198,26 @@ class TestRoleFiltering:
             assert tool not in tools, f"Educator role should NOT include {tool}"
 
     @pytest.mark.asyncio
+    async def test_creator_role_has_exact_student_data_free_allowlist(self):
+        """Creator additions must fail review until explicitly allowlisted."""
+        mcp = FastMCP(name="test-creator")
+        register_all_tools(mcp, role="creator")
+        assert await _get_tool_names(mcp) == CREATOR_TOOLS
+
+    @pytest.mark.asyncio
+    async def test_creator_never_enables_code_execution(self):
+        """The feature flag cannot widen creator into direct Canvas access."""
+        mcp = FastMCP(name="test-creator-code")
+        with patch(
+            "canvas_mcp.server.get_config",
+            return_value=SimpleNamespace(execute_typescript_enabled=True),
+        ):
+            register_all_tools(mcp, role="creator")
+        tools = await _get_tool_names(mcp)
+        assert "execute_typescript" not in tools
+        assert "list_code_api_modules" not in tools
+
+    @pytest.mark.asyncio
     async def test_all_role_includes_everything(self):
         mcp = FastMCP(name="test-all")
         register_all_tools(mcp, role="all")
@@ -177,7 +258,7 @@ class TestRoleFiltering:
         assert not missing, f"Tools in 'all' but missing from student+educator: {missing}"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("role", ["student", "educator", "all"])
+    @pytest.mark.parametrize("role", ["student", "creator", "educator", "all"])
     async def test_self_identity_tools_registered_for_every_role(self, role):
         """They need no roster permission, so no profile may omit them (#171)."""
         mcp = FastMCP(name=f"test-{role}")

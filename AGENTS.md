@@ -29,11 +29,18 @@ Reduce tool overhead by setting a role-based profile. Only tools relevant to the
 ```
 # In .env:
 CANVAS_ROLE=student    # ~37 tools (student + shared)
+CANVAS_ROLE=creator    # 53 course-building tools; no student records
 CANVAS_ROLE=educator   # 92 tools (educator + shared)
 CANVAS_ROLE=all        # Default profile; 98 tools by default, 103 with all feature-gated tools enabled
 ```
 
 Or via CLI flag: `canvas-mcp-server --role student` (CLI flag takes precedence over env var).
+
+Use `creator` while building course content without exposing student records.
+It includes assignments, syllabus, pages, modules, course files, rubrics,
+announcements, migrations, and accessibility tools. It excludes rosters,
+submissions, grading, analytics, peer reviews, conversations, discussions,
+messaging, anonymization maps, and code execution.
 
 ## Tool Categories
 

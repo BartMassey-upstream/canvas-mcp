@@ -10,6 +10,7 @@ Includes tests for:
 - update_assignment
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -491,6 +492,21 @@ class TestAssignmentTools:
 
             assert len(result) == 2
             assert result[0]["name"] == "Assignment 1"
+
+    @pytest.mark.asyncio
+    async def test_creator_list_assignments_does_not_request_submissions(
+        self, mock_canvas_api
+    ):
+        """Creator assignment discovery must not include submission state."""
+        mock_canvas_api["fetch_all_paginated_results"].return_value = []
+        with patch(
+            "canvas_mcp.tools.assignments.get_config",
+            return_value=SimpleNamespace(canvas_role="creator"),
+        ):
+            await get_tool_function("list_assignments")("60366")
+
+        params = mock_canvas_api["fetch_all_paginated_results"].call_args.args[1]
+        assert "include[]" not in params
 
     @pytest.mark.asyncio
     async def test_get_assignment_details(self):

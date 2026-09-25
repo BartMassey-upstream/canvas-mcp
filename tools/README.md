@@ -5,6 +5,7 @@ This document provides a comprehensive overview of all tools available in the Ca
 ## Table of Contents
 
 - [Student Tools](#student-tools)
+- [Creator Profile](#creator-profile)
 - [Educator Tools](#educator-tools)
 - [Shared Tools](#shared-tools-both-students--educators)
 - [Developer Tools](#developer-tools)
@@ -18,7 +19,7 @@ These tools provide students with personal academic tracking and organization ca
 
 ### Self-Identity
 
-Available under **every** role profile (student, educator, all) — these describe only the authenticated caller, so they need no roster permission.
+Available under **every** role profile (student, creator, educator, all) — these describe only the authenticated caller, so they need no roster permission.
 
 #### `get_my_profile`
 Get your own Canvas identity.
@@ -50,6 +51,17 @@ List the courses **you** are enrolled in, with your role in each.
 **Returns:** Course code, name, ID, and your role(s) per course. Reports **all** roles when you hold more than one enrollment in a course (e.g. TA and student).
 
 Use this — not [`check_enrollment`](#check_enrollment) — for any question about your own enrollment. `check_enrollment` reads the course roster, which requires roster-admin rights your token probably does not have.
+
+---
+
+## Creator Profile
+
+Set `CANVAS_ROLE=creator` to expose course-construction tools without tools
+that read student records. The profile supports assignments, syllabus, pages,
+modules, course files, rubrics, announcements, content migrations, and
+accessibility review. It excludes rosters, submissions, grading, analytics,
+peer reviews, conversations, discussions, messaging,
+anonymization maps, and code execution.
 
 ---
 
