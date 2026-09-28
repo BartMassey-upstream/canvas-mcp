@@ -35,11 +35,18 @@ Reduce tool overhead by setting a role-based profile. Only tools relevant to the
 ```
 # In the platform config directory's env file:
 CANVAS_ROLE=student    # ~37 tools (student + shared)
-CANVAS_ROLE=educator   # 92 tools (educator + shared)
-CANVAS_ROLE=all        # Default profile; 98 tools by default, 103 with all feature-gated tools enabled
+CANVAS_ROLE=creator    # 68 course-building tools; no student records
+CANVAS_ROLE=educator   # 109 tools (educator + shared)
+CANVAS_ROLE=all        # Default profile; 115 tools by default, 120 with all feature-gated tools enabled
 ```
 
 Or via CLI flag: `canvas-mcp-server --role student` (CLI flag takes precedence over env var).
+
+Use `creator` while building course content without exposing student records.
+It includes assignments, assignment groups, Classic Quizzes, course navigation, syllabus, pages, modules, course files, rubrics,
+announcements, migrations, and accessibility tools. It excludes rosters,
+submissions, grading, analytics, peer reviews, conversations, discussions,
+messaging, anonymization maps, and code execution.
 
 ## Tool Categories
 
@@ -89,13 +96,13 @@ Course management, grading, and analytics. Requires instructor/TA role.
 
 | Tool | Purpose |
 |------|---------|
-| `list_assignments` | All assignments in a course |
-| `get_assignment_details` | Full assignment info including description |
+| `list_assignments` | All assignments in a course, including assignment-group IDs |
+| `get_assignment_details` | Full assignment info including description and assignment-group ID |
 | `list_submissions` | Student submissions for grading |
 | `get_assignment_analytics` | Performance statistics |
 | `create_assignment` | Create new assignment with due date, submission types, peer reviews |
 | `update_assignment` | Update existing assignment (name, due date, points, published, etc.) |
-| `delete_assignment_with_confirmation` | Delete an assignment (two-step: preview, then confirm with the token) |
+| `delete_assignment_with_confirmation` | Delete an assignment; existing student work additionally requires `allow_deleting_student_work=true`, followed by preview and confirmation |
 | `create_content_migration` | Preview target occupancy, then request a full course-copy migration after explicit confirmation |
 | `get_content_migration_status` | Poll one migration once and review terminal migration issues |
 | `get_student_analytics` | Individual student performance |
@@ -283,9 +290,13 @@ Is it a simple query?
 
 The token expires in 5 minutes and stops matching if the target changed in between
 (retitled, different criteria match set), so the deletion is always the one previewed.
+Assignment, quiz, and quiz-question deletion additionally refuse when Canvas
+reports existing student work unless `allow_deleting_student_work=true` is
+passed in both the preview and confirmation calls.
 Applies to: delete_announcement_with_confirmation, bulk_delete_announcements,
 delete_announcements_by_criteria, delete_page, delete_module, delete_module_item,
-delete_assignment_with_confirmation. There is no un-tokened delete tool.
+delete_assignment_with_confirmation, delete_assignment_group, delete_quiz, and
+delete_quiz_question. There is no un-tokened delete tool.
 ```
 
 ### Educator: Write the Syllabus
@@ -427,10 +438,13 @@ Canvas MCP accepts multiple identifier formats:
 | Format | Example | Notes |
 |--------|---------|-------|
 | Canvas ID | `12345` | Numeric course ID |
-| Course code | `badm_350_120251_246794` | SIS course code |
-| SIS ID | `sis_course_id:ABC123` | If configured |
+| Course code | `CS-423/523-001 Fall 2026` | Exact value returned by `list_courses` |
+| SIS ID | `sis_course_id:ABC123` | Explicit prefix required |
 
-The server automatically resolves identifiers to Canvas IDs.
+The server resolves an exact course-code match to a Canvas ID. Spaces,
+slashes, Unicode, and other punctuation are supported. If a course is
+not visible to `list_courses`, use a numeric ID or an explicitly
+prefixed SIS ID rather than relying on an inferred SIS lookup.
 
 ## Privacy and Anonymization
 

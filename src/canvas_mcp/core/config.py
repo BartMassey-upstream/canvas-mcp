@@ -703,7 +703,7 @@ def validate_config() -> bool:
             f"defaulting to 'auto' (got '{config.ts_sandbox_mode}')"
         )
 
-    valid_roles = ("student", "educator", "all")
+    valid_roles = ("student", "creator", "educator", "all")
     if config.canvas_role not in valid_roles:
         log_warning(
             f"CANVAS_ROLE should be one of {', '.join(valid_roles)}; "

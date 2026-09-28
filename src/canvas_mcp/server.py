@@ -45,6 +45,7 @@ from .resources import register_resources_and_prompts
 from .tools import (
     register_accessibility_tools,
     register_admin_tools,
+    register_assignment_group_tools,
     register_code_execution_tools,
     register_content_migration_tools,
     register_course_tools,
@@ -57,9 +58,11 @@ from .tools import (
     register_educator_module_tools,
     register_educator_page_crud_tools,
     register_enrollment_tools,
+    register_navigation_tools,
     register_page_tools,
     register_peer_review_comment_tools,
     register_peer_review_tools,
+    register_quiz_tools,
     register_rubric_tools,
     register_self_identity_tools,
     register_shared_assignment_tools,
@@ -430,12 +433,43 @@ def create_server() -> FastMCP:
     return FastMCP(name=config.mcp_server_name)
 
 
+_CREATOR_EXCLUDED_TOOLS = frozenset({
+    # Conversations and discussion participation can contain student-authored
+    # messages, names, and other identifiers. Announcements remain available
+    # because only instructors can author them.
+    "bulk_delete_announcements",
+    "delete_announcement_with_confirmation",
+    "get_conversation_details",
+    "get_discussion_entry_details",
+    "get_discussion_topic_details",
+    "get_discussion_with_replies",
+    "get_unread_count",
+    "list_conversations",
+    "list_discussion_entries",
+    "list_discussion_topics",
+    "mark_conversations_read",
+    "post_discussion_entry",
+    "reply_to_discussion_entry",
+    # These educator tools read submissions, assessments, peer-review
+    # assignments, or student-level performance data.
+    "assign_peer_review",
+    "bulk_grade_submissions",
+    "create_discussion_topic",
+    "get_assignment_analytics",
+    "get_rubric_assessment",
+    "grade_with_rubric",
+    "list_peer_reviews",
+    "list_submissions",
+    "update_discussion_topic",
+})
+
+
 def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
     """Register MCP tools based on the selected role profile.
 
     Args:
         mcp: FastMCP server instance
-        role: One of "student", "educator", or "all" (default)
+        role: One of "student", "creator", "educator", or "all" (default)
     """
     log_info(f"Registering Canvas MCP tools (role: {role})...")
     install_tool_result_contract(mcp)
@@ -459,25 +493,34 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
         # STUDENT_WRITE_TOOLS (default: none). See tools/student_write.py.
         register_student_write_tools(mcp)
 
-    # Educator-specific tools
-    if role in ("educator", "all"):
+    # Educator and course-creator tools. The creator profile registers course
+    # construction tools, then removes mixed-group operations that can read
+    # student records. Entirely student-facing groups are never registered.
+    if role in ("creator", "educator", "all"):
+        register_assignment_group_tools(mcp)
         register_educator_assignment_tools(mcp)
         register_educator_course_tools(mcp)
         register_content_migration_tools(mcp)
         register_educator_discussion_tools(mcp)
         register_educator_module_tools(mcp)
         register_educator_file_tools(mcp)
+        register_navigation_tools(mcp)
         register_page_tools(mcp)
         register_educator_page_crud_tools(mcp)
+        register_quiz_tools(mcp)
         register_rubric_tools(mcp)
-        register_peer_review_tools(mcp)
-        register_peer_review_comment_tools(mcp)
-        register_educator_messaging_tools(mcp)
         register_accessibility_tools(mcp)
-        register_enrollment_tools(mcp)  # requires teacher-scoped roster access
-        if get_config().execute_typescript_enabled:
-            register_code_execution_tools(mcp)
-        register_admin_tools(mcp)
+        if role == "creator":
+            for tool_name in _CREATOR_EXCLUDED_TOOLS:
+                mcp.local_provider.remove_tool(tool_name)
+        else:
+            register_peer_review_tools(mcp)
+            register_peer_review_comment_tools(mcp)
+            register_educator_messaging_tools(mcp)
+            register_enrollment_tools(mcp)  # requires teacher-scoped roster access
+            if get_config().execute_typescript_enabled:
+                register_code_execution_tools(mcp)
+            register_admin_tools(mcp)
 
     # Resources and prompts — always registered
     register_resources_and_prompts(mcp)
@@ -587,9 +630,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--role",
-        choices=["student", "educator", "all"],
+        choices=["student", "creator", "educator", "all"],
         default=None,
-        help="Tool profile: student (~37 tools), educator (~88 tools), all (default: all)"
+        help=(
+            "Tool profile: student (~37 tools), creator (course content only), "
+            "educator (~109 tools), all (default: all)"
+        )
     )
     parser.add_argument(
         "--list-grants",
@@ -784,7 +830,7 @@ def main() -> None:
     mcp = create_server()
     # Resolve role: CLI flag > env var > default
     role = args.role or config.canvas_role
-    if role not in ("student", "educator", "all"):
+    if role not in ("student", "creator", "educator", "all"):
         log_warning(f"Unknown role '{role}', defaulting to 'all'")
         role = "all"
     # Make the resolved role authoritative so runtime tool behavior (e.g.

@@ -132,7 +132,7 @@ SINGLE_TARGET = [
      {"title": "Fall 2024 Schedule", "url": "old-schedule"}, "Fall 2024 Schedule", {"title": "Spring", "url": "old-schedule"}),
     ("assignments", "delete_assignment_with_confirmation", ("60366", 777),
      {"id": 777, "name": "Homework 1", "due_at": "2026-09-01T05:59:00Z", "points_possible": 10,
-      "has_submitted_submissions": True, "needs_grading_count": 4},
+      "has_submitted_submissions": False, "needs_grading_count": 0},
      "Homework 1", {"id": 777, "name": "Homework 1 (v2)"}),
 ]
 
@@ -240,9 +240,25 @@ async def test_assignment_preview_shows_submission_impact(assignments):
         "id": 777, "name": "Homework 1", "due_at": "2026-09-01T05:59:00Z", "points_possible": 10,
         "has_submitted_submissions": True, "needs_grading_count": 4,
     })
-    result = await assignments["tools"]["delete_assignment_with_confirmation"]("60366", 777)
+    tool = assignments["tools"]["delete_assignment_with_confirmation"]
+    blocked = await tool("60366", 777)
+    assert "Error:" in blocked and "allow_deleting_student_work=true" in blocked
+    assert TOKEN_RE.search(blocked) is None
+
+    result = await tool("60366", 777, allow_deleting_student_work=True)
+    assert "PREVIEW" in result
     assert "submissions" in result.lower()
     assert "4" in result  # needs grading
+
+    token = token_from(result)
+    deleted = await tool(
+        "60366",
+        777,
+        allow_deleting_student_work=True,
+        confirmation_token=token,
+    )
+    assert "deleted" in deleted.lower()
+    assert len(_calls(assignments["req"], "delete")) == 1
 
 
 @pytest.mark.asyncio
@@ -391,9 +407,16 @@ async def test_assignment_token_bound_to_displayed_details(assignments, field, c
             "has_submitted_submissions": True, "needs_grading_count": 4}
     assignments["req"].side_effect = _by_method(base)
     tool = assignments["tools"]["delete_assignment_with_confirmation"]
-    token = token_from(await tool("60366", 777))
+    token = token_from(
+        await tool("60366", 777, allow_deleting_student_work=True)
+    )
     assignments["req"].side_effect = _by_method({**base, field: changed})
-    result = await tool("60366", 777, confirmation_token=token)
+    result = await tool(
+        "60366",
+        777,
+        allow_deleting_student_work=True,
+        confirmation_token=token,
+    )
     assert "does not match" in result
     assert _calls(assignments["req"], "delete") == []
 

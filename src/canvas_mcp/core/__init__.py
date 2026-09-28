@@ -8,6 +8,7 @@ from .client import (
 )
 from .config import get_config, reset_config, validate_config
 from .dates import format_date, parse_date, truncate_text
+from .path import canvas_path
 from .validation import (
     format_error,
     is_error_response,
@@ -29,6 +30,7 @@ __all__ = [
     'format_date',
     'parse_date',
     'truncate_text',
+    'canvas_path',
     'get_config',
     'reset_config',
     'validate_config'

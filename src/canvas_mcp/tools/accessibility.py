@@ -15,6 +15,7 @@ from mcp.types import ToolAnnotations
 from ..core.cache import get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.config import get_config
+from ..core.path import canvas_path
 from ..core.untrusted_content import (
     fence_untrusted,
     fence_untrusted_fields,
@@ -55,7 +56,7 @@ def _register_ufixit_tools(mcp: FastMCP) -> None:
 
         # First, try to find the page by title
         pages = await fetch_all_paginated_results(
-            f"/courses/{course_id}/pages",
+            canvas_path('courses', course_id, 'pages'),
             {"per_page": 100, "search_term": page_title}
         )
 
@@ -78,7 +79,7 @@ def _register_ufixit_tools(mcp: FastMCP) -> None:
         # Fetch the full page content
         page_response = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/pages/{page_url}"
+            canvas_path('courses', course_id, 'pages', page_url)
         )
 
         if "error" in page_response:
@@ -244,7 +245,7 @@ def _register_builtin_scanner_tools(mcp: FastMCP) -> None:
         # Scan pages
         if "pages" in types:
             pages = await fetch_all_paginated_results(
-                f"/courses/{course_id}/pages",
+                canvas_path('courses', course_id, 'pages'),
                 {"per_page": 100}
             )
             if isinstance(pages, list):
@@ -260,7 +261,7 @@ def _register_builtin_scanner_tools(mcp: FastMCP) -> None:
         # Scan assignments
         if "assignments" in types:
             assignments = await fetch_all_paginated_results(
-                f"/courses/{course_id}/assignments",
+                canvas_path('courses', course_id, 'assignments'),
                 {"per_page": 100}
             )
             if isinstance(assignments, list):
@@ -327,7 +328,7 @@ def _register_builtin_scanner_tools(mcp: FastMCP) -> None:
 
         if "pages" in content:
             pages = await fetch_all_paginated_results(
-                f"/courses/{course_id}/pages", {"per_page": 100}
+                canvas_path('courses', course_id, 'pages'), {"per_page": 100}
             )
             if isinstance(pages, list):
                 for page in pages:
@@ -335,7 +336,7 @@ def _register_builtin_scanner_tools(mcp: FastMCP) -> None:
                     if not slug:
                         continue
                     full = await make_canvas_request(
-                        "get", f"/courses/{course_id}/pages/{slug}"
+                        "get", canvas_path('courses', course_id, 'pages', slug)
                     )
                     body = full.get("body", "") if isinstance(full, dict) else ""
                     if body:
@@ -344,13 +345,13 @@ def _register_builtin_scanner_tools(mcp: FastMCP) -> None:
                             "id": slug,
                             "title": page.get("title", slug),
                             "body": body,
-                            "endpoint": f"/courses/{course_id}/pages/{slug}",
+                            "endpoint": canvas_path('courses', course_id, 'pages', slug),
                             "body_field": "wiki_page[body]"
                         })
 
         if "assignments" in content:
             assignments = await fetch_all_paginated_results(
-                f"/courses/{course_id}/assignments", {"per_page": 100}
+                canvas_path('courses', course_id, 'assignments'), {"per_page": 100}
             )
             if isinstance(assignments, list):
                 for asgn in assignments:
@@ -361,7 +362,7 @@ def _register_builtin_scanner_tools(mcp: FastMCP) -> None:
                             "id": asgn.get("id"),
                             "title": asgn.get("name", ""),
                             "body": desc,
-                            "endpoint": f"/courses/{course_id}/assignments/{asgn['id']}",
+                            "endpoint": canvas_path('courses', course_id, 'assignments', asgn['id']),
                             "body_field": "assignment[description]"
                         })
 

@@ -34,6 +34,7 @@ from ..core.file_validation import (
     sanitize_filename,
     validate_file_for_upload,
 )
+from ..core.path import canvas_path
 from ..core.untrusted_content import fence_untrusted_inline
 from ..core.validation import validate_params
 
@@ -83,7 +84,7 @@ def register_shared_file_tools(mcp: FastMCP) -> None:
         # Get file metadata from Canvas API
         file_info = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/files/{file_id}"
+            canvas_path('courses', course_id, 'files', file_id)
         )
 
         if isinstance(file_info, dict) and "error" in file_info:
@@ -201,7 +202,7 @@ def register_shared_file_tools(mcp: FastMCP) -> None:
         # Get file metadata from Canvas API
         file_info = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/files/{file_id}"
+            canvas_path('courses', course_id, 'files', file_id)
         )
 
         if isinstance(file_info, dict) and "error" in file_info:
@@ -290,7 +291,7 @@ def register_shared_file_tools(mcp: FastMCP) -> None:
             params["search_term"] = search_term
 
         files = await fetch_all_paginated_results(
-            f"/courses/{course_id}/files",
+            canvas_path('courses', course_id, 'files'),
             params
         )
 
@@ -388,7 +389,7 @@ def register_educator_file_tools(mcp: FastMCP) -> None:
         # Request the upload slot
         step1_response = await make_canvas_request(
             "post",
-            f"/courses/{course_id}/files",
+            canvas_path('courses', course_id, 'files'),
             data=upload_request_params,
             use_form_data=True
         )

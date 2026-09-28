@@ -1,4 +1,4 @@
-import { canvasGet, canvasPutForm } from "../../client.js";
+import { canvasGet, canvasPath, canvasPutForm } from "../../client.js";
 
 export interface GradeWithRubricInput {
   courseIdentifier: string | number;
@@ -149,7 +149,7 @@ export function createRubricGrader(): (input: GradeWithRubricInput) => Promise<G
       let pending = assignments.get(key);
       if (!pending) {
         pending = canvasGet<RubricAssignment>(
-          `/courses/${courseIdentifier}/assignments/${assignmentId}`,
+          canvasPath('courses', courseIdentifier, 'assignments', assignmentId),
           {"include[]": ["rubric", "rubric_settings"]}
         );
         assignments.set(key, pending);
@@ -176,7 +176,9 @@ export function createRubricGrader(): (input: GradeWithRubricInput) => Promise<G
     }
 
     // Canvas API endpoint for updating submission
-    const endpoint = `/courses/${courseIdentifier}/assignments/${assignmentId}/submissions/${userId}`;
+    const endpoint = canvasPath(
+      'courses', courseIdentifier, 'assignments', assignmentId, 'submissions', userId
+    );
 
     try {
       // Submit the grade with rubric assessment using form encoding

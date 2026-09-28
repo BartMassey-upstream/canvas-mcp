@@ -1,6 +1,5 @@
 """Admin and developer MCP tools for Canvas API."""
 
-
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
@@ -8,6 +7,7 @@ from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.credentials import is_http_request_active
 from ..core.csv_safety import csv_safe_cell
+from ..core.path import canvas_path
 from ..core.untrusted_content import fence_untrusted_inline
 from ..core.validation import validate_params
 
@@ -65,7 +65,7 @@ def register_admin_tools(mcp: FastMCP) -> None:
 
         # Get all groups in the course
         groups = await fetch_all_paginated_results(
-            f"/courses/{course_id}/groups", {"per_page": 100}
+            canvas_path('courses', course_id, 'groups'), {"per_page": 100}
         )
 
         if isinstance(groups, dict) and "error" in groups:
@@ -93,7 +93,7 @@ def register_admin_tools(mcp: FastMCP) -> None:
 
             # Get members for this group
             members = await fetch_all_paginated_results(
-                f"/groups/{group_id}/users", {"per_page": 100}
+                canvas_path('groups', group_id, 'users'), {"per_page": 100}
             )
 
             if isinstance(members, dict) and "error" in members:
@@ -134,7 +134,7 @@ def register_admin_tools(mcp: FastMCP) -> None:
             "per_page": 100
         }
 
-        users = await fetch_all_paginated_results(f"/courses/{course_id}/users", params)
+        users = await fetch_all_paginated_results(canvas_path('courses', course_id, 'users'), params)
 
         if isinstance(users, dict) and "error" in users:
             return f"Error fetching users: {users['error']}"
@@ -188,14 +188,14 @@ def register_admin_tools(mcp: FastMCP) -> None:
         """
         course_id = await get_course_id(course_identifier)
 
-        course_response = await make_canvas_request("get", f"/courses/{course_id}")
+        course_response = await make_canvas_request("get", canvas_path('courses', course_id))
         if "error" in course_response:
             return f"Error fetching course: {course_response['error']}"
         course_name = course_response.get("name", "Unknown Course")
 
         # Real per-student analytics endpoint
         summaries = await fetch_all_paginated_results(
-            f"/courses/{course_id}/analytics/student_summaries",
+            canvas_path('courses', course_id, 'analytics', 'student_summaries'),
             {"per_page": 100}
         )
         if isinstance(summaries, dict) and "error" in summaries:
@@ -203,7 +203,7 @@ def register_admin_tools(mcp: FastMCP) -> None:
 
         # Student roster for names
         students = await fetch_all_paginated_results(
-            f"/courses/{course_id}/users",
+            canvas_path('courses', course_id, 'users'),
             {"enrollment_type[]": "student", "per_page": 100}
         )
         if isinstance(students, dict) and "error" in students:
@@ -330,7 +330,7 @@ def register_admin_tools(mcp: FastMCP) -> None:
         # useless (issue #179). The file is written locally, for the
         # instructor who already has roster access.
         students = await fetch_all_paginated_results(
-            f"/courses/{course_id}/users", params, skip_anonymization=True
+            canvas_path('courses', course_id, 'users'), params, skip_anonymization=True
         )
 
         if isinstance(students, dict) and "error" in students:

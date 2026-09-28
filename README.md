@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![skills.sh](https://img.shields.io/badge/skills.sh-canvas--mcp-blue)](https://skills.sh)
 
-MCP server for Canvas LMS with **up to 103 tools** and **8 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
+MCP server for Canvas LMS with **up to 120 tools** and **8 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
 
 ## Quick Start
 
@@ -36,7 +36,7 @@ See [Agent Skills](#-agent-skills) for the list. If your agent is Claude Code, t
   See CLAUDE.md "Documentation Maintenance" for full guidelines.
 -->
 
-Canvas MCP provides **up to 103 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 103. Tools are organized by user type:
+Canvas MCP provides **up to 120 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 120. Tools are organized by user type:
 
 <details>
 <summary><strong>Student Tools</strong> (click to expand)</summary>
@@ -126,7 +126,9 @@ Canvas MCP provides **up to 103 tools** for interacting with Canvas LMS; the def
 
 ### Quick Reference
 
-**Course identifiers:** Canvas ID (`12345`), course code (`badm_350_120251_246794`), or SIS ID
+**Course identifiers:** Canvas ID (`12345`), the exact course code
+returned by `list_courses` (including spaces or punctuation), or an
+explicit SIS ID such as `sis_course_id:ABC123`.
 
 **Cannot do:** Create/delete courses, modify course settings, access other users' data
 
@@ -273,6 +275,15 @@ Claude Code skills are located in `.claude/skills/` and can be customized for yo
 **Want a custom skill?** [Submit a request](https://github.com/vishalsachdev/canvas-mcp/issues/new?labels=skill-request&title=[Skill%20Request]) describing your repetitive workflow!
 
 ## 🔒 Privacy & Data Protection
+
+### Course Creation Without Student Records
+
+Set `CANVAS_ROLE=creator` (or pass `--role creator`) to expose 68 tools for
+building assignments, assignment groups, Classic Quizzes, course navigation, syllabi, pages, modules, course files, rubrics,
+announcements, migrations, and accessible content without registering tools
+that read student records. The profile excludes rosters, submissions,
+grading, analytics, peer reviews, conversations, discussions,
+messaging, anonymization maps, and arbitrary TypeScript execution.
 
 ### For Educators: FERPA-Conscious Data Handling
 

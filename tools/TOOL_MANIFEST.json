@@ -157,7 +157,7 @@
           "description": "Course code or Canvas ID"
         }
       ],
-      "returns": "List of assignments with IDs, names, due dates, points",
+      "returns": "List of assignments with IDs, names, assignment-group IDs, due dates, and points",
       "examples": [
         "Show me all assignments in BADM 350",
         "List assignments for course 12345"
@@ -181,10 +181,130 @@
           "description": "Assignment ID"
         }
       ],
-      "returns": "Full assignment details including description, due date, submission types",
+      "returns": "Full assignment details including assignment-group ID, description, due date, and submission types",
       "examples": [
         "Show me details for assignment 456 in course 123"
       ]
+    },
+    {
+      "name": "list_assignment_groups",
+      "category": "educator",
+      "description": "List assignment groups, optionally with compact assignment and Classic Quiz membership",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "include_assignments", "type": "boolean", "required": false, "default": false}],
+      "returns": "Assignment group IDs, names, positions, and weights, optionally with assignment IDs and Classic Quiz IDs; never submissions or scores",
+      "examples": ["List the assignment groups in ENG 101"]
+    },
+    {
+      "name": "create_assignment_group",
+      "category": "educator",
+      "description": "Create an assignment group",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "name", "type": "string", "required": true}],
+      "returns": "The created assignment group",
+      "examples": ["Create a Projects assignment group"]
+    },
+    {
+      "name": "update_assignment_group",
+      "category": "educator",
+      "description": "Update an assignment group's name, position, or weight",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "assignment_group_id", "type": "string | integer", "required": true}],
+      "returns": "The updated assignment group",
+      "examples": ["Make Projects worth 30 percent"]
+    },
+    {
+      "name": "delete_assignment_group",
+      "category": "educator",
+      "description": "Delete an assignment group after confirmation and move its assignments",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "assignment_group_id", "type": "string | integer", "required": true}, {"name": "move_assignments_to", "type": "string | integer", "required": true}],
+      "returns": "A preview and confirmation token, then deletion status",
+      "examples": ["Delete Old Quizzes and move its assignments to Quizzes"]
+    },
+    {
+      "name": "list_quizzes",
+      "category": "educator",
+      "description": "List Classic Quiz definitions without student activity",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}],
+      "returns": "Quiz IDs, titles, assignment-group IDs, backing assignment IDs, types, points, question counts, and dates",
+      "examples": ["List the Classic Quizzes in ENG 101"]
+    },
+    {
+      "name": "get_quiz",
+      "category": "educator",
+      "description": "Get one Classic Quiz definition without student activity",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "clear_time_limit", "type": "boolean", "required": false, "default": false}, {"name": "clear_due_at", "type": "boolean", "required": false, "default": false}, {"name": "clear_unlock_at", "type": "boolean", "required": false, "default": false}, {"name": "clear_lock_at", "type": "boolean", "required": false, "default": false}],
+      "returns": "Quiz definition with assignment-group ID, backing assignment ID, and fenced description",
+      "examples": ["Show the settings for Classic Quiz 7"]
+    },
+    {
+      "name": "create_quiz",
+      "category": "educator",
+      "description": "Create a Classic Quiz, unpublished by default",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "title", "type": "string", "required": true}],
+      "returns": "The created quiz definition",
+      "examples": ["Create an unpublished Midterm Classic Quiz"]
+    },
+    {
+      "name": "update_quiz",
+      "category": "educator",
+      "description": "Update a Classic Quiz definition and publication state",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}],
+      "returns": "The updated quiz definition",
+      "examples": ["Give Classic Quiz 7 a 45 minute time limit"]
+    },
+    {
+      "name": "delete_quiz",
+      "category": "educator",
+      "description": "Delete a Classic Quiz after preview and confirmation",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "allow_deleting_student_work", "type": "boolean", "required": false, "default": false}],
+      "returns": "An error if student work exists without explicit permission; otherwise a preview and confirmation token, then deletion status",
+      "examples": ["Delete Classic Quiz 7"]
+    },
+    {
+      "name": "list_quiz_questions",
+      "category": "educator",
+      "description": "List Classic Quiz question definitions without student responses",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}],
+      "returns": "Question IDs, names, types, points, and fenced question text",
+      "examples": ["List the questions in Classic Quiz 7"]
+    },
+    {
+      "name": "create_quiz_question",
+      "category": "educator",
+      "description": "Add a question definition to a Classic Quiz",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "question_name", "type": "string", "required": true}, {"name": "question_text", "type": "string", "required": true}, {"name": "question_type", "type": "string", "required": true}],
+      "returns": "The created question definition",
+      "examples": ["Add a multiple-choice question to Classic Quiz 7"]
+    },
+    {
+      "name": "update_quiz_question",
+      "category": "educator",
+      "description": "Update a Classic Quiz question definition",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "question_id", "type": "string | integer", "required": true}],
+      "returns": "The updated question definition",
+      "examples": ["Make question 9 worth two points"]
+    },
+    {
+      "name": "delete_quiz_question",
+      "category": "educator",
+      "description": "Delete a Classic Quiz question after preview and confirmation",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "question_id", "type": "string | integer", "required": true}, {"name": "allow_deleting_student_work", "type": "boolean", "required": false, "default": false}],
+      "returns": "An error if student work exists without explicit permission; otherwise a preview and confirmation token, then deletion status",
+      "examples": ["Delete question 9 from Classic Quiz 7"]
+    },
+    {
+      "name": "list_course_navigation",
+      "category": "educator",
+      "description": "List course navigation tabs, positions, and visibility",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}],
+      "returns": "Navigation tab IDs, labels, types, positions, and visibility",
+      "examples": ["Show the course navigation for ENG 101"]
+    },
+    {
+      "name": "update_course_navigation",
+      "category": "educator",
+      "description": "Reorder or show and hide a course navigation tab",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "tab_id", "type": "string", "required": true}],
+      "returns": "The updated navigation tab",
+      "examples": ["Move Modules to position 2 and make it visible"]
     },
     {
       "name": "list_submissions",
@@ -590,6 +710,22 @@
       "examples": [
         "Create an announcement about tomorrow's exam"
       ]
+    },
+    {
+      "name": "get_announcement",
+      "category": "educator",
+      "description": "Get one announcement through the announcement-only collection",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "announcement_id", "type": "string | integer", "required": true}, {"name": "clear_delayed_post_at", "type": "boolean", "required": false, "default": false}, {"name": "clear_lock_at", "type": "boolean", "required": false, "default": false}],
+      "returns": "The fenced announcement title, body, and publication settings",
+      "examples": ["Show announcement 7 in ENG 101"]
+    },
+    {
+      "name": "update_announcement",
+      "category": "educator",
+      "description": "Update an ID verified through the announcement-only collection",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "announcement_id", "type": "string | integer", "required": true}],
+      "returns": "The updated announcement",
+      "examples": ["Update announcement 7 with the revised schedule"]
     },
     {
       "name": "list_courses",
@@ -2787,13 +2923,20 @@
           "description": "Only delete if the assignment name matches this string exactly"
         },
         {
+          "name": "allow_deleting_student_work",
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Must be true when Canvas reports existing submissions or grades"
+        },
+        {
           "name": "confirmation_token",
           "type": "string",
           "required": false,
           "description": "Token from the preview call; omit to preview. Single-use, expires in 5 minutes, stops matching if the target changes."
         }
       ],
-      "returns": "First call (no token): a preview of exactly what would be deleted plus a confirmation token, nothing deleted. Second call with the token: the deletion result.",
+      "returns": "An error if student work exists without explicit permission. Otherwise, the first call returns a preview and confirmation token; the second call with the token returns deletion status.",
       "examples": [
         "Delete the duplicate 'Homework 1' assignment, but show me first"
       ],

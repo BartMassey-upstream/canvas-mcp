@@ -74,6 +74,7 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     ),
     "get_assignment_analytics": _fenced("fence_untrusted_inline"),
     "get_assignment_details": _fenced("fence_untrusted"),
+    "get_announcement": _fenced("_format_announcement"),
     "get_conversation_details": _fenced("_fence_conversation_fields"),
     "get_course_content_overview": _fenced("fence_untrusted"),
     "get_content_migration_status": _fenced("fence_untrusted"),
@@ -101,6 +102,7 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     "get_my_upcoming_assignments": _fenced("fence_untrusted_inline"),
     "get_page_content": _fenced("fence_untrusted"),
     "get_page_details": _fenced("fence_untrusted"),
+    "get_quiz": _fenced("_format_quiz"),
     "get_peer_review_assignments": _fenced("_fence_peer_review_names"),
     "get_peer_review_comments": _fenced("fence_untrusted_fields"),
     "get_peer_review_completion_analytics": _fenced("_fence_peer_review_names"),
@@ -114,10 +116,12 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     ),
     "identify_problematic_peer_reviews": _fenced("fence_untrusted_fields"),
     "list_announcements": _fenced("fence_untrusted"),
+    "list_assignment_groups": _fenced("_format_group"),
     "list_assignments": _fenced("fence_untrusted_inline"),
     "list_code_api_modules": _safe(
         "Returns metadata from bundled local TypeScript modules, not Canvas content."
     ),
+    "list_course_navigation": _fenced("_format_tab"),
     "list_conversations": _fenced("_fence_conversation_fields"),
     "list_course_files": _fenced("fence_untrusted_inline"),
     "list_courses": _deferred(
@@ -129,6 +133,8 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     "list_module_items": _fenced("fence_untrusted_inline"),
     "list_modules": _fenced("fence_untrusted_inline"),
     "list_pages": _fenced("fence_untrusted"),
+    "list_quiz_questions": _fenced("_format_question"),
+    "list_quizzes": _fenced("_format_quiz"),
     "list_peer_reviews": _fenced("fence_untrusted_inline"),
     "list_rubrics": _fenced("fence_untrusted_inline"),
     "list_submissions": _deferred(
@@ -255,7 +261,7 @@ def strip_fence_markers(text: str) -> str:
     return _FENCE_LINE.sub("", _coerce_text(text))
 
 
-def contains_fence_markers(text: str) -> bool:
+def contains_fence_markers(text: object) -> bool:
     """True if ``text`` carries one of our provenance markers.
 
     Read tools fence Canvas-authored content; if a caller pastes a fenced read

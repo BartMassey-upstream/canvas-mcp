@@ -9,6 +9,7 @@ from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.client import make_canvas_request
+from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     UNTRUSTED_NOTICE,
@@ -270,7 +271,7 @@ async def _compose_reminder(
     """Build the (subject, body) of a peer-review reminder, or an error dict."""
     assignment_response = await make_canvas_request(
         "get",
-        f"/courses/{course_identifier}/assignments/{assignment_id}"
+        canvas_path('courses', course_identifier, 'assignments', assignment_id)
     )
 
     if "error" in assignment_response:
@@ -389,7 +390,7 @@ def register_shared_messaging_tools(mcp: FastMCP) -> None:
 
             response = await make_canvas_request(
                 "get",
-                f"/conversations/{conversation_id}",
+                canvas_path('conversations', conversation_id),
                 params=params
             )
 
@@ -640,7 +641,7 @@ def register_educator_messaging_tools(mcp: FastMCP) -> None:
             course_id = await get_course_id(course_identifier)
             permissions = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}/permissions",
+                canvas_path('courses', course_id, 'permissions'),
                 params={"permissions[]": "manage_grades"},
             )
             if (

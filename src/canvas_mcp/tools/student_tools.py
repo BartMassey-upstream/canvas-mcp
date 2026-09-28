@@ -13,6 +13,7 @@ from mcp.types import ToolAnnotations
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.dates import format_date, parse_date
+from ..core.path import canvas_path
 from ..core.untrusted_content import fence_untrusted_inline
 from ..core.validation import validate_params
 
@@ -228,7 +229,7 @@ def register_student_tools(mcp: FastMCP) -> None:
             course_id = await get_course_id(course_identifier)
 
             assignments = await fetch_all_paginated_results(
-                f"/courses/{course_id}/assignments",
+                canvas_path('courses', course_id, 'assignments'),
                 params={"include[]": ["submission"], "per_page": 100}
             )
 
@@ -256,7 +257,7 @@ def register_student_tools(mcp: FastMCP) -> None:
                 course_name = course.get("course_code", course.get("name", "Unknown"))
 
                 assignments = await fetch_all_paginated_results(
-                    f"/courses/{course_id}/assignments",
+                    canvas_path('courses', course_id, 'assignments'),
                     params={"include[]": ["submission"], "per_page": 100}
                 )
 
@@ -469,14 +470,14 @@ def register_student_tools(mcp: FastMCP) -> None:
             course_id = await get_course_id(course_identifier)
 
             assignment = await make_canvas_request(
-                "get", f"/courses/{course_id}/assignments/{assignment_identifier}"
+                "get", canvas_path('courses', course_id, 'assignments', assignment_identifier)
             )
             if not isinstance(assignment, dict) or "error" in assignment:
                 detail = assignment.get("error") if isinstance(assignment, dict) else assignment
                 return f"Error fetching assignment {assignment_identifier}: {detail}"
 
             peer_reviews = await fetch_all_paginated_results(
-                f"/courses/{course_id}/assignments/{assignment_identifier}/peer_reviews",
+                canvas_path('courses', course_id, 'assignments', assignment_identifier, 'peer_reviews'),
                 params={"include[]": ["user"], "per_page": 100}
             )
             if isinstance(peer_reviews, dict) and "error" in peer_reviews:
@@ -530,7 +531,7 @@ def register_student_tools(mcp: FastMCP) -> None:
         for course_id in course_ids:
             # Get assignments for this course
             assignments = await fetch_all_paginated_results(
-                f"/courses/{course_id}/assignments",
+                canvas_path('courses', course_id, 'assignments'),
                 params={"per_page": 100}
             )
 
@@ -545,7 +546,7 @@ def register_student_tools(mcp: FastMCP) -> None:
 
                     # Get peer reviews for this assignment
                     peer_reviews = await fetch_all_paginated_results(
-                        f"/courses/{course_id}/assignments/{assignment_id}/peer_reviews",
+                        canvas_path('courses', course_id, 'assignments', assignment_id, 'peer_reviews'),
                         params={"include[]": ["user"], "per_page": 100}
                     )
 

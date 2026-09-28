@@ -43,6 +43,7 @@ from typing import Any, NamedTuple
 from .client import make_canvas_request
 from .config import get_config
 from .logging import log_warning
+from .path import canvas_path
 
 _KEY_AGENT_WRITES = "agent_writes"
 _KEY_ALLOW_TOOLS = "allow_tools"
@@ -209,7 +210,7 @@ async def _read_policy_text(course_id: str) -> tuple[str | None, str]:
     """
     # The syllabus, which students cannot edit.
     response = await make_canvas_request(
-        "get", f"/courses/{course_id}", params={"include[]": ["syllabus_body"]}
+        "get", canvas_path('courses', course_id), params={"include[]": ["syllabus_body"]}
     )
     if isinstance(response, dict) and "error" in response:
         # A 404 on the COURSE itself means this caller cannot see the course at

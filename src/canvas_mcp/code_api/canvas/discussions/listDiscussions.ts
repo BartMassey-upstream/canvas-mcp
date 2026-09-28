@@ -1,4 +1,4 @@
-import { fetchAllPaginated } from "../../client.js";
+import { canvasPath, fetchAllPaginated } from "../../client.js";
 
 export interface ListDiscussionsInput {
   courseIdentifier: string | number;
@@ -29,7 +29,7 @@ export async function listDiscussions(
 ): Promise<Discussion[]> {
   const { courseIdentifier } = input;
   return fetchAllPaginated<Discussion>(
-    `/courses/${courseIdentifier}/discussion_topics`,
+    canvasPath('courses', courseIdentifier, 'discussion_topics'),
     { per_page: 100 }
   );
 }

@@ -10,7 +10,9 @@ from mcp.types import ToolAnnotations
 
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
+from ..core.config import get_config
 from ..core.dates import format_date, parse_date
+from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
@@ -45,12 +47,11 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
         """
         course_id = await get_course_id(course_identifier)
 
-        params = {
-            "per_page": 100,
-            "include[]": ["all_dates", "submission"]
-        }
+        params: dict[str, Any] = {"per_page": 100}
+        if get_config().canvas_role != "creator":
+            params["include[]"] = ["all_dates", "submission"]
 
-        all_assignments = await fetch_all_paginated_results(f"/courses/{course_id}/assignments", params)
+        all_assignments = await fetch_all_paginated_results(canvas_path('courses', course_id, 'assignments'), params)
 
         if isinstance(all_assignments, dict) and "error" in all_assignments:
             return f"Error fetching assignments: {all_assignments['error']}"
@@ -64,11 +65,13 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
             name = assignment.get("name", "Unnamed assignment")
             due_at = assignment.get("due_at", "No due date")
             points = assignment.get("points_possible", 0)
+            assignment_group_id = assignment.get("assignment_group_id", "N/A")
 
             # Assignment names are instructor-authored free text (issue 239).
             assignments_info.append(
                 f"ID: {assignment_id}\n"
                 f"Name: {fence_untrusted_inline(name, 'assignment name')}\n"
+                f"Assignment Group ID: {assignment_group_id}\n"
                 f"Due: {due_at}\nPoints: {points}\n"
             )
 
@@ -91,7 +94,7 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
         assignment_id_str = str(assignment_id)
 
         response = await make_canvas_request(
-            "get", f"/courses/{course_id}/assignments/{assignment_id_str}"
+            "get", canvas_path('courses', course_id, 'assignments', assignment_id_str)
         )
 
         if "error" in response:
@@ -105,6 +108,7 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
             + fence_untrusted(response.get('description') or 'N/A', 'assignment description'),
             f"Due Date: {format_date(response.get('due_at'))}",
             f"Points Possible: {response.get('points_possible', 'N/A')}",
+            f"Assignment Group ID: {response.get('assignment_group_id', 'N/A')}",
             f"Submission Types: {', '.join(response.get('submission_types', ['N/A']))}",
             f"Published: {response.get('published', False)}",
             f"Locked: {response.get('locked_for_user', False)}"
@@ -134,7 +138,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         # First, we need to get the submission ID for the reviewee
         submissions = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/assignments/{assignment_id}/submissions",
+            canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions'),
             params={"per_page": 100}
         )
 
@@ -161,7 +165,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
             reviewee_submission = await make_canvas_request(
                 "post",
-                f"/courses/{course_id}/assignments/{assignment_id}/submissions",
+                canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions'),
                 data=placeholder_data
             )
 
@@ -179,7 +183,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         # Make the API request to create the peer review
         response = await make_canvas_request(
             "post",
-            f"/courses/{course_id}/assignments/{assignment_id}/submissions/{submission_id}/peer_reviews",
+            canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions', submission_id, 'peer_reviews'),
             data=data
         )
 
@@ -208,7 +212,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
         # Get all submissions for this assignment
         submissions = await fetch_all_paginated_results(
-            f"/courses/{course_id}/assignments/{assignment_id}/submissions",
+            canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions'),
             {"include[]": "submission_comments", "per_page": 100}
         )
 
@@ -223,7 +227,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
         # Get all users in the course for name lookups
         users = await fetch_all_paginated_results(
-            f"/courses/{course_id}/users",
+            canvas_path('courses', course_id, 'users'),
             {"per_page": 100}
         )
 
@@ -248,7 +252,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             # Get peer reviews for this submission
             peer_reviews = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}/assignments/{assignment_id}/submissions/{submission_id}/peer_reviews"
+                canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions', submission_id, 'peer_reviews')
             )
 
             if "error" in peer_reviews:
@@ -327,7 +331,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         }
 
         submissions = await fetch_all_paginated_results(
-            f"/courses/{course_id}/assignments/{assignment_id_str}/submissions", params
+            canvas_path('courses', course_id, 'assignments', assignment_id_str, 'submissions'), params
         )
 
         if isinstance(submissions, dict) and "error" in submissions:
@@ -370,7 +374,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
         # Get assignment details
         assignment = await make_canvas_request(
-            "get", f"/courses/{course_id}/assignments/{assignment_id_str}"
+            "get", canvas_path('courses', course_id, 'assignments', assignment_id_str)
         )
 
         if isinstance(assignment, dict) and "error" in assignment:
@@ -383,7 +387,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         }
 
         students = await fetch_all_paginated_results(
-            f"/courses/{course_id}/users", params
+            canvas_path('courses', course_id, 'users'), params
         )
 
         if isinstance(students, dict) and "error" in students:
@@ -397,7 +401,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
         # Get submissions for this assignment
         submissions = await fetch_all_paginated_results(
-            f"/courses/{course_id}/assignments/{assignment_id}/submissions",
+            canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions'),
             {"per_page": 100, "include[]": ["user"]}
         )
 
@@ -738,7 +742,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         # Make the API request
         response = await make_canvas_request(
             "post",
-            f"/courses/{course_id}/assignments",
+            canvas_path('courses', course_id, 'assignments'),
             data={"assignment": assignment_data}
         )
 
@@ -900,7 +904,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         # Make the API request
         response = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/assignments/{assignment_id}",
+            canvas_path('courses', course_id, 'assignments', assignment_id),
             data={"assignment": assignment_data}
         )
 
@@ -948,6 +952,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         course_identifier: str | int,
         assignment_id: str | int,
         require_name_match: str | None = None,
+        allow_deleting_student_work: bool = False,
         confirmation_token: str | None = None
     ) -> str:
         """Delete an assignment. Two-step: preview first, then confirm with the token.
@@ -959,12 +964,13 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             course_identifier: Course code or Canvas ID
             assignment_id: Assignment ID to delete
             require_name_match: Only delete if the assignment name matches this string exactly
+            allow_deleting_student_work: Must be true when submissions or grades exist
             confirmation_token: Token from the preview call; omit to preview
         """
         course_id = await get_course_id(course_identifier)
 
         assignment = await make_canvas_request(
-            "get", f"/courses/{course_id}/assignments/{assignment_id}"
+            "get", canvas_path('courses', course_id, 'assignments', assignment_id)
         )
         if "error" in assignment:
             return f"Error fetching assignment details: {assignment['error']}"
@@ -980,6 +986,15 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
         has_submissions = bool(assignment.get("has_submitted_submissions"))
         needs_grading = assignment.get("needs_grading_count")
+        has_student_work = has_submissions or (
+            isinstance(needs_grading, int | float) and needs_grading > 0
+        )
+        if has_student_work and not allow_deleting_student_work:
+            return (
+                "Error: this assignment has existing student work. It was not "
+                "deleted. Pass allow_deleting_student_work=true only if deleting "
+                "its submissions and grades is intentional."
+            )
         course_display = await get_course_code(course_id) or course_identifier
         # Everything the preview shows to identify the target is bound, so a
         # due-date or points edit between preview and confirm stops matching.
@@ -987,6 +1002,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             "delete_assignment_with_confirmation", str(course_id), str(assignment_id),
             name, str(assignment.get("due_at")), str(assignment.get("points_possible")),
             str(has_submissions), str(needs_grading),
+            str(allow_deleting_student_work),
         )
         if not confirmation_token:
             preview = (
@@ -996,6 +1012,8 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
                 f"  Points: {assignment.get('points_possible')}\n"
                 f"  Submissions: {'yes' if has_submissions else 'none'}"
                 f"{f', needs grading: {needs_grading}' if needs_grading is not None else ''}\n"
+                f"  Student-work deletion authorized: "
+                f"{'yes' if allow_deleting_student_work else 'not needed'}\n"
                 "  ⚠️  Deleting an assignment also deletes all of its submissions and grades."
             )
             return preview_with_token(
@@ -1007,7 +1025,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             return error
 
         response = await make_canvas_request(
-            "delete", f"/courses/{course_id}/assignments/{assignment_id}"
+            "delete", canvas_path('courses', course_id, 'assignments', assignment_id)
         )
         if "error" in response:
             return f"Error deleting assignment {shown_name}: {response['error']}"
@@ -1064,7 +1082,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         if has_rubric_grades:
             assignment_check = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}/assignments/{assignment_id_str}",
+                canvas_path('courses', course_id, 'assignments', assignment_id_str),
                 params={"include[]": ["rubric", "rubric_settings"]}
             )
 
@@ -1173,7 +1191,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
                 # Submit the grade
                 response = await make_canvas_request(
                     "put",
-                    f"/courses/{course_id}/assignments/{assignment_id_str}/submissions/{user_id}",
+                    canvas_path('courses', course_id, 'assignments', assignment_id_str, 'submissions', user_id),
                     data=form_data,
                     use_form_data=True
                 )

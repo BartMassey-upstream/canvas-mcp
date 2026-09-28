@@ -13,6 +13,7 @@ from mcp.types import ToolAnnotations
 from ..core.cache import get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.dates import parse_date
+from ..core.path import canvas_path
 from ..core.untrusted_content import fence_untrusted
 from ..core.validation import coerce_canvas_id, validate_params
 from ..core.write_confirmation import ConfirmationGuard, unconfirmed_write_warning
@@ -39,7 +40,7 @@ async def _resolve_course(
     """Resolve and verify one course, returning its canonical numeric ID."""
     try:
         resolved = await get_course_id(course_identifier)
-        response = await make_canvas_request("get", f"/courses/{resolved}")
+        response = await make_canvas_request("get", canvas_path('courses', resolved))
     except Exception as exc:
         return None, None, f"Could not resolve the {label} course: {exc}"
 
@@ -119,7 +120,7 @@ async def _target_occupancy(target_course_id: str) -> dict[str, Any]:
     for label, endpoint_suffix in _OCCUPANCY_ENDPOINTS.items():
         try:
             response = await fetch_all_paginated_results(
-                f"/courses/{target_course_id}/{endpoint_suffix}",
+                canvas_path("courses", target_course_id, endpoint_suffix),
                 {"per_page": 100},
             )
         except Exception:
@@ -360,7 +361,7 @@ def register_content_migration_tools(mcp: FastMCP) -> None:
         try:
             response = await make_canvas_request(
                 "post",
-                f"/courses/{target_id}/content_migrations",
+                canvas_path('courses', target_id, 'content_migrations'),
                 data=form,
                 use_form_data=True,
             )
@@ -423,7 +424,7 @@ def register_content_migration_tools(mcp: FastMCP) -> None:
             return {"error": "Could not resolve the course to a numeric Canvas ID."}
 
         migration_endpoint = (
-            f"/courses/{course_id}/content_migrations/{canonical_migration_id}"
+            canvas_path('courses', course_id, 'content_migrations', canonical_migration_id)
         )
         try:
             migration = await make_canvas_request("get", migration_endpoint)
@@ -446,7 +447,7 @@ def register_content_migration_tools(mcp: FastMCP) -> None:
             }
 
         try:
-            progress = await make_canvas_request("get", f"/progress/{progress_id}")
+            progress = await make_canvas_request("get", canvas_path('progress', progress_id))
         except Exception as exc:
             return {"error": f"Could not read content migration progress: {exc}"}
         if not isinstance(progress, dict):
@@ -493,7 +494,13 @@ def register_content_migration_tools(mcp: FastMCP) -> None:
                 ),
             }
 
-        issues_endpoint = f"{migration_endpoint}/migration_issues"
+        issues_endpoint = canvas_path(
+            "courses",
+            course_id,
+            "content_migrations",
+            canonical_migration_id,
+            "migration_issues",
+        )
         try:
             issues_response = await fetch_all_paginated_results(issues_endpoint)
         except Exception as exc:

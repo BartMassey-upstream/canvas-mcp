@@ -423,7 +423,7 @@ and is worth planning for up front.
 | `LOG_API_REQUESTS` | `false` | `false` | |
 | `LOG_ACCESS_EVENTS` / `LOG_EXECUTION_EVENTS` | `false` | `true` | Audit trail |
 | `AUDIT_LOG_DIR` | empty | persisted path | |
-| `CANVAS_ROLE` | `all` | `all` or `educator` | Tool profile: `student`, `educator`, or `all`. Student *write* tools additionally require the `STUDENT_WRITE_TOOLS` allowlist (empty by default — every student write is off unless the operator names it) |
+| `CANVAS_ROLE` | `all` | `all`, `creator`, or `educator` | Tool profile: `student`, `creator` (course setup without student records), `educator`, or `all`. Student *write* tools additionally require the `STUDENT_WRITE_TOOLS` allowlist (empty by default — every student write is off unless the operator names it) |
 | `API_TIMEOUT` / `CACHE_TTL` / `MAX_CONCURRENT_REQUESTS` | `30` / `300` / `10` | tune | |
 | `READ_FILE_MAX_SIZE_MB` | `100` | tune | Course-file read cap |
 | `MCP_SERVER_NAME` | `canvas-api` | `canvas-mcp` | |

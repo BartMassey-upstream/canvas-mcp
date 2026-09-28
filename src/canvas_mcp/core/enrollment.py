@@ -26,6 +26,7 @@ from typing import cast
 from .audit import log_data_access
 from .cache import get_course_id
 from .client import make_canvas_request
+from .path import canvas_path
 
 # Identifier guard: alphanumerics plus a few separators, bounded length, before
 # the value ever reaches a Canvas query string. ``@`` is permitted because many
@@ -320,7 +321,7 @@ async def _fetch_enrollments_raw(course_id: str, params: dict) -> list[dict] | d
     while True:
         resp = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/enrollments",
+            canvas_path('courses', course_id, 'enrollments'),
             params={**params, "page": page, "per_page": 100},
             skip_anonymization=True,
         )
@@ -383,7 +384,7 @@ async def check_enrollment(
 
     raw = await _fetch_enrollments_raw(course_id, params)
     if isinstance(raw, dict) and "error" in raw:
-        log_data_access("GET", f"/courses/{course_id}/enrollments", "error",
+        log_data_access("GET", canvas_path('courses', course_id, 'enrollments'), "error",
                         error=str(raw.get("error")))
         raise RuntimeError(str(raw.get("error")))
     # _fetch_enrollments_raw returns a list in every non-error case.
@@ -429,7 +430,7 @@ async def check_enrollment(
     needs_visibility_proof = match is None or not match[2]
     scope = answerable if match is None else enrollments
     if needs_visibility_proof and scope and not _identifiers_visible(scope):
-        log_data_access("GET", f"/courses/{course_id}/enrollments", "indeterminate")
+        log_data_access("GET", canvas_path('courses', course_id, 'enrollments'), "indeterminate")
         detail = (
             "so a 'not enrolled' answer cannot be trusted."
             if match is None
@@ -443,7 +444,7 @@ async def check_enrollment(
             f"this roster, {detail}"
         )
 
-    log_data_access("GET", f"/courses/{course_id}/enrollments", "success")
+    log_data_access("GET", canvas_path('courses', course_id, 'enrollments'), "success")
 
     if match is None:
         return EnrollmentResult(enrolled=False, course_id=course_id)

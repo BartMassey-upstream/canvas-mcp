@@ -5,6 +5,7 @@ This document provides a comprehensive overview of all tools available in the Ca
 ## Table of Contents
 
 - [Student Tools](#student-tools)
+- [Creator Profile](#creator-profile)
 - [Educator Tools](#educator-tools)
 - [Shared Tools](#shared-tools-both-students--educators)
 - [Developer Tools](#developer-tools)
@@ -18,7 +19,7 @@ These tools provide students with personal academic tracking and organization ca
 
 ### Self-Identity
 
-Available under **every** role profile (student, educator, all) — these describe only the authenticated caller, so they need no roster permission.
+Available under **every** role profile (student, creator, educator, all) — these describe only the authenticated caller, so they need no roster permission.
 
 #### `get_my_profile`
 Get your own Canvas identity.
@@ -50,6 +51,17 @@ List the courses **you** are enrolled in, with your role in each.
 **Returns:** Course code, name, ID, and your role(s) per course. Reports **all** roles when you hold more than one enrollment in a course (e.g. TA and student).
 
 Use this — not [`check_enrollment`](#check_enrollment) — for any question about your own enrollment. `check_enrollment` reads the course roster, which requires roster-admin rights your token probably does not have.
+
+---
+
+## Creator Profile
+
+Set `CANVAS_ROLE=creator` to expose course-construction tools without tools
+that read student records. The profile supports assignments, assignment groups, Classic Quizzes, course navigation, syllabus, pages,
+modules, course files, rubrics, announcements, content migrations, and
+accessibility review. It excludes rosters, submissions, grading, analytics,
+peer reviews, conversations, discussions, messaging,
+anonymization maps, and code execution.
 
 ---
 
@@ -311,7 +323,7 @@ These tools provide instructors and TAs with course management, grading, analyti
 ### Assignment Management
 
 #### `list_assignments`
-List all assignments for a course.
+List all assignments for a course, including each assignment-group ID.
 
 **Parameters:**
 - `course_identifier`: Course code (e.g., "badm_350_120251_246794") or ID
@@ -325,7 +337,8 @@ List all assignments for a course.
 ---
 
 #### `get_assignment_details`
-Get detailed information about a specific assignment.
+Get detailed information about a specific assignment, including its
+assignment-group ID.
 
 **Parameters:**
 - `course_identifier`: Course code or ID
@@ -335,6 +348,61 @@ Get detailed information about a specific assignment.
 ```
 "Show me details for Assignment 3"
 ```
+
+---
+
+#### Assignment-group tools
+
+- `list_assignment_groups`: list IDs, names, positions, and weights; pass
+  `include_assignments=true` for a compact group hierarchy containing
+  assignment IDs and Classic Quiz IDs, but never submissions or scores
+- `create_assignment_group`: create a named group with optional position and
+  weight
+- `update_assignment_group`: change its name, position, or weight
+- `delete_assignment_group`: preview and confirm deletion while moving every
+  assignment to another active group; it never deletes the assignments
+
+---
+
+#### Classic Quiz authoring tools
+
+- `list_quizzes` and `get_quiz`: read quiz definitions, assignment-group IDs,
+  and backing assignment IDs without attempts, submissions, responses, or
+  statistics
+- `create_quiz` and `update_quiz`: author Classic Quiz settings; the update
+  tool's `clear_time_limit`, `clear_due_at`, `clear_unlock_at`, and
+  `clear_lock_at` flags remove existing limits and dates
+- `delete_quiz`: refuse when student work exists unless
+  `allow_deleting_student_work=true`, then preview and confirm deletion
+- `list_quiz_questions`, `create_quiz_question`, and
+  `update_quiz_question`: author question definitions and answer choices
+- `delete_quiz_question`: apply the same student-work opt-in before previewing
+  and confirming question deletion
+
+These tools target Canvas Classic Quizzes. They do not expose New Quizzes or
+any student quiz activity.
+
+---
+
+#### Course-navigation tools
+
+- `list_course_navigation`: list the course's navigation tabs, positions, and
+  visibility
+- `update_course_navigation`: reorder or show/hide a tab using its returned ID
+
+---
+
+#### Announcement detail tools
+
+- `get_announcement`: read one announcement's body and settings
+- `update_announcement`: edit only an ID verified through Canvas's
+  announcement-only collection; `clear_delayed_post_at` and `clear_lock_at`
+  remove its scheduled posting and automatic lock times
+
+The creator profile omits the older ID-based single and bulk announcement
+delete tools because those Canvas endpoints also address ordinary discussion
+topics. Criteria-based announcement deletion remains available because it
+starts from the announcement-only collection.
 
 ---
 
@@ -441,6 +509,8 @@ Delete an assignment. **Permanent, and it takes every submission and grade with 
 - `course_identifier`: Course code or ID
 - `assignment_id`: Assignment ID to delete
 - `require_name_match` (optional): Only delete if the assignment name matches this string exactly
+- `allow_deleting_student_work` (optional, default `false`): Required when
+  Canvas reports submissions or grades for the assignment
 - `confirmation_token` (optional): Token from the preview call; omit to preview
 
 **Example:**
@@ -448,7 +518,9 @@ Delete an assignment. **Permanent, and it takes every submission and grade with 
 "Delete the duplicate 'Homework 1' assignment, but show me first"
 ```
 
-**Returns:** Preview with name, due date, points and whether submissions exist (no token), then the deletion result.
+**Returns:** An error when student work exists without explicit permission;
+otherwise a preview with name, due date, points, and submission impact, then
+the deletion result after confirmation.
 
 ---
 
