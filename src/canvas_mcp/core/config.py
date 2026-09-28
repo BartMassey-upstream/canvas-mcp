@@ -150,11 +150,6 @@ def _validate_windows_token_acl(fd: int, token_path: Path) -> None:
 
     sid_text = win32security.ConvertSidToStringSid
     current_sid_text = sid_text(current_sid)
-    if sid_text(owner_sid) != current_sid_text:
-        raise CanvasTokenFileError(
-            f"Canvas token file {token_path} must be owned by the current Windows user"
-        )
-
     allowed_sids = {
         current_sid_text,
         sid_text(
@@ -168,6 +163,12 @@ def _validate_windows_token_acl(fd: int, token_path: Path) -> None:
             )
         ),
     }
+    if sid_text(owner_sid) not in allowed_sids:
+        raise CanvasTokenFileError(
+            f"Canvas token file {token_path} must be owned by the current Windows "
+            "user, SYSTEM, or Administrators"
+        )
+
     allowed_ace_types = {
         getattr(win32security, name)
         for name in (

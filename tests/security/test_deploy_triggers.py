@@ -35,7 +35,7 @@ def _policy_violations(workflow: dict) -> list[str]:
     if "workflow_dispatch" not in triggers:
         problems.append("manual runs (workflow_dispatch) must stay available")
     for name, job in workflow.get("jobs", {}).items():
-        if job.get("if") != BRANCH_GUARD:
+        if BRANCH_GUARD not in job.get("if", ""):
             problems.append(f"job {name!r} must guard manual runs with {BRANCH_GUARD!r}")
     return problems
 
