@@ -119,7 +119,7 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "read_course_file": Effect.READ,
     "scan_course_content_accessibility": Effect.READ,
     "search_canvas_tools": Effect.READ,
-    # --- CANVAS_WRITE (52) ---
+    # --- CANVAS_WRITE (54) ---
     "add_module_item": Effect.CANVAS_WRITE,
     "assign_peer_review": Effect.CANVAS_WRITE,
     "associate_rubric": Effect.CANVAS_WRITE,
@@ -142,6 +142,7 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "delete_announcements_by_criteria": Effect.CANVAS_WRITE,
     "delete_assignment_with_confirmation": Effect.CANVAS_WRITE,
     "delete_assignment_group": Effect.CANVAS_WRITE,
+    "delete_course_file": Effect.CANVAS_WRITE,
     "delete_module": Effect.CANVAS_WRITE,
     "delete_module_item": Effect.CANVAS_WRITE,
     "delete_page": Effect.CANVAS_WRITE,
@@ -162,6 +163,7 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "update_assignment": Effect.CANVAS_WRITE,
     "update_assignment_group": Effect.CANVAS_WRITE,
     "update_announcement": Effect.CANVAS_WRITE,
+    "update_course_file": Effect.CANVAS_WRITE,
     "update_course_navigation": Effect.CANVAS_WRITE,
     "update_discussion_topic": Effect.CANVAS_WRITE,
     "update_module": Effect.CANVAS_WRITE,

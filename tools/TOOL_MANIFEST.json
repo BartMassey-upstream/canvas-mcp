@@ -3168,6 +3168,42 @@
       ]
     },
     {
+      "name": "update_course_file",
+      "category": "educator",
+      "description": "Rename, move, or change visibility and lock settings for a course file.",
+      "parameters": [
+        {"name": "course_identifier", "type": "string | integer", "required": true, "description": "Course code or Canvas ID"},
+        {"name": "file_id", "type": "string | integer", "required": true, "description": "Canvas file ID"},
+        {"name": "name", "type": "string", "required": false, "description": "New display name"},
+        {"name": "parent_folder_id", "type": "string | integer", "required": false, "description": "Folder ID to move the file into"},
+        {"name": "on_duplicate", "type": "string", "required": false, "description": "How to handle a name collision: overwrite or rename"},
+        {"name": "lock_at", "type": "string", "required": false, "description": "Date/time at which the file becomes locked"},
+        {"name": "unlock_at", "type": "string", "required": false, "description": "Date/time at which the file becomes available"},
+        {"name": "locked", "type": "boolean", "required": false, "description": "Lock or unlock the file immediately"},
+        {"name": "hidden", "type": "boolean", "required": false, "description": "Hide or show the file"},
+        {"name": "visibility_level", "type": "string", "required": false, "description": "One of inherit, course, institution, or public"},
+        {"name": "clear_lock_at", "type": "boolean", "required": false, "default": false, "description": "Remove the scheduled lock date"},
+        {"name": "clear_unlock_at", "type": "boolean", "required": false, "default": false, "description": "Remove the scheduled unlock date"}
+      ],
+      "returns": "Updated file details",
+      "examples": ["Move the syllabus into folder 42 and rename it"]
+    },
+    {
+      "name": "delete_course_file",
+      "category": "educator",
+      "description": "Permanently delete a course file after preview and confirmation.",
+      "parameters": [
+        {"name": "course_identifier", "type": "string | integer", "required": true, "description": "Course code or Canvas ID"},
+        {"name": "file_id", "type": "string | integer", "required": true, "description": "Canvas file ID"},
+        {"name": "require_name_match", "type": "string", "required": false, "description": "Only delete if the current display name matches exactly"},
+        {"name": "allow_deleting_module_references", "type": "boolean", "required": false, "default": false, "description": "Permit deletion despite linked module items"},
+        {"name": "confirmation_token", "type": "string", "required": false, "description": "Token from the preview call; omit to preview"}
+      ],
+      "returns": "A deletion preview and confirmation token, or deletion result",
+      "examples": ["Delete obsolete file 123 after showing its module references"],
+      "notes": "Canvas does not remove module items linked to a deleted file. The tool refuses linked files unless allow_deleting_module_references is explicitly true."
+    },
+    {
       "name": "upload_course_file",
       "category": "educator",
       "description": "Upload a file to Canvas course storage.",

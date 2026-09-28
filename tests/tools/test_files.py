@@ -8,6 +8,7 @@ Tests for the Canvas file upload tools:
 These tests use mocking to avoid requiring real Canvas API access.
 """
 
+import re
 from unittest.mock import patch
 
 import pytest
@@ -46,6 +47,7 @@ def mock_canvas_api():
     with patch('canvas_mcp.tools.files.get_course_id') as mock_get_id, \
          patch('canvas_mcp.tools.files.get_course_code') as mock_get_code, \
          patch('canvas_mcp.tools.files.make_canvas_request') as mock_request, \
+         patch('canvas_mcp.tools.files.fetch_all_paginated_results') as mock_fetch, \
          patch('canvas_mcp.tools.files.upload_file_to_storage') as mock_upload:
 
         mock_get_id.return_value = "60366"
@@ -55,6 +57,7 @@ def mock_canvas_api():
             'get_course_id': mock_get_id,
             'get_course_code': mock_get_code,
             'make_canvas_request': mock_request,
+            'fetch_all_paginated_results': mock_fetch,
             'upload_file_to_storage': mock_upload
         }
 
@@ -1292,6 +1295,166 @@ class TestListCourseFiles:
         result = await list_fn("60366", order="asc")
 
         assert "Invalid order" not in result
+
+
+class TestUpdateCourseFile:
+    @pytest.mark.asyncio
+    async def test_updates_metadata(self, mock_canvas_api):
+        mock_canvas_api["make_canvas_request"].side_effect = [
+            MOCK_UPLOAD_SUCCESS_RESPONSE,
+            {
+                **MOCK_UPLOAD_SUCCESS_RESPONSE,
+                "display_name": "outline.pdf",
+                "folder_id": 99,
+            },
+        ]
+        tool = get_tool_function("update_course_file")
+
+        result = await tool(
+            "60366",
+            12345,
+            name="outline.pdf",
+            parent_folder_id=99,
+            locked=False,
+            hidden=True,
+            clear_unlock_at=True,
+        )
+
+        assert "updated successfully" in result
+        assert mock_canvas_api["make_canvas_request"].call_args_list[1].args == (
+            "put",
+            "/files/12345",
+        )
+        assert mock_canvas_api["make_canvas_request"].call_args_list[1].kwargs == {
+            "data": {
+                "name": "outline.pdf",
+                "parent_folder_id": "99",
+                "unlock_at": "",
+                "locked": False,
+                "hidden": True,
+            },
+            "use_form_data": True,
+        }
+
+    @pytest.mark.asyncio
+    async def test_rejects_no_fields_and_invalid_values(self, mock_canvas_api):
+        tool = get_tool_function("update_course_file")
+        assert "No fields" in await tool("60366", 12345)
+        assert "Invalid on_duplicate" in await tool("60366", 12345, on_duplicate="fail")
+        assert "Invalid visibility_level" in await tool(
+            "60366", 12345, visibility_level="secret"
+        )
+        assert "cannot both" in await tool(
+            "60366", 12345, lock_at="2026-01-01", clear_lock_at=True
+        )
+        assert mock_canvas_api["make_canvas_request"].await_count == 0
+
+    @pytest.mark.asyncio
+    async def test_validates_course_membership_before_global_update(
+        self, mock_canvas_api
+    ):
+        mock_canvas_api["make_canvas_request"].return_value = {"error": "not found"}
+        tool = get_tool_function("update_course_file")
+        result = await tool("60366", 12345, name="new.pdf")
+        assert "Error fetching file details" in result
+        assert mock_canvas_api["make_canvas_request"].await_count == 1
+
+
+class TestDeleteCourseFile:
+    @staticmethod
+    def _token(preview: str) -> str:
+        match = re.search(r"Confirmation token: (\S+)", preview)
+        assert match
+        return match.group(1)
+
+    @pytest.fixture(autouse=True)
+    def reset_guard(self):
+        from canvas_mcp.tools.files import _DELETE_FILE_GUARD
+
+        _DELETE_FILE_GUARD.reset()
+
+    @pytest.mark.asyncio
+    async def test_preview_then_confirm(self, mock_canvas_api):
+        mock_canvas_api["make_canvas_request"].side_effect = [
+            MOCK_UPLOAD_SUCCESS_RESPONSE,
+            MOCK_UPLOAD_SUCCESS_RESPONSE,
+            MOCK_UPLOAD_SUCCESS_RESPONSE,
+        ]
+        mock_canvas_api["fetch_all_paginated_results"].return_value = []
+        tool = get_tool_function("delete_course_file")
+
+        preview = await tool("60366", 12345, require_name_match="syllabus.pdf")
+        assert "PREVIEW" in preview and "Nothing deleted" in preview
+        assert all(
+            call.args[0] != "delete"
+            for call in mock_canvas_api["make_canvas_request"].call_args_list
+        )
+
+        result = await tool(
+            "60366",
+            12345,
+            require_name_match="syllabus.pdf",
+            confirmation_token=self._token(preview),
+        )
+        assert "deleted successfully" in result
+        delete_call = mock_canvas_api["make_canvas_request"].call_args_list[-1]
+        assert delete_call.args == ("delete", "/files/12345")
+
+    @pytest.mark.asyncio
+    async def test_refuses_linked_module_item_without_opt_in(self, mock_canvas_api):
+        mock_canvas_api[
+            "make_canvas_request"
+        ].return_value = MOCK_UPLOAD_SUCCESS_RESPONSE
+        mock_canvas_api["fetch_all_paginated_results"].return_value = [
+            {
+                "id": 7,
+                "name": "Week 1",
+                "items_count": 1,
+                "items": [
+                    {"id": 8, "type": "File", "content_id": 12345, "title": "Syllabus"}
+                ],
+            }
+        ]
+        tool = get_tool_function("delete_course_file")
+        result = await tool("60366", 12345)
+        assert "allow_deleting_module_references=true" in result
+        assert "Nothing was deleted" in result
+
+    @pytest.mark.asyncio
+    async def test_opt_in_previews_module_references(self, mock_canvas_api):
+        mock_canvas_api[
+            "make_canvas_request"
+        ].return_value = MOCK_UPLOAD_SUCCESS_RESPONSE
+        mock_canvas_api["fetch_all_paginated_results"].return_value = [
+            {
+                "id": 7,
+                "name": "Week 1",
+                "items_count": 1,
+                "items": [
+                    {"id": 8, "type": "File", "content_id": 12345, "title": "Syllabus"}
+                ],
+            }
+        ]
+        tool = get_tool_function("delete_course_file")
+        result = await tool("60366", 12345, allow_deleting_module_references=True)
+        assert "PREVIEW" in result
+        assert "Module references left broken: 1" in result
+        assert "Week 1" in result and "Syllabus" in result
+
+    @pytest.mark.asyncio
+    async def test_changed_file_invalidates_token(self, mock_canvas_api):
+        mock_canvas_api[
+            "make_canvas_request"
+        ].return_value = MOCK_UPLOAD_SUCCESS_RESPONSE
+        mock_canvas_api["fetch_all_paginated_results"].return_value = []
+        tool = get_tool_function("delete_course_file")
+        preview = await tool("60366", 12345)
+        mock_canvas_api["make_canvas_request"].return_value = {
+            **MOCK_UPLOAD_SUCCESS_RESPONSE,
+            "display_name": "renamed.pdf",
+        }
+        result = await tool("60366", 12345, confirmation_token=self._token(preview))
+        assert "does not match" in result
 
 
 if __name__ == "__main__":

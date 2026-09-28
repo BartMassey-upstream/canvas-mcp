@@ -88,6 +88,7 @@ CREATOR_TOOLS = {
     "delete_assignment_group",
     "delete_announcements_by_criteria",
     "delete_assignment_with_confirmation",
+    "delete_course_file",
     "delete_module",
     "delete_module_item",
     "delete_page",
@@ -132,6 +133,7 @@ CREATOR_TOOLS = {
     "update_assignment_group",
     "update_announcement",
     "update_course_navigation",
+    "update_course_file",
     "update_module",
     "update_module_item",
     "update_page_settings",
@@ -152,6 +154,8 @@ EDUCATOR_ONLY_SAMPLE = {
     "create_announcement",
     "create_module",
     "upload_course_file",
+    "update_course_file",
+    "delete_course_file",
     "create_page",
     # Writing a syllabus needs an instructor-scoped token, so it must not leak
     # into the student profile even though its read twin get_syllabus is shared.

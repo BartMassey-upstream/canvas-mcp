@@ -67,6 +67,7 @@ DESTRUCTIVE = {
     "update_module_item",
     "update_page_settings",
     "update_discussion_topic",
+    "update_course_file",
     # Replaces a file (on_duplicate="overwrite") or a local CSV.
     "upload_course_file",
     "create_student_anonymization_map",
@@ -84,6 +85,7 @@ DESTRUCTIVE = {
     "create_content_migration",
     # Removals.
     "delete_page",
+    "delete_course_file",
     "delete_module",
     "delete_module_item",
     "delete_announcement_with_confirmation",

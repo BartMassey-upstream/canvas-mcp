@@ -35,9 +35,9 @@ Reduce tool overhead by setting a role-based profile. Only tools relevant to the
 ```
 # In the platform config directory's env file:
 CANVAS_ROLE=student    # ~37 tools (student + shared)
-CANVAS_ROLE=creator    # 68 course-building tools; no student records
+CANVAS_ROLE=creator    # 70 course-building tools; no student records
 CANVAS_ROLE=educator   # 109 tools (educator + shared)
-CANVAS_ROLE=all        # Default profile; 115 tools by default, 120 with all feature-gated tools enabled
+CANVAS_ROLE=all        # Default profile; 117 tools by default, 122 with all feature-gated tools enabled
 ```
 
 Or via CLI flag: `canvas-mcp-server --role student` (CLI flag takes precedence over env var).
@@ -120,6 +120,8 @@ Course management, grading, and analytics. Requires instructor/TA role.
 | `send_bulk_messages_from_list` | Templated bulk messaging. **Two calls:** the first returns a preview + confirmation token and sends nothing; show the preview to the educator, then call again with the token and identical arguments. The token is single-use and dies if any argument changed |
 | `send_peer_review_inbox_messages` | Send direct Canvas Inbox messages about incomplete peer reviews; this is not Canvas's native reminder action. Requires `manage_grades` permission and uses **two calls** (preview + confirm) |
 | `create_announcement` | Post course announcements. Pre-checks Canvas's announcement permission; if Canvas silently creates a discussion instead, the tool deletes that unintended topic and reports failure (or warns if cleanup cannot be confirmed) |
+| `update_course_file` | Rename or move a course file and change its lock or visibility settings |
+| `delete_course_file` | Permanently delete a course file after preview; linked module items require an additional explicit opt-in |
 | `update_discussion_topic` | Edit discussion or announcement title/body and settings |
 | `update_syllabus` | Write the course Syllabus tab (`replace`, `append`, or `prepend`). Canvas keeps no revision history for the syllabus, so **replacing a syllabus that already has content is two calls** — preview + token, then confirm. Writing into an empty syllabus, appending, or prepending is a single call. The write is verified by reading the syllabus back |
 
@@ -295,7 +297,7 @@ reports existing student work unless `allow_deleting_student_work=true` is
 passed in both the preview and confirmation calls.
 Applies to: delete_announcement_with_confirmation, bulk_delete_announcements,
 delete_announcements_by_criteria, delete_page, delete_module, delete_module_item,
-delete_assignment_with_confirmation, delete_assignment_group, delete_quiz, and
+delete_assignment_with_confirmation, delete_course_file, delete_assignment_group, delete_quiz, and
 delete_quiz_question. There is no un-tokened delete tool.
 ```
 

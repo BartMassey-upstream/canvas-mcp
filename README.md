@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![skills.sh](https://img.shields.io/badge/skills.sh-canvas--mcp-blue)](https://skills.sh)
 
-MCP server for Canvas LMS with **up to 120 tools** and **8 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
+MCP server for Canvas LMS with **up to 122 tools** and **8 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
 
 ## Quick Start
 
@@ -36,7 +36,7 @@ See [Agent Skills](#-agent-skills) for the list. If your agent is Claude Code, t
   See CLAUDE.md "Documentation Maintenance" for full guidelines.
 -->
 
-Canvas MCP provides **up to 120 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 120. Tools are organized by user type:
+Canvas MCP provides **up to 122 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 122. Tools are organized by user type:
 
 <details>
 <summary><strong>Student Tools</strong> (click to expand)</summary>
@@ -76,6 +76,8 @@ Canvas MCP provides **up to 120 tools** for interacting with Canvas LMS; the def
 | `bulk_update_pages` | Batch page operations | "Unpublish all draft pages" |
 | **File Management** | | |
 | `upload_course_file` | Upload local file to Canvas | "Upload syllabus.pdf to the course" |
+| `update_course_file` | Rename, move, lock, or hide a file | "Move the syllabus into the Week 1 folder" |
+| `delete_course_file` | Safely delete a file after preview | "Delete the obsolete handout" |
 
 </details>
 
@@ -278,7 +280,7 @@ Claude Code skills are located in `.claude/skills/` and can be customized for yo
 
 ### Course Creation Without Student Records
 
-Set `CANVAS_ROLE=creator` (or pass `--role creator`) to expose 68 tools for
+Set `CANVAS_ROLE=creator` (or pass `--role creator`) to expose 70 tools for
 building assignments, assignment groups, Classic Quizzes, course navigation, syllabi, pages, modules, course files, rubrics,
 announcements, migrations, and accessible content without registering tools
 that read student records. The profile excludes rosters, submissions,

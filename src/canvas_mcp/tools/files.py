@@ -13,8 +13,10 @@ This module handles all three steps transparently.
 """
 
 import base64
+import json
 import os
 import tempfile
+from typing import Any
 
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -28,6 +30,7 @@ from ..core.client import (
 )
 from ..core.config import get_config
 from ..core.credentials import is_http_request_active
+from ..core.dates import parse_date
 from ..core.file_validation import (
     FileValidationResult,
     format_file_size,
@@ -35,8 +38,56 @@ from ..core.file_validation import (
     validate_file_for_upload,
 )
 from ..core.path import canvas_path
-from ..core.untrusted_content import fence_untrusted_inline
+from ..core.untrusted_content import (
+    FENCE_LEAK_ERROR,
+    contains_fence_markers,
+    fence_untrusted_inline,
+)
 from ..core.validation import validate_params
+from ..core.write_confirmation import (
+    ConfirmationGuard,
+    preview_with_token,
+    redeem_confirmation,
+)
+
+_DELETE_FILE_GUARD = ConfirmationGuard(nothing_done="Nothing was deleted.")
+
+
+async def _file_module_references(
+    course_id: str | int, file_id: str | int
+) -> list[dict[str, Any]] | dict[str, str]:
+    """Return every module item that directly references a course file."""
+    modules = await fetch_all_paginated_results(
+        canvas_path("courses", course_id, "modules"),
+        {"per_page": 100, "include[]": ["items"]},
+    )
+    if isinstance(modules, dict) and "error" in modules:
+        return {"error": str(modules["error"])}
+
+    references: list[dict[str, Any]] = []
+    for module in modules:
+        items = module.get("items") or []
+        if len(items) < (module.get("items_count") or 0):
+            items = await fetch_all_paginated_results(
+                canvas_path("courses", course_id, "modules", module.get("id"), "items"),
+                {"per_page": 100},
+            )
+            if isinstance(items, dict) and "error" in items:
+                return {"error": str(items["error"])}
+        for item in items:
+            if item.get("type") == "File" and str(item.get("content_id")) == str(
+                file_id
+            ):
+                references.append(
+                    {
+                        "module_id": module.get("id"),
+                        "module_name": module.get("name", "Unknown"),
+                        "item_id": item.get("id"),
+                        "item_title": item.get("title", "Unknown"),
+                    }
+                )
+    references.sort(key=lambda ref: (str(ref["module_id"]), str(ref["item_id"])))
+    return references
 
 
 def register_shared_file_tools(mcp: FastMCP) -> None:
@@ -319,7 +370,212 @@ def register_shared_file_tools(mcp: FastMCP) -> None:
 
 
 def register_educator_file_tools(mcp: FastMCP) -> None:
-    """Register educator-only file tools (upload)."""
+    """Register educator-only file tools."""
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
+    @validate_params
+    async def update_course_file(
+        course_identifier: str | int,
+        file_id: str | int,
+        name: str | None = None,
+        parent_folder_id: str | int | None = None,
+        on_duplicate: str | None = None,
+        lock_at: str | None = None,
+        unlock_at: str | None = None,
+        locked: bool | None = None,
+        hidden: bool | None = None,
+        visibility_level: str | None = None,
+        clear_lock_at: bool = False,
+        clear_unlock_at: bool = False,
+    ) -> str:
+        """Rename, move, or change visibility and lock settings for a course file.
+
+        This updates file metadata only; it does not replace the file contents.
+
+        Args:
+            course_identifier: Course code or Canvas ID
+            file_id: Canvas file ID
+            name: New display name (maximum 255 characters)
+            parent_folder_id: Folder ID to move the file into (same course)
+            on_duplicate: How to handle a name collision: "overwrite" or "rename"
+            lock_at: Date/time at which the file becomes locked
+            unlock_at: Date/time at which the file becomes available
+            locked: Lock or unlock the file immediately
+            hidden: Hide or show the file
+            visibility_level: One of inherit, course, institution, or public
+            clear_lock_at: Remove the scheduled lock date
+            clear_unlock_at: Remove the scheduled unlock date
+        """
+        if name is not None and contains_fence_markers(name):
+            return FENCE_LEAK_ERROR
+        if name is not None and (not name.strip() or len(name) > 255):
+            return "Invalid name: file names must contain 1 to 255 characters."
+        if on_duplicate is not None and on_duplicate not in {"overwrite", "rename"}:
+            return "Invalid on_duplicate value. Must be 'overwrite' or 'rename'."
+        valid_visibility = {"inherit", "course", "institution", "public"}
+        if visibility_level is not None and visibility_level not in valid_visibility:
+            return f"Invalid visibility_level. Must be one of: {', '.join(sorted(valid_visibility))}."
+        for field, value, clear in (
+            ("lock_at", lock_at, clear_lock_at),
+            ("unlock_at", unlock_at, clear_unlock_at),
+        ):
+            if value is not None and clear:
+                return f"Invalid configuration: {field} and clear_{field} cannot both be provided."
+
+        updates: dict[str, Any] = {}
+        if name is not None:
+            updates["name"] = name
+        if parent_folder_id is not None:
+            updates["parent_folder_id"] = parent_folder_id
+        if on_duplicate is not None:
+            updates["on_duplicate"] = on_duplicate
+        for field, value, clear in (
+            ("lock_at", lock_at, clear_lock_at),
+            ("unlock_at", unlock_at, clear_unlock_at),
+        ):
+            if clear:
+                updates[field] = ""
+            elif value is not None:
+                parsed = parse_date(value)
+                if parsed is None:
+                    return f"Invalid date format for {field}: '{value}'. Use ISO 8601 format."
+                updates[field] = parsed.isoformat()
+        if locked is not None:
+            updates["locked"] = locked
+        if hidden is not None:
+            updates["hidden"] = hidden
+        if visibility_level is not None:
+            updates["visibility_level"] = visibility_level
+        if not updates:
+            return "Error: No fields provided to update."
+
+        course_id = await get_course_id(course_identifier)
+        existing = await make_canvas_request(
+            "get", canvas_path("courses", course_id, "files", file_id)
+        )
+        if isinstance(existing, dict) and "error" in existing:
+            return f"Error fetching file details: {existing['error']}"
+        response = await make_canvas_request(
+            "put", canvas_path("files", file_id), data=updates, use_form_data=True
+        )
+        if isinstance(response, dict) and "error" in response:
+            return f"Error updating file: {response['error']}"
+
+        file_name = response.get("display_name") or response.get(
+            "filename", name or "Unknown"
+        )
+        course_display = await get_course_code(course_id) or course_identifier
+        result = "✅ File updated successfully!\n\n"
+        result += f"  File: {fence_untrusted_inline(file_name, 'file name')}\n"
+        result += f"  File ID: {response.get('id', file_id)}\n"
+        result += f"  Course: {course_display}\n"
+        if response.get("folder_id") is not None:
+            result += f"  Folder ID: {response['folder_id']}\n"
+        return result
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
+    @validate_params
+    async def delete_course_file(
+        course_identifier: str | int,
+        file_id: str | int,
+        require_name_match: str | None = None,
+        allow_deleting_module_references: bool = False,
+        confirmation_token: str | None = None,
+    ) -> str:
+        """Permanently delete a course file after a preview and confirmation.
+
+        Canvas does not remove module items that link to a deleted file. This
+        tool reports those links and refuses unless they have first been
+        removed or allow_deleting_module_references is explicitly true.
+
+        Args:
+            course_identifier: Course code or Canvas ID
+            file_id: Canvas file ID
+            require_name_match: Only delete if the current display name matches exactly
+            allow_deleting_module_references: Permit deletion despite linked module items
+            confirmation_token: Token from the preview call; omit to preview
+        """
+        course_id = await get_course_id(course_identifier)
+        file_info = await make_canvas_request(
+            "get", canvas_path("courses", course_id, "files", file_id)
+        )
+        if isinstance(file_info, dict) and "error" in file_info:
+            return f"Error fetching file details: {file_info['error']}"
+
+        file_name = file_info.get("display_name") or file_info.get(
+            "filename", "Unknown"
+        )
+        if require_name_match is not None and file_name != require_name_match:
+            return (
+                f"Error: File name is {fence_untrusted_inline(file_name, 'file name')}, "
+                f"not the required name {fence_untrusted_inline(require_name_match, 'required file name')}. "
+                "Nothing was deleted."
+            )
+
+        references = await _file_module_references(course_id, file_id)
+        if isinstance(references, dict):
+            return f"Error checking module references: {references['error']}. Nothing was deleted."
+        if references and not allow_deleting_module_references:
+            shown = ", ".join(
+                f"{fence_untrusted_inline(ref['module_name'], 'module name')} / "
+                f"{fence_untrusted_inline(ref['item_title'], 'module item title')} "
+                f"(item {ref['item_id']})"
+                for ref in references
+            )
+            return (
+                f"Error: File {fence_untrusted_inline(file_name, 'file name')} is linked from "
+                f"{len(references)} module item(s): {shown}. Canvas would leave broken module "
+                "items. Remove them first, or pass allow_deleting_module_references=true to "
+                "explicitly permit this. Nothing was deleted."
+            )
+
+        reference_facts = json.dumps(references, sort_keys=True, separators=(",", ":"))
+        fingerprint = _DELETE_FILE_GUARD.fingerprint(
+            "delete_course_file",
+            str(course_id),
+            str(file_id),
+            file_name,
+            str(file_info.get("folder_id")),
+            str(file_info.get("size")),
+            str(file_info.get("updated_at")),
+            str(require_name_match),
+            str(allow_deleting_module_references),
+            reference_facts,
+        )
+        shown_name = fence_untrusted_inline(file_name, "file name")
+        course_display = await get_course_code(course_id) or course_identifier
+        if not confirmation_token:
+            preview = (
+                f"Would permanently delete file **{shown_name}** from course {course_display}\n"
+                f"  File ID: {file_id}\n"
+                f"  Folder ID: {file_info.get('folder_id', 'Unknown')}\n"
+                f"  Size: {format_file_size(file_info.get('size', 0))}\n"
+                f"  Module references left broken: {len(references)}"
+            )
+            if references:
+                for ref in references:
+                    preview += (
+                        f"\n    - {fence_untrusted_inline(ref['module_name'], 'module name')} / "
+                        f"{fence_untrusted_inline(ref['item_title'], 'module item title')} "
+                        f"(module {ref['module_id']}, item {ref['item_id']})"
+                    )
+            return preview_with_token(
+                _DELETE_FILE_GUARD, fingerprint, "delete_course_file", preview
+            )
+
+        error = redeem_confirmation(_DELETE_FILE_GUARD, confirmation_token, fingerprint)
+        if error:
+            return error
+        response = await make_canvas_request("delete", canvas_path("files", file_id))
+        if isinstance(response, dict) and "error" in response:
+            return f"Error deleting file: {response['error']}"
+        return (
+            "✅ File deleted successfully!\n\n"
+            f"  Deleted: **{shown_name}**\n"
+            f"  Course: {course_display}\n"
+            f"  File ID: {file_id}\n"
+            f"  Module references left broken: {len(references)}\n"
+        )
 
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=False))
     @validate_params

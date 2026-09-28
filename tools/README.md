@@ -1407,6 +1407,36 @@ Delete a page from a course. **Permanent.** Two-step: preview first, then confir
 
 For listing, downloading, and reading course files (available to both roles), see [Files](#files) under Shared Tools.
 
+#### `update_course_file`
+Rename or move a course file, or change its lock and visibility settings.
+This changes metadata only; replacing file contents still uses
+`upload_course_file`, and Canvas does not guarantee that an overwrite keeps
+the old file ID.
+
+**Parameters:**
+- `course_identifier`: Course code or ID
+- `file_id`: Canvas file ID
+- `name` (optional): New display name
+- `parent_folder_id` (optional): Folder ID in the same course
+- `on_duplicate` (optional): `rename` or `overwrite`
+- `lock_at`, `unlock_at` (optional): ISO 8601 dates
+- `clear_lock_at`, `clear_unlock_at` (optional): Remove those dates
+- `locked`, `hidden` (optional): Immediate lock and visibility flags
+- `visibility_level` (optional): `inherit`, `course`, `institution`, or `public`
+
+#### `delete_course_file`
+Permanently delete a course file. **Permanent.** Two-step: preview first,
+then confirm with the token. Canvas leaves module items linked to a deleted
+file, so the tool refuses when it finds such links unless
+`allow_deleting_module_references=true` is explicitly supplied.
+
+**Parameters:**
+- `course_identifier`: Course code or ID
+- `file_id`: Canvas file ID
+- `require_name_match` (optional): Delete only if the name matches exactly
+- `allow_deleting_module_references` (optional): Permit broken module links
+- `confirmation_token` (optional): Token from the preview call
+
 #### `upload_course_file`
 Upload a local file to Canvas course storage.
 
@@ -1428,6 +1458,10 @@ Upload a local file to Canvas course storage.
 ```
 
 **Returns:** Uploaded file details including the Canvas file ID, usable with `add_module_item` (`item_type='File'`) or `send_conversation` (attachment IDs).
+
+> `on_duplicate="overwrite"` is duplicate-name handling, not an in-place
+> content-update guarantee. Always use the returned file ID and repair any
+> references if Canvas replaced the original file record.
 
 ---
 
