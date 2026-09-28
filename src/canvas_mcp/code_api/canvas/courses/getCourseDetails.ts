@@ -1,4 +1,4 @@
-import { canvasGet } from "../../client.js";
+import { canvasGet, canvasPath } from "../../client.js";
 
 export interface GetCourseDetailsInput {
   courseIdentifier: string | number;
@@ -26,5 +26,5 @@ export async function getCourseDetails(
   input: GetCourseDetailsInput
 ): Promise<CourseDetails> {
   const { courseIdentifier } = input;
-  return canvasGet<CourseDetails>(`/courses/${courseIdentifier}`);
+  return canvasGet<CourseDetails>(canvasPath('courses', courseIdentifier));
 }

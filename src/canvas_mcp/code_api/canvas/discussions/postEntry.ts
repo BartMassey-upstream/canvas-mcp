@@ -1,4 +1,4 @@
-import { canvasPost } from "../../client.js";
+import { canvasPath, canvasPost } from "../../client.js";
 
 export interface PostEntryInput {
   courseIdentifier: string | number;
@@ -37,7 +37,7 @@ export async function postEntry(
   }
 
   return canvasPost<DiscussionEntry>(
-    `/courses/${courseIdentifier}/discussion_topics/${topicId}/entries`,
+    canvasPath('courses', courseIdentifier, 'discussion_topics', topicId, 'entries'),
     body
   );
 }

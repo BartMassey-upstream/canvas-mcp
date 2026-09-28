@@ -53,6 +53,7 @@ from ..core.file_validation import (
     detect_mime_type,
     sanitize_filename,
 )
+from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
@@ -458,10 +459,10 @@ async def _final_preflight(
         return f"❌ Submission blocked. {reason}"
 
     assignment = await make_canvas_request(
-        "get", f"/courses/{course_id}/assignments/{assignment_id}"
+        "get", canvas_path('courses', course_id, 'assignments', assignment_id)
     )
     submission = await make_canvas_request(
-        "get", f"/courses/{course_id}/assignments/{assignment_id}/submissions/self"
+        "get", canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions', 'self')
     )
     if (
         not isinstance(assignment, dict)
@@ -512,7 +513,7 @@ async def _upload_one(
     """
     slot = await make_canvas_request(
         "post",
-        f"/courses/{course_id}/assignments/{assignment_id}/submissions/self/files",
+        canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions', 'self', 'files'),
         data={
             "name": prepared.name,
             "size": prepared.size,
@@ -600,7 +601,7 @@ def register_student_write_tools(mcp: FastMCP) -> None:
 
         submission = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/assignments/{assignment_id}/submissions/self",
+            canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions', 'self'),
             params={"include[]": ["submission_comments", "assignment"]},
         )
         if isinstance(submission, dict) and "error" in submission:
@@ -714,7 +715,7 @@ def register_student_write_tools(mcp: FastMCP) -> None:
                 return "Error: online_upload requires 'file_paths' or 'file_contents'"
 
             assignment = await make_canvas_request(
-                "get", f"/courses/{course_id}/assignments/{assignment_id}"
+                "get", canvas_path('courses', course_id, 'assignments', assignment_id)
             )
             if isinstance(assignment, dict) and "error" in assignment:
                 return f"Error fetching assignment: {assignment['error']}"
@@ -737,7 +738,7 @@ def register_student_write_tools(mcp: FastMCP) -> None:
 
             submission = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}/assignments/{assignment_id}/submissions/self",
+                canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions', 'self'),
             )
             # Attempt state is not optional context here: it is what the preview
             # reports and what the confirmation commits to. Substituting zero on
@@ -881,7 +882,7 @@ def register_student_write_tools(mcp: FastMCP) -> None:
                 # a second attempt.
                 response = await make_canvas_request(
                     "post",
-                    f"/courses/{course_id}/assignments/{assignment_id}/submissions",
+                    canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions'),
                     data=data,
                     use_form_data=True,
                 )
@@ -947,7 +948,7 @@ def register_student_write_tools(mcp: FastMCP) -> None:
 
             response = await make_canvas_request(
                 "put",
-                f"/courses/{course_id}/assignments/{assignment_id}/submissions/self",
+                canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions', 'self'),
                 data=data,
                 use_form_data=True,
             )
@@ -983,7 +984,7 @@ def register_student_write_tools(mcp: FastMCP) -> None:
                 return f"❌ Update blocked. {reason}"
 
             item_endpoint = (
-                f"/courses/{course_id}/modules/{module_id}/items/{item_id}"
+                canvas_path('courses', course_id, 'modules', module_id, 'items', item_id)
             )
 
             # The /done PUT only has a visible effect on items whose
@@ -1014,7 +1015,9 @@ def register_student_write_tools(mcp: FastMCP) -> None:
 
             response = await make_canvas_request(
                 "put",
-                f"{item_endpoint}/done",
+                canvas_path(
+                    "courses", course_id, "modules", module_id, "items", item_id, "done"
+                ),
             )
             if isinstance(response, dict) and "error" in response:
                 return f"❌ Could not mark item done: {response['error']}"

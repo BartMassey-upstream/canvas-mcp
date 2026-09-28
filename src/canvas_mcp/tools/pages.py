@@ -4,7 +4,6 @@ Provides tools for updating page settings (publish/unpublish, front page,
 editing roles) separate from content editing.
 """
 
-
 import datetime
 from typing import Any
 
@@ -14,6 +13,7 @@ from mcp.types import ToolAnnotations
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import make_canvas_request
 from ..core.dates import format_date, parse_date
+from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
@@ -132,7 +132,7 @@ def register_page_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/pages/{page_url_or_id}",
+            canvas_path('courses', course_id, 'pages', page_url_or_id),
             data=update_data
         )
 
@@ -226,7 +226,7 @@ def register_page_tools(mcp: FastMCP) -> None:
             # inner dict into its Python repr, which Canvas rejects with a 500 (#207)
             response = await make_canvas_request(
                 "put",
-                f"/courses/{course_id}/pages/{page_url}",
+                canvas_path('courses', course_id, 'pages', page_url),
                 data=update_data
             )
 
@@ -325,7 +325,7 @@ def register_educator_page_crud_tools(mcp: FastMCP) -> None:
             }
         }
 
-        response = await make_canvas_request("post", f"/courses/{course_id}/pages", data=data)
+        response = await make_canvas_request("post", canvas_path('courses', course_id, 'pages'), data=data)
 
         if "error" in response:
             return f"Error creating page: {response['error']}"
@@ -391,7 +391,7 @@ def register_educator_page_crud_tools(mcp: FastMCP) -> None:
         # Update the page
         response = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/pages/{page_url_or_id}",
+            canvas_path('courses', course_id, 'pages', page_url_or_id),
             data=update_data
         )
 
@@ -425,7 +425,7 @@ def register_educator_page_crud_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
 
         page = await make_canvas_request(
-            "get", f"/courses/{course_id}/pages/{page_url_or_id}"
+            "get", canvas_path('courses', course_id, 'pages', page_url_or_id)
         )
         if "error" in page:
             return f"Error fetching page details: {page['error']}"
@@ -457,7 +457,7 @@ def register_educator_page_crud_tools(mcp: FastMCP) -> None:
             return error
 
         response = await make_canvas_request(
-            "delete", f"/courses/{course_id}/pages/{page_url_or_id}"
+            "delete", canvas_path('courses', course_id, 'pages', page_url_or_id)
         )
         if "error" in response:
             return f"Error deleting page {shown_title}: {response['error']}"

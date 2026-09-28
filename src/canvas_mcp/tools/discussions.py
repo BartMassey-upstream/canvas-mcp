@@ -11,6 +11,7 @@ from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.dates import format_date, parse_date, truncate_text
 from ..core.logging import log_warning
+from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
@@ -89,7 +90,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
         # calls. (include[]=announcement is NOT a supported include value --
         # Canvas silently ignores it. Issue #238.)
         topics = await fetch_all_paginated_results(
-            f"/courses/{course_id}/discussion_topics", {"per_page": 100}
+            canvas_path('courses', course_id, 'discussion_topics'), {"per_page": 100}
         )
 
         if isinstance(topics, dict) and "error" in topics:
@@ -97,7 +98,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
 
         if include_announcements:
             announcements = await fetch_all_paginated_results(
-                f"/courses/{course_id}/discussion_topics",
+                canvas_path('courses', course_id, 'discussion_topics'),
                 {"only_announcements": True, "per_page": 100},
             )
             if isinstance(announcements, dict) and "error" in announcements:
@@ -161,7 +162,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
             "per_page": 100
         }
 
-        announcements = await fetch_all_paginated_results(f"/courses/{course_id}/discussion_topics", params)
+        announcements = await fetch_all_paginated_results(canvas_path('courses', course_id, 'discussion_topics'), params)
 
         if isinstance(announcements, dict) and "error" in announcements:
             return f"Error fetching announcements: {announcements['error']}"
@@ -198,7 +199,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
 
         response = await make_canvas_request(
-            "get", f"/courses/{course_id}/discussion_topics/{topic_id}"
+            "get", canvas_path('courses', course_id, 'discussion_topics', topic_id)
         )
 
         if "error" in response:
@@ -276,7 +277,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
 
         # Get basic entries first
         entries = await fetch_all_paginated_results(
-            f"/courses/{course_id}/discussion_topics/{topic_id}/entries",
+            canvas_path('courses', course_id, 'discussion_topics', topic_id, 'entries'),
             {"per_page": 100}
         )
 
@@ -295,7 +296,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
             full_entries_map = {}
             try:
                 view_response = await make_canvas_request(
-                    "get", f"/courses/{course_id}/discussion_topics/{topic_id}/view"
+                    "get", canvas_path('courses', course_id, 'discussion_topics', topic_id, 'view')
                 )
 
                 if "error" not in view_response and "view" in view_response:
@@ -319,7 +320,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
             if missing_entry_ids:
                 try:
                     entry_list_response = await make_canvas_request(
-                        "get", f"/courses/{course_id}/discussion_topics/{topic_id}/entry_list",
+                        "get", canvas_path('courses', course_id, 'discussion_topics', topic_id, 'entry_list'),
                         params={"ids[]": missing_entry_ids}
                     )
 
@@ -337,7 +338,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
 
         # Get topic details for context
         topic_response = await make_canvas_request(
-            "get", f"/courses/{course_id}/discussion_topics/{topic_id}"
+            "get", canvas_path('courses', course_id, 'discussion_topics', topic_id)
         )
 
         topic_title = "Unknown Topic"
@@ -400,7 +401,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
                 if not replies or has_more_replies:
                     try:
                         replies_response = await fetch_all_paginated_results(
-                            f"/courses/{course_id}/discussion_topics/{topic_id}/entries/{entry_id}/replies",
+                            canvas_path('courses', course_id, 'discussion_topics', topic_id, 'entries', entry_id, 'replies'),
                             {"per_page": 100}
                         )
 
@@ -505,7 +506,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
         try:
             # First try the discussion view endpoint which includes all entries
             view_response = await make_canvas_request(
-                "get", f"/courses/{course_id}/discussion_topics/{topic_id}/view"
+                "get", canvas_path('courses', course_id, 'discussion_topics', topic_id, 'view')
             )
 
             if "error" not in view_response and "view" in view_response:
@@ -529,7 +530,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
         if not entry_response:
             try:
                 entry_list_response = await make_canvas_request(
-                    "get", f"/courses/{course_id}/discussion_topics/{topic_id}/entry_list",
+                    "get", canvas_path('courses', course_id, 'discussion_topics', topic_id, 'entry_list'),
                     params={"ids[]": entry_id}
                 )
 
@@ -549,7 +550,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
         if not entry_response:
             try:
                 all_entries = await fetch_all_paginated_results(
-                    f"/courses/{course_id}/discussion_topics/{topic_id}/entries",
+                    canvas_path('courses', course_id, 'discussion_topics', topic_id, 'entries'),
                     {"per_page": 100}
                 )
 
@@ -578,7 +579,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
         if include_replies and not replies:
             try:
                 replies_response = await fetch_all_paginated_results(
-                    f"/courses/{course_id}/discussion_topics/{topic_id}/entries/{entry_id}/replies",
+                    canvas_path('courses', course_id, 'discussion_topics', topic_id, 'entries', entry_id, 'replies'),
                     {"per_page": 100}
                 )
 
@@ -595,7 +596,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
 
         # Get topic details for context
         topic_response = await make_canvas_request(
-            "get", f"/courses/{course_id}/discussion_topics/{topic_id}"
+            "get", canvas_path('courses', course_id, 'discussion_topics', topic_id)
         )
 
         topic_title = "Unknown Topic"
@@ -683,7 +684,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
 
         # Get basic entries first
         entries = await fetch_all_paginated_results(
-            f"/courses/{course_id}/discussion_topics/{topic_id}/entries",
+            canvas_path('courses', course_id, 'discussion_topics', topic_id, 'entries'),
             {"per_page": 100}
         )
 
@@ -695,7 +696,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
 
         # Get topic details for context
         topic_response = await make_canvas_request(
-            "get", f"/courses/{course_id}/discussion_topics/{topic_id}"
+            "get", canvas_path('courses', course_id, 'discussion_topics', topic_id)
         )
 
         topic_title = "Unknown Topic"
@@ -745,7 +746,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
                 if not replies or has_more_replies:
                     try:
                         replies_response = await fetch_all_paginated_results(
-                            f"/courses/{course_id}/discussion_topics/{topic_id}/entries/{entry_id}/replies",
+                            canvas_path('courses', course_id, 'discussion_topics', topic_id, 'entries', entry_id, 'replies'),
                             {"per_page": 100}
                         )
 
@@ -835,7 +836,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
 
         # Post the entry
         response = await make_canvas_request(
-            "post", f"/courses/{course_id}/discussion_topics/{topic_id}/entries",
+            "post", canvas_path('courses', course_id, 'discussion_topics', topic_id, 'entries'),
             data=data
         )
 
@@ -844,7 +845,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
 
         # Get context information for confirmation
         topic_response = await make_canvas_request(
-            "get", f"/courses/{course_id}/discussion_topics/{topic_id}"
+            "get", canvas_path('courses', course_id, 'discussion_topics', topic_id)
         )
 
         topic_title = "Unknown Topic"
@@ -898,7 +899,7 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "post",
-            f"/courses/{course_id}/discussion_topics/{topic_id_str}/entries/{entry_id_str}/replies",
+            canvas_path('courses', course_id, 'discussion_topics', topic_id_str, 'entries', entry_id_str, 'replies'),
             data=data
         )
 
@@ -968,7 +969,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             data["lock_at"] = lock_at
 
         response = await make_canvas_request(
-            "post", f"/courses/{course_id}/discussion_topics", data=data
+            "post", canvas_path('courses', course_id, 'discussion_topics'), data=data
         )
 
         if "error" in response:
@@ -1012,13 +1013,13 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             lock_at: ISO 8601 datetime to auto-lock the discussion
             require_initial_post: Students must post before seeing others
         """
-        course_id = await get_course_id(course_identifier)
-
         # Backstop for issue 239: never publish our provenance fence markers.
         if (message is not None and contains_fence_markers(message)) or (
             title is not None and contains_fence_markers(title)
         ):
             return FENCE_LEAK_ERROR
+
+        course_id = await get_course_id(course_identifier)
 
         data: dict[str, str | bool] = {}
 
@@ -1066,7 +1067,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/discussion_topics/{topic_id}",
+            canvas_path('courses', course_id, 'discussion_topics', topic_id),
             data=data,
         )
 
@@ -1132,7 +1133,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         # False; any other shape (error, missing key) falls open to the
         # post-create backstop below.
         course_info = await make_canvas_request(
-            "get", f"/courses/{course_id}", params={"include[]": "permissions"}
+            "get", canvas_path('courses', course_id), params={"include[]": "permissions"}
         )
         if isinstance(course_info, dict) and "error" not in course_info:
             permissions = course_info.get("permissions")
@@ -1158,7 +1159,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             data["lock_at"] = lock_at
 
         response = await make_canvas_request(
-            "post", f"/courses/{course_id}/discussion_topics", data=data
+            "post", canvas_path('courses', course_id, 'discussion_topics'), data=data
         )
 
         if "error" in response:
@@ -1195,7 +1196,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
                     "unintended."
                 )
                 delete_response = await make_canvas_request(
-                    "delete", f"/courses/{course_id}/discussion_topics/{announcement_id}"
+                    "delete", canvas_path('courses', course_id, 'discussion_topics', announcement_id)
                 )
                 # A null 200 body would surface here as None — treat any
                 # non-dict as unconfirmed cleanup, never claim the delete
@@ -1258,7 +1259,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
 
         announcement = await make_canvas_request(
-            "get", f"/courses/{course_id}/discussion_topics/{announcement_id}"
+            "get", canvas_path('courses', course_id, 'discussion_topics', announcement_id)
         )
         if "error" in announcement:
             return f"Error fetching announcement details: {announcement['error']}"
@@ -1293,7 +1294,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             return error
 
         response = await make_canvas_request(
-            "delete", f"/courses/{course_id}/discussion_topics/{announcement_id}"
+            "delete", canvas_path('courses', course_id, 'discussion_topics', announcement_id)
         )
         if "error" in response:
             return f"Error deleting announcement {shown_title}: {response['error']}"
@@ -1340,7 +1341,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         unreachable: list[dict[str, str]] = []
         for announcement_id in announcement_ids:
             announcement = await make_canvas_request(
-                "get", f"/courses/{course_id}/discussion_topics/{announcement_id}"
+                "get", canvas_path('courses', course_id, 'discussion_topics', announcement_id)
             )
             if "error" in announcement:
                 unreachable.append({"id": str(announcement_id), "error": announcement["error"]})
@@ -1396,7 +1397,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             shown = fence_untrusted(item["title"], "announcement title")
             try:
                 response = await make_canvas_request(
-                    "delete", f"/courses/{course_id}/discussion_topics/{item['id']}"
+                    "delete", canvas_path('courses', course_id, 'discussion_topics', item['id'])
                 )
             except Exception as e:  # noqa: BLE001 - per-item isolation
                 failed.append({"id": item["id"], "title": shown, "error": str(e)})
@@ -1459,7 +1460,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             "only_announcements": True,
             "per_page": 100
         }
-        announcements = await fetch_all_paginated_results(f"/courses/{course_id}/discussion_topics", params)
+        announcements = await fetch_all_paginated_results(canvas_path('courses', course_id, 'discussion_topics'), params)
         if isinstance(announcements, dict) and "error" in announcements:
             return f"Error fetching announcements: {announcements['error']}"
         if not announcements:
@@ -1554,7 +1555,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             shown = fence_untrusted(announcement.get("title", "Unknown Title"), "announcement title")
             try:
                 response = await make_canvas_request(
-                    "delete", f"/courses/{course_id}/discussion_topics/{announcement_id}"
+                    "delete", canvas_path('courses', course_id, 'discussion_topics', announcement_id)
                 )
                 if "error" in response:
                     failed.append({"id": str(announcement_id), "title": shown, "error": response["error"]})

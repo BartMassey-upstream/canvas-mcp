@@ -15,6 +15,7 @@ from ..core.client import make_canvas_request
 from ..core.credentials import is_http_request_active
 from ..core.csv_safety import csv_safe_cell, rows_to_csv_string
 from ..core.file_validation import sanitize_filename
+from ..core.path import canvas_path
 from ..core.peer_review_comments import PeerReviewCommentAnalyzer
 from ..core.untrusted_content import (
     fence_untrusted,
@@ -363,7 +364,7 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
             # Get assignment info
             assignment_response = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}/assignments/{assignment_id}"
+                canvas_path('courses', course_id, 'assignments', assignment_id)
             )
             assignment_name = assignment_response.get("name", "Unknown Assignment") if "error" not in assignment_response else "Unknown Assignment"
 

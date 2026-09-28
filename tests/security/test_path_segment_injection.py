@@ -17,12 +17,77 @@ Two layers are pinned here:
    so the bad value never reaches the client layer.
 """
 
+import ast
+import re
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 
+from canvas_mcp.core.path import canvas_path
 from canvas_mcp.core.validation import coerce_canvas_id
+
+
+class TestCanvasPath:
+    """Dynamic values remain one path segment, whatever text they contain."""
+
+    @pytest.mark.parametrize(
+        ("value", "encoded"),
+        [
+            ("ordinary-name", "ordinary-name"),
+            ("two words", "two%20words"),
+            ("CS/101.11é", "CS%2F101%2E11%C3%A9"),
+            ("question?fragment#", "question%3Ffragment%23"),
+            ("already%2Fencoded", "already%252Fencoded"),
+            ("sis_course_id:CS/101", "sis_course_id:CS%2F101"),
+            ("..", "%2E%2E"),
+        ],
+    )
+    def test_encodes_each_dynamic_segment(self, value, encoded):
+        assert canvas_path("courses", value, "assignments") == (
+            f"/courses/{encoded}/assignments"
+        )
+
+    def test_rejects_empty_segments(self):
+        with pytest.raises(ValueError, match="cannot be empty"):
+            canvas_path("courses", "")
+
+
+class TestDynamicRoutesUseCanvasPath:
+    """Keep raw interpolation out of Canvas route construction."""
+
+    def test_python_sources_have_no_interpolated_canvas_routes(self):
+        source_root = Path(__file__).parents[2] / "src" / "canvas_mcp"
+        offenders = []
+        prefixes = ("/courses/", "/groups/", "/progress/", "/conversations/")
+        for source_path in source_root.rglob("*.py"):
+            tree = ast.parse(source_path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.JoinedStr):
+                    continue
+                literal_text = "".join(
+                    str(part.value)
+                    for part in node.values
+                    if isinstance(part, ast.Constant)
+                )
+                if literal_text.startswith(prefixes):
+                    offenders.append(f"{source_path}:{node.lineno}")
+        assert offenders == []
+
+    def test_typescript_sources_have_no_interpolated_canvas_routes(self):
+        source_root = Path(__file__).parents[2] / "src" / "canvas_mcp" / "code_api"
+        route_template = re.compile(
+            r"`/(?:courses|groups|progress|conversations)/\$\{"
+        )
+        offenders = []
+        for source_path in source_root.rglob("*.ts"):
+            for line_number, line in enumerate(
+                source_path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                if route_template.search(line):
+                    offenders.append(f"{source_path}:{line_number}")
+        assert offenders == []
 
 
 class TestUrlConstructionPremise:

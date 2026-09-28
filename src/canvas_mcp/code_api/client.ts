@@ -70,6 +70,22 @@ interface RequestOptions {
   retries?: number;
 }
 
+/** Build a Canvas API path without letting values alter its route structure. */
+export function canvasPath(...segments: Array<string | number>): string {
+  if (segments.length === 0) {
+    throw new Error('A Canvas API path needs at least one segment');
+  }
+  return '/' + segments.map((segment) => {
+    const text = String(segment);
+    if (text.length === 0) {
+      throw new Error('Canvas API path segments cannot be empty');
+    }
+    return encodeURIComponent(text)
+      .replace(/\./g, '%2E')
+      .replace(/%3A/gi, ':');
+  }).join('/');
+}
+
 function requestUrl(cfg: CanvasConfig, endpoint: string, params: Record<string, any> = {}): URL {
   const url = new URL(`${cfg.apiUrl}${endpoint}`);
   Object.entries(params).forEach(([key, value]) => {

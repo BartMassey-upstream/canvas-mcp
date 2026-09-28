@@ -126,7 +126,9 @@ Canvas MCP provides **up to 103 tools** for interacting with Canvas LMS; the def
 
 ### Quick Reference
 
-**Course identifiers:** Canvas ID (`12345`), course code (`badm_350_120251_246794`), or SIS ID
+**Course identifiers:** Canvas ID (`12345`), the exact course code
+returned by `list_courses` (including spaces or punctuation), or an
+explicit SIS ID such as `sis_course_id:ABC123`.
 
 **Cannot do:** Create/delete courses, modify course settings, access other users' data
 

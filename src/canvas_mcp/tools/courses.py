@@ -17,6 +17,7 @@ from ..core.cache import (
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.config import get_config
 from ..core.dates import format_date
+from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
@@ -253,7 +254,7 @@ def register_course_tools(mcp: FastMCP) -> None:
         """
         course_id = await get_course_id(course_identifier)
 
-        response = await make_canvas_request("get", f"/courses/{course_id}")
+        response = await make_canvas_request("get", canvas_path('courses', course_id))
 
         if "error" in response:
             return f"Error fetching course details: {response['error']}"
@@ -320,7 +321,7 @@ def register_course_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "get",
-            f"/courses/{course_id}",
+            canvas_path('courses', course_id),
             params={"include[]": "syllabus_body"},
         )
 
@@ -379,14 +380,14 @@ def register_course_tools(mcp: FastMCP) -> None:
         overview_sections = []
 
         # Get course details for context
-        course_response = await make_canvas_request("get", f"/courses/{course_id}")
+        course_response = await make_canvas_request("get", canvas_path('courses', course_id))
         if "error" not in course_response:
             course_name = course_response.get("name", "Unknown Course")
             overview_sections.append(f"Course: {course_name}")
 
         # Get pages if requested
         if include_pages:
-            pages = await fetch_all_paginated_results(f"/courses/{course_id}/pages", {"per_page": 100})
+            pages = await fetch_all_paginated_results(canvas_path('courses', course_id, 'pages'), {"per_page": 100})
             if isinstance(pages, list):
                 published_pages = [p for p in pages if p.get("published", False)]
                 unpublished_pages = [p for p in pages if not p.get("published", False)]
@@ -420,7 +421,7 @@ def register_course_tools(mcp: FastMCP) -> None:
 
         # Get modules if requested
         if include_modules:
-            modules = await fetch_all_paginated_results(f"/courses/{course_id}/modules", {"per_page": 100})
+            modules = await fetch_all_paginated_results(canvas_path('courses', course_id, 'modules'), {"per_page": 100})
             if isinstance(modules, list):
                 modules_summary = [
                     "\nModules Summary:",
@@ -435,7 +436,7 @@ def register_course_tools(mcp: FastMCP) -> None:
                     module_id = module.get("id")
                     if module_id:
                         items = await fetch_all_paginated_results(
-                            f"/courses/{course_id}/modules/{module_id}/items",
+                            canvas_path('courses', course_id, 'modules', module_id, 'items'),
                             {"per_page": 100}
                         )
                         if isinstance(items, list):
@@ -468,7 +469,7 @@ def register_course_tools(mcp: FastMCP) -> None:
             # Fetch the course details with syllabus_body included
             course_with_syllabus = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}",
+                canvas_path('courses', course_id),
                 params={"include[]": "syllabus_body"}
             )
 
@@ -536,7 +537,7 @@ def register_shared_content_tools(mcp: FastMCP) -> None:
         if published is not None:
             params["published"] = published
 
-        pages = await fetch_all_paginated_results(f"/courses/{course_id}/pages", params)
+        pages = await fetch_all_paginated_results(canvas_path('courses', course_id, 'pages'), params)
 
         if isinstance(pages, dict) and "error" in pages:
             return f"Error fetching pages: {pages['error']}"
@@ -581,7 +582,7 @@ def register_shared_content_tools(mcp: FastMCP) -> None:
         """
         course_id = await get_course_id(course_identifier)
 
-        response = await make_canvas_request("get", f"/courses/{course_id}/pages/{page_url_or_id}")
+        response = await make_canvas_request("get", canvas_path('courses', course_id, 'pages', page_url_or_id))
 
         if "error" in response:
             return f"Error fetching page content: {response['error']}"
@@ -629,7 +630,7 @@ def register_shared_content_tools(mcp: FastMCP) -> None:
         """
         course_id = await get_course_id(course_identifier)
 
-        response = await make_canvas_request("get", f"/courses/{course_id}/pages/{page_url_or_id}")
+        response = await make_canvas_request("get", canvas_path('courses', course_id, 'pages', page_url_or_id))
 
         if "error" in response:
             return f"Error fetching page details: {response['error']}"
@@ -716,7 +717,7 @@ def register_shared_content_tools(mcp: FastMCP) -> None:
         """
         course_id = await get_course_id(course_identifier)
 
-        response = await make_canvas_request("get", f"/courses/{course_id}/front_page")
+        response = await make_canvas_request("get", canvas_path('courses', course_id, 'front_page'))
 
         if "error" in response:
             return f"Error fetching front page: {response['error']}"
@@ -757,7 +758,7 @@ def register_shared_content_tools(mcp: FastMCP) -> None:
             params["include[]"] = ["content_details"]
 
         items = await fetch_all_paginated_results(
-            f"/courses/{course_id}/modules/{module_id}/items", params
+            canvas_path('courses', course_id, 'modules', module_id, 'items'), params
         )
 
         if isinstance(items, dict) and "error" in items:
@@ -768,7 +769,7 @@ def register_shared_content_tools(mcp: FastMCP) -> None:
 
         # Get module details for context
         module_response = await make_canvas_request(
-            "get", f"/courses/{course_id}/modules/{module_id}"
+            "get", canvas_path('courses', course_id, 'modules', module_id)
         )
 
         module_name = "Unknown Module"
@@ -867,7 +868,7 @@ def register_educator_course_tools(mcp: FastMCP) -> None:
 
         current = await make_canvas_request(
             "get",
-            f"/courses/{course_id}",
+            canvas_path('courses', course_id),
             params={"include[]": "syllabus_body"},
         )
         if "error" in current:
@@ -938,7 +939,7 @@ def register_educator_course_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "put",
-            f"/courses/{course_id}",
+            canvas_path('courses', course_id),
             data={"course": {"syllabus_body": new_body}},
         )
         if "error" in response:
@@ -949,7 +950,7 @@ def register_educator_course_tools(mcp: FastMCP) -> None:
         # Read it back rather than trusting the status code.
         verify = await make_canvas_request(
             "get",
-            f"/courses/{course_id}",
+            canvas_path('courses', course_id),
             params={"include[]": "syllabus_body"},
         )
         saved_body = verify.get("syllabus_body") or "" if "error" not in verify else None

@@ -12,6 +12,7 @@ from typing import Any
 from .anonymization import generate_anonymous_id
 from .client import fetch_all_paginated_results, make_canvas_request
 from .dates import format_date
+from .path import canvas_path
 
 
 class PeerReviewCommentAnalyzer:
@@ -64,7 +65,7 @@ class PeerReviewCommentAnalyzer:
             # Get assignment details
             assignment_response = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}/assignments/{assignment_id}"
+                canvas_path('courses', course_id, 'assignments', assignment_id)
             )
 
             if "error" in assignment_response:
@@ -73,7 +74,7 @@ class PeerReviewCommentAnalyzer:
             # Get peer reviews (these don't include comments directly)
             peer_reviews_response = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}/assignments/{assignment_id}/peer_reviews",
+                canvas_path('courses', course_id, 'assignments', assignment_id, 'peer_reviews'),
                 params={"include[]": ["user", "assessor"]}
             )
 
@@ -86,7 +87,7 @@ class PeerReviewCommentAnalyzer:
             users_map = {}
             if include_reviewer_info or include_reviewee_info:
                 users_response = await fetch_all_paginated_results(
-                    f"/courses/{course_id}/users",
+                    canvas_path('courses', course_id, 'users'),
                     {"enrollment_type[]": "student", "per_page": 100}
                 )
                 if isinstance(users_response, list):
@@ -96,7 +97,7 @@ class PeerReviewCommentAnalyzer:
             submissions_map = {}
             submissions_by_id = {}
             submissions_response = await fetch_all_paginated_results(
-                f"/courses/{course_id}/assignments/{assignment_id}/submissions",
+                canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions'),
                 {"include[]": ["submission_comments"], "per_page": 100}
             )
             if isinstance(submissions_response, list):

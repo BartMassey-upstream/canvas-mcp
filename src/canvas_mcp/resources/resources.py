@@ -6,6 +6,7 @@ from fastmcp import FastMCP
 
 from ..core.cache import get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
+from ..core.path import canvas_path
 from ..core.untrusted_content import fence_untrusted
 from ..core.validation import validate_params
 
@@ -23,7 +24,7 @@ def register_resources_and_prompts(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
 
         response = await make_canvas_request(
-            "get", f"/courses/{course_id}", params={"include[]": "syllabus_body"}
+            "get", canvas_path('courses', course_id), params={"include[]": "syllabus_body"}
         )
 
         if "error" in response:
@@ -50,7 +51,7 @@ def register_resources_and_prompts(mcp: FastMCP) -> None:
         assignment_id_str = str(assignment_id)
 
         response = await make_canvas_request(
-            "get", f"/courses/{course_id}/assignments/{assignment_id_str}"
+            "get", canvas_path('courses', course_id, 'assignments', assignment_id_str)
         )
 
         if "error" in response:
@@ -72,13 +73,13 @@ def register_resources_and_prompts(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
 
         # Get course details
-        course_response = await make_canvas_request("get", f"/courses/{course_id}")
+        course_response = await make_canvas_request("get", canvas_path('courses', course_id))
 
         if "error" in course_response:
             return f"Error fetching course: {course_response['error']}"
 
         # Get assignments
-        assignments_response = await fetch_all_paginated_results(f"/courses/{course_id}/assignments")
+        assignments_response = await fetch_all_paginated_results(canvas_path('courses', course_id, 'assignments'))
 
         if isinstance(assignments_response, dict) and "error" in assignments_response:
             assignments_info = "Error fetching assignments"
@@ -94,7 +95,7 @@ def register_resources_and_prompts(mcp: FastMCP) -> None:
             assignments_info = f"{assignments_count} total assignments, {upcoming_count} upcoming"
 
         # Get modules
-        modules_response = await fetch_all_paginated_results(f"/courses/{course_id}/modules")
+        modules_response = await fetch_all_paginated_results(canvas_path('courses', course_id, 'modules'))
 
         if isinstance(modules_response, dict) and "error" in modules_response:
             modules_info = "Error fetching modules"

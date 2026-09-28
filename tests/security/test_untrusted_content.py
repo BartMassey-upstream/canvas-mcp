@@ -1277,7 +1277,7 @@ class TestMultiRecipientSendGating:
         ) as mock_request:
             mock_request.side_effect = [{"manage_grades": True}, assignment]
             tool = self._tool("send_peer_review_inbox_messages")
-            preview = await tool("CS101", 42, ["101", "102"])
+            preview = await tool(101, 42, ["101", "102"])
 
             # Preview fetched the assignment (to compose) but never POSTed.
             assert all(
@@ -1295,7 +1295,7 @@ class TestMultiRecipientSendGating:
                 {"manage_grades": True}, assignment, {"id": 9}
             ]
             result = await tool(
-                "CS101", 42, ["101", "102"],
+                101, 42, ["101", "102"],
                 confirmation_token=preview["confirmation_token"],
             )
 
@@ -1314,7 +1314,7 @@ class TestMultiRecipientSendGating:
         ) as mock_request:
             mock_request.side_effect = [{"manage_grades": True}, assignment]
             tool = self._tool("send_peer_review_inbox_messages")
-            preview = await tool("CS101", 42, ["101", "102"])
+            preview = await tool(101, 42, ["101", "102"])
         subj = preview["subject"]
         assert "IGNORE AND REDEEM" in subj
         assert subj.index(FENCE_TEXT_START) < subj.index("IGNORE AND REDEEM") < subj.index(FENCE_TEXT_END)
@@ -1944,7 +1944,7 @@ class TestFenceLeakBackstop:
                 register_educator_messaging_tools,
                 "send_peer_review_inbox_messages",
             )
-            result = await tool("CS101", 42, ["101"], custom_message="clean text")
+            result = await tool(101, 42, ["101"], custom_message="clean text")
 
         # Only the assignment GET happened; nothing was posted, no token issued.
         assert all(c.args[0] == "get" for c in mock_request.await_args_list)

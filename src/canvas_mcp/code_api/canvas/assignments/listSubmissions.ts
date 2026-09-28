@@ -1,4 +1,4 @@
-import { fetchAllPaginated } from "../../client.js";
+import { canvasPath, fetchAllPaginated } from "../../client.js";
 
 export interface ListSubmissionsInput {
   courseIdentifier: string | number;
@@ -51,7 +51,9 @@ export async function listSubmissions(
   const { courseIdentifier, assignmentId, includeUser } = input;
 
   // Canvas API endpoint for submissions
-  const endpoint = `/courses/${courseIdentifier}/assignments/${assignmentId}/submissions`;
+  const endpoint = canvasPath(
+    'courses', courseIdentifier, 'assignments', assignmentId, 'submissions'
+  );
 
   // Prepare query parameters
   const params: any = { per_page: 100 };

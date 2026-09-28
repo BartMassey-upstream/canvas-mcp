@@ -14,6 +14,7 @@ from mcp.types import ToolAnnotations
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.dates import format_date, truncate_text
+from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
@@ -863,7 +864,7 @@ async def _ensure_course_bookmark(response: Any, course_id: str | int) -> str:
 
     retry = await make_canvas_request(
         "post",
-        f"/courses/{course_id}/rubric_associations",
+        canvas_path('courses', course_id, 'rubric_associations'),
         data={
             "rubric_association[rubric_id]": str(rubric_id),
             "rubric_association[association_id]": str(course_id),
@@ -918,7 +919,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
 
             response = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}/rubrics/{rubric_id_str}",
+                canvas_path('courses', course_id, 'rubrics', rubric_id_str),
                 params={"include[]": ["assessments", "associations"]}
             )
 
@@ -1007,7 +1008,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/assignments/{assignment_id_str}",
+            canvas_path('courses', course_id, 'assignments', assignment_id_str),
             params={"include[]": ["rubric", "rubric_settings"]}
         )
 
@@ -1097,7 +1098,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         # Get submission with rubric assessment
         response = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/assignments/{assignment_id_str}/submissions/{user_id_str}",
+            canvas_path('courses', course_id, 'assignments', assignment_id_str, 'submissions', user_id_str),
             params={"include[]": ["rubric_assessment", "full_rubric_assessment"]}
         )
 
@@ -1113,7 +1114,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         if not rubric_assessment:
             # Get user and assignment names for better error message
             assignment_response = await make_canvas_request(
-                "get", f"/courses/{course_id}/assignments/{assignment_id_str}"
+                "get", canvas_path('courses', course_id, 'assignments', assignment_id_str)
             )
             assignment_name = assignment_response.get("name", "Unknown Assignment") if "error" not in assignment_response else "Unknown Assignment"
 
@@ -1126,7 +1127,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
 
         # Get assignment details for context
         assignment_response = await make_canvas_request(
-            "get", f"/courses/{course_id}/assignments/{assignment_id_str}",
+            "get", canvas_path('courses', course_id, 'assignments', assignment_id_str),
             params={"include[]": ["rubric"]}
         )
 
@@ -1235,7 +1236,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         # CRITICAL: Verify rubric is configured for grading BEFORE submitting
         assignment_check = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/assignments/{assignment_id_str}",
+            canvas_path('courses', course_id, 'assignments', assignment_id_str),
             params={"include[]": ["rubric", "rubric_settings"]}
         )
 
@@ -1263,7 +1264,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         # Submit the grade with rubric assessment using form encoding
         response = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/assignments/{assignment_id_str}/submissions/{user_id_str}",
+            canvas_path('courses', course_id, 'assignments', assignment_id_str, 'submissions', user_id_str),
             data=form_data,
             use_form_data=True
         )
@@ -1276,7 +1277,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
 
         # Get assignment details for confirmation
         assignment_response = await make_canvas_request(
-            "get", f"/courses/{course_id}/assignments/{assignment_id_str}"
+            "get", canvas_path('courses', course_id, 'assignments', assignment_id_str)
         )
         assignment_name = assignment_response.get("name", "Unknown Assignment") if "error" not in assignment_response else "Unknown Assignment"
 
@@ -1324,7 +1325,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
 
         # Fetch all rubrics for the course
-        rubrics = await fetch_all_paginated_results(f"/courses/{course_id}/rubrics")
+        rubrics = await fetch_all_paginated_results(canvas_path('courses', course_id, 'rubrics'))
 
         if isinstance(rubrics, dict) and "error" in rubrics:
             return f"Error fetching rubrics: {rubrics['error']}"
@@ -1447,7 +1448,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         # Upload the CSV
         response = await make_canvas_request(
             "post",
-            f"/courses/{course_id}/rubrics/upload",
+            canvas_path('courses', course_id, 'rubrics', 'upload'),
             files=files
         )
 
@@ -1473,7 +1474,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
             await asyncio.sleep(2)
             check_resp = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}/rubrics/upload/{import_id}"
+                canvas_path('courses', course_id, 'rubrics', 'upload', import_id)
             )
             if "error" in check_resp:
                 return f"Error checking rubric import status: {check_resp['error']}"
@@ -1616,7 +1617,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "post",
-            f"/courses/{course_id}/rubrics",
+            canvas_path('courses', course_id, 'rubrics'),
             data=form_data,
             use_form_data=True,
         )
@@ -1693,7 +1694,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         association_id_str = str(rubric_association_id)
         response = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/rubrics/{rubric_id_str}",
+            canvas_path('courses', course_id, 'rubrics', rubric_id_str),
             params={"include[]": ["associations"]},
         )
         try:
@@ -1753,7 +1754,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         )
         update_response = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/rubrics/{rubric_id_str}",
+            canvas_path('courses', course_id, 'rubrics', rubric_id_str),
             data=form_data,
             use_form_data=True,
         )
@@ -1789,7 +1790,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
 
         readback_response = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/rubrics/{rubric_id_str}",
+            canvas_path('courses', course_id, 'rubrics', rubric_id_str),
             params={"include[]": ["associations"]},
         )
         try:
@@ -1869,7 +1870,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "post",
-            f"/courses/{course_id}/rubric_associations",
+            canvas_path('courses', course_id, 'rubric_associations'),
             data=request_data,
             use_form_data=True,
         )
@@ -1880,7 +1881,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         # Get assignment details for confirmation
         assignment_response = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/assignments/{assignment_id_str}"
+            canvas_path('courses', course_id, 'assignments', assignment_id_str)
         )
 
         assignment_name = "Unknown Assignment"

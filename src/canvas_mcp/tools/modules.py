@@ -4,7 +4,6 @@ Provides tools for creating, updating, and managing Canvas course modules
 and module items. Modules are the primary content organization system in Canvas.
 """
 
-
 from typing import Any
 
 from fastmcp import FastMCP
@@ -13,6 +12,7 @@ from mcp.types import ToolAnnotations
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.dates import format_date, parse_date
+from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
@@ -55,7 +55,7 @@ def register_shared_module_tools(mcp: FastMCP) -> None:
             params["search_term"] = search_term
 
         modules = await fetch_all_paginated_results(
-            f"/courses/{course_id}/modules", params
+            canvas_path('courses', course_id, 'modules'), params
         )
 
         if isinstance(modules, dict) and "error" in modules:
@@ -127,7 +127,7 @@ def register_shared_module_tools(mcp: FastMCP) -> None:
         params = {"per_page": 100, "include[]": ["items"]}
 
         modules = await fetch_all_paginated_results(
-            f"/courses/{course_id}/modules", params
+            canvas_path('courses', course_id, 'modules'), params
         )
 
         if isinstance(modules, dict) and "error" in modules:
@@ -278,7 +278,7 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "post",
-            f"/courses/{course_id}/modules",
+            canvas_path('courses', course_id, 'modules'),
             data=form_data,
             use_form_data=True
         )
@@ -377,7 +377,7 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/modules/{module_id}",
+            canvas_path('courses', course_id, 'modules', module_id),
             data=form_data,
             use_form_data=True
         )
@@ -425,7 +425,7 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
 
         module_response = await make_canvas_request(
-            "get", f"/courses/{course_id}/modules/{module_id}"
+            "get", canvas_path('courses', course_id, 'modules', module_id)
         )
         if "error" in module_response:
             return f"Error fetching module details: {module_response['error']}"
@@ -449,7 +449,7 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
             return error
 
         response = await make_canvas_request(
-            "delete", f"/courses/{course_id}/modules/{module_id}"
+            "delete", canvas_path('courses', course_id, 'modules', module_id)
         )
         if isinstance(response, dict) and "error" in response:
             return f"Error deleting module: {response['error']}"
@@ -571,7 +571,7 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "post",
-            f"/courses/{course_id}/modules/{module_id}/items",
+            canvas_path('courses', course_id, 'modules', module_id, 'items'),
             data=item_params,
             use_form_data=True
         )
@@ -699,7 +699,7 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/modules/{module_id}/items/{item_id}",
+            canvas_path('courses', course_id, 'modules', module_id, 'items', item_id),
             data=item_params,
             use_form_data=True
         )
@@ -750,7 +750,7 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
 
         item_response = await make_canvas_request(
-            "get", f"/courses/{course_id}/modules/{module_id}/items/{item_id}"
+            "get", canvas_path('courses', course_id, 'modules', module_id, 'items', item_id)
         )
         if "error" in item_response:
             return f"Error fetching module item details: {item_response['error']}"
@@ -777,7 +777,7 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
             return error
 
         response = await make_canvas_request(
-            "delete", f"/courses/{course_id}/modules/{module_id}/items/{item_id}"
+            "delete", canvas_path('courses', course_id, 'modules', module_id, 'items', item_id)
         )
         if isinstance(response, dict) and "error" in response:
             return f"Error deleting module item: {response['error']}"

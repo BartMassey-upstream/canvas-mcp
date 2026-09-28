@@ -11,6 +11,7 @@ from typing import Any
 from .client import fetch_all_paginated_results, make_canvas_request
 from .csv_safety import csv_safe_cell, rows_to_csv_string
 from .dates import parse_date
+from .path import canvas_path
 
 
 class PeerReviewAnalyzer:
@@ -32,7 +33,7 @@ class PeerReviewAnalyzer:
             # Get assignment details
             assignment_response = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}/assignments/{assignment_id}"
+                canvas_path('courses', course_id, 'assignments', assignment_id)
             )
 
             if "error" in assignment_response:
@@ -41,7 +42,7 @@ class PeerReviewAnalyzer:
             # Get peer reviews
             peer_reviews_response = await make_canvas_request(
                 "get",
-                f"/courses/{course_id}/assignments/{assignment_id}/peer_reviews"
+                canvas_path('courses', course_id, 'assignments', assignment_id, 'peer_reviews')
             )
 
             if "error" in peer_reviews_response:
@@ -53,7 +54,7 @@ class PeerReviewAnalyzer:
             users_map = {}
             if include_names:
                 users_response = await fetch_all_paginated_results(
-                    f"/courses/{course_id}/users",
+                    canvas_path('courses', course_id, 'users'),
                     {"enrollment_type[]": "student", "per_page": 100}
                 )
                 if isinstance(users_response, list):
@@ -129,7 +130,7 @@ class PeerReviewAnalyzer:
 
             # Get all students in the course
             users_response = await fetch_all_paginated_results(
-                f"/courses/{course_id}/users",
+                canvas_path('courses', course_id, 'users'),
                 {"enrollment_type[]": "student", "per_page": 100}
             )
 

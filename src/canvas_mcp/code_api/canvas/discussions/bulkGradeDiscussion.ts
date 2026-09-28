@@ -1,5 +1,11 @@
 import { createBatchRunner } from "../../batching.js";
-import { canvasGet, canvasPut, canvasPutForm, fetchAllPaginated } from "../../client.js";
+import {
+  canvasGet,
+  canvasPath,
+  canvasPut,
+  canvasPutForm,
+  fetchAllPaginated
+} from "../../client.js";
 
 export interface DiscussionEntry {
   id: number;
@@ -132,7 +138,7 @@ async function fetchAllDiscussionEntries(
   try {
     // Fetch all top-level entries
     const entries = await fetchAllPaginated<DiscussionEntry>(
-      `/courses/${courseIdentifier}/discussion_topics/${topicId}/entries`,
+      canvasPath('courses', courseIdentifier, 'discussion_topics', topicId, 'entries'),
       { per_page: 100 }
     );
 
@@ -146,7 +152,10 @@ async function fetchAllDiscussionEntries(
     for (const entry of entries) {
       try {
         const replies = await fetchAllPaginated<DiscussionEntry>(
-          `/courses/${courseIdentifier}/discussion_topics/${topicId}/entries/${entry.id}/replies`,
+          canvasPath(
+            'courses', courseIdentifier, 'discussion_topics', topicId,
+            'entries', entry.id, 'replies'
+          ),
           { per_page: 100 }
         );
 
@@ -394,7 +403,9 @@ async function gradeDiscussionSubmission(
   // Canvas discussions that are graded have an associated assignment
   // We grade them like any other assignment submission
 
-  const endpoint = `/courses/${courseIdentifier}/assignments/${assignmentId}/submissions/${userId}`;
+  const endpoint = canvasPath(
+    'courses', courseIdentifier, 'assignments', assignmentId, 'submissions', userId
+  );
 
   // Build form data for Canvas API
   const formData: Record<string, string> = {
