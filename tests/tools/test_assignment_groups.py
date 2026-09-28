@@ -36,6 +36,44 @@ async def test_list_assignment_groups_uses_no_student_includes():
 
 
 @pytest.mark.asyncio
+async def test_list_assignment_groups_can_include_compact_assignment_hierarchy():
+    groups = [
+        {
+            "id": 7,
+            "name": "Assessments",
+            "assignments": [
+                {"id": 10, "name": "Essay", "submission_types": ["online_upload"]},
+                {
+                    "id": 11,
+                    "name": "Midterm",
+                    "quiz_id": 21,
+                    "submission_types": ["online_quiz"],
+                },
+            ],
+        }
+    ]
+    with patch(
+        "canvas_mcp.tools.assignment_groups.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.assignment_groups.get_course_code", new=AsyncMock(return_value="ENG101")
+    ), patch(
+        "canvas_mcp.tools.assignment_groups.fetch_all_paginated_results",
+        new=AsyncMock(return_value=groups),
+    ) as fetch:
+        result = await (await _tool("list_assignment_groups"))(
+            "ENG101", include_assignments=True
+        )
+
+    assert fetch.await_args.args == (
+        "/courses/42/assignment_groups",
+        {"per_page": 100, "include[]": ["assignments"]},
+    )
+    assert "assignment ID 10" in result
+    assert "Classic Quiz ID 21" in result
+    assert "submission" not in result.lower()
+
+
+@pytest.mark.asyncio
 async def test_create_assignment_group_sends_only_course_structure_fields():
     with patch(
         "canvas_mcp.tools.assignment_groups.get_course_id", new=AsyncMock(return_value="42")

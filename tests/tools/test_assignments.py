@@ -509,6 +509,41 @@ class TestAssignmentTools:
         assert "include[]" not in params
 
     @pytest.mark.asyncio
+    async def test_list_assignments_exposes_assignment_group_id(
+        self, mock_canvas_api
+    ):
+        mock_canvas_api["fetch_all_paginated_results"].return_value = [
+            {
+                "id": 1,
+                "name": "Essay",
+                "assignment_group_id": 7,
+                "points_possible": 10,
+            }
+        ]
+        with patch(
+            "canvas_mcp.tools.assignments.get_config",
+            return_value=SimpleNamespace(canvas_role="creator"),
+        ):
+            result = await get_tool_function("list_assignments")("60366")
+
+        assert "Assignment Group ID: 7" in result
+
+    @pytest.mark.asyncio
+    async def test_get_assignment_details_exposes_assignment_group_id(
+        self, mock_canvas_api
+    ):
+        mock_canvas_api["make_canvas_request"].return_value = {
+            "id": 1,
+            "name": "Essay",
+            "assignment_group_id": 7,
+            "submission_types": ["online_upload"],
+        }
+
+        result = await get_tool_function("get_assignment_details")("60366", 1)
+
+        assert "Assignment Group ID: 7" in result
+
+    @pytest.mark.asyncio
     async def test_get_assignment_details(self):
         """Test getting assignment details."""
         mock_assignment = {

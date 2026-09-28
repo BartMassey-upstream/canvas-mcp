@@ -23,12 +23,23 @@ async def test_list_quizzes_uses_definition_endpoint_without_student_includes():
         "canvas_mcp.tools.quizzes.get_course_code", new=AsyncMock(return_value="ENG101")
     ), patch(
         "canvas_mcp.tools.quizzes.fetch_all_paginated_results",
-        new=AsyncMock(return_value=[{"id": 7, "title": "Midterm"}]),
+        new=AsyncMock(
+            return_value=[
+                {
+                    "id": 7,
+                    "title": "Midterm",
+                    "assignment_group_id": 12,
+                    "assignment_id": 99,
+                }
+            ]
+        ),
     ) as fetch:
         result = await (await _tools())["list_quizzes"]("ENG101")
 
     assert fetch.await_args.args == ("/courses/42/quizzes", {"per_page": 100})
     assert "UNTRUSTED CANVAS CONTENT" in result
+    assert "Assignment Group ID: 12" in result
+    assert "Backing Assignment ID: 99" in result
 
 
 @pytest.mark.asyncio

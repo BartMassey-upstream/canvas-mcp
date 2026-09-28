@@ -65,11 +65,13 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
             name = assignment.get("name", "Unnamed assignment")
             due_at = assignment.get("due_at", "No due date")
             points = assignment.get("points_possible", 0)
+            assignment_group_id = assignment.get("assignment_group_id", "N/A")
 
             # Assignment names are instructor-authored free text (issue 239).
             assignments_info.append(
                 f"ID: {assignment_id}\n"
                 f"Name: {fence_untrusted_inline(name, 'assignment name')}\n"
+                f"Assignment Group ID: {assignment_group_id}\n"
                 f"Due: {due_at}\nPoints: {points}\n"
             )
 
@@ -106,6 +108,7 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
             + fence_untrusted(response.get('description') or 'N/A', 'assignment description'),
             f"Due Date: {format_date(response.get('due_at'))}",
             f"Points Possible: {response.get('points_possible', 'N/A')}",
+            f"Assignment Group ID: {response.get('assignment_group_id', 'N/A')}",
             f"Submission Types: {', '.join(response.get('submission_types', ['N/A']))}",
             f"Published: {response.get('published', False)}",
             f"Locked: {response.get('locked_for_user', False)}"

@@ -24,17 +24,44 @@ _DELETE_ASSIGNMENT_GROUP_GUARD = ConfirmationGuard(
 )
 
 
-def _format_group(group: dict[str, Any]) -> str:
+def _format_group(
+    group: dict[str, Any], *, include_assignments: bool = False
+) -> str:
     name = fence_untrusted_inline(
         group.get("name") or "Unnamed assignment group",
         "assignment group name",
     )
-    return (
+    result = (
         f"ID: {group.get('id')}\n"
         f"Name: {name}\n"
         f"Position: {group.get('position', 'N/A')}\n"
         f"Weight: {group.get('group_weight', 0)}%"
     )
+    if not include_assignments:
+        return result
+
+    assignments = group.get("assignments") or []
+    if not assignments:
+        return result + "\nAssignments: none"
+
+    lines = [result, "Assignments:"]
+    for assignment in assignments:
+        assignment_name = fence_untrusted_inline(
+            assignment.get("name") or "Unnamed assignment",
+            "assignment name",
+        )
+        quiz_id = assignment.get("quiz_id")
+        kind = (
+            "Classic Quiz"
+            if quiz_id is not None
+            or "online_quiz" in (assignment.get("submission_types") or [])
+            else "Assignment"
+        )
+        identity = f"assignment ID {assignment.get('id')}"
+        if quiz_id is not None:
+            identity += f", Classic Quiz ID {quiz_id}"
+        lines.append(f"  - {assignment_name} ({kind}; {identity})")
+    return "\n".join(lines)
 
 
 def register_assignment_group_tools(mcp: FastMCP) -> None:
@@ -42,12 +69,18 @@ def register_assignment_group_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params
-    async def list_assignment_groups(course_identifier: str | int) -> str:
-        """List assignment groups without assignments, submissions, or scores."""
+    async def list_assignment_groups(
+        course_identifier: str | int,
+        include_assignments: bool = False,
+    ) -> str:
+        """List groups, optionally with assignment definitions; never student data."""
         course_id = await get_course_id(course_identifier)
+        params: dict[str, Any] = {"per_page": 100}
+        if include_assignments:
+            params["include[]"] = ["assignments"]
         groups = await fetch_all_paginated_results(
             f"/courses/{course_id}/assignment_groups",
-            {"per_page": 100},
+            params,
         )
         if isinstance(groups, dict) and "error" in groups:
             return f"Error listing assignment groups: {groups['error']}"
@@ -57,7 +90,10 @@ def register_assignment_group_tools(mcp: FastMCP) -> None:
         course_display = await get_course_code(course_id) or course_identifier
         return (
             f"Assignment groups for course {course_display}:\n\n"
-            + "\n\n".join(_format_group(group) for group in groups)
+            + "\n\n".join(
+                _format_group(group, include_assignments=include_assignments)
+                for group in groups
+            )
         )
 
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))

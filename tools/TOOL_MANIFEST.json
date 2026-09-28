@@ -157,7 +157,7 @@
           "description": "Course code or Canvas ID"
         }
       ],
-      "returns": "List of assignments with IDs, names, due dates, points",
+      "returns": "List of assignments with IDs, names, assignment-group IDs, due dates, and points",
       "examples": [
         "Show me all assignments in BADM 350",
         "List assignments for course 12345"
@@ -181,7 +181,7 @@
           "description": "Assignment ID"
         }
       ],
-      "returns": "Full assignment details including description, due date, submission types",
+      "returns": "Full assignment details including assignment-group ID, description, due date, and submission types",
       "examples": [
         "Show me details for assignment 456 in course 123"
       ]
@@ -189,9 +189,9 @@
     {
       "name": "list_assignment_groups",
       "category": "educator",
-      "description": "List assignment groups without assignments, submissions, or scores",
-      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}],
-      "returns": "Assignment group IDs, names, positions, and weights",
+      "description": "List assignment groups, optionally with compact assignment and Classic Quiz membership",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "include_assignments", "type": "boolean", "required": false, "default": false}],
+      "returns": "Assignment group IDs, names, positions, and weights, optionally with assignment IDs and Classic Quiz IDs; never submissions or scores",
       "examples": ["List the assignment groups in ENG 101"]
     },
     {
@@ -223,7 +223,7 @@
       "category": "educator",
       "description": "List Classic Quiz definitions without student activity",
       "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}],
-      "returns": "Quiz IDs, titles, types, points, question counts, and dates",
+      "returns": "Quiz IDs, titles, assignment-group IDs, backing assignment IDs, types, points, question counts, and dates",
       "examples": ["List the Classic Quizzes in ENG 101"]
     },
     {
@@ -231,7 +231,7 @@
       "category": "educator",
       "description": "Get one Classic Quiz definition without student activity",
       "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}],
-      "returns": "Quiz definition and fenced description",
+      "returns": "Quiz definition with assignment-group ID, backing assignment ID, and fenced description",
       "examples": ["Show the settings for Classic Quiz 7"]
     },
     {

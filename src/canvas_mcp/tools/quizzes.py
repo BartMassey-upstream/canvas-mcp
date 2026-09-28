@@ -45,6 +45,8 @@ def _format_quiz(quiz: dict[str, Any], *, include_description: bool = False) -> 
         f"ID: {quiz.get('id')}",
         f"Title: {fence_untrusted_inline(quiz.get('title') or 'Untitled quiz', 'quiz title')}",
         f"Type: {quiz.get('quiz_type', 'N/A')}",
+        f"Assignment Group ID: {quiz.get('assignment_group_id', 'N/A')}",
+        f"Backing Assignment ID: {quiz.get('assignment_id', 'N/A')}",
         f"Points: {quiz.get('points_possible', 'N/A')}",
         f"Questions: {quiz.get('question_count', 'N/A')}",
         f"Published: {quiz.get('published', False)}",

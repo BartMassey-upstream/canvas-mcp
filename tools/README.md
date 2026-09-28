@@ -323,7 +323,7 @@ These tools provide instructors and TAs with course management, grading, analyti
 ### Assignment Management
 
 #### `list_assignments`
-List all assignments for a course.
+List all assignments for a course, including each assignment-group ID.
 
 **Parameters:**
 - `course_identifier`: Course code (e.g., "badm_350_120251_246794") or ID
@@ -337,7 +337,8 @@ List all assignments for a course.
 ---
 
 #### `get_assignment_details`
-Get detailed information about a specific assignment.
+Get detailed information about a specific assignment, including its
+assignment-group ID.
 
 **Parameters:**
 - `course_identifier`: Course code or ID
@@ -352,8 +353,9 @@ Get detailed information about a specific assignment.
 
 #### Assignment-group tools
 
-- `list_assignment_groups`: list IDs, names, positions, and weights without
-  requesting assignments, submissions, or scores
+- `list_assignment_groups`: list IDs, names, positions, and weights; pass
+  `include_assignments=true` for a compact group hierarchy containing
+  assignment IDs and Classic Quiz IDs, but never submissions or scores
 - `create_assignment_group`: create a named group with optional position and
   weight
 - `update_assignment_group`: change its name, position, or weight
@@ -364,8 +366,9 @@ Get detailed information about a specific assignment.
 
 #### Classic Quiz authoring tools
 
-- `list_quizzes` and `get_quiz`: read quiz definitions without attempts,
-  submissions, responses, or statistics
+- `list_quizzes` and `get_quiz`: read quiz definitions, assignment-group IDs,
+  and backing assignment IDs without attempts, submissions, responses, or
+  statistics
 - `create_quiz` and `update_quiz`: author Classic Quiz settings
 - `delete_quiz`: refuse when student work exists unless
   `allow_deleting_student_work=true`, then preview and confirm deletion
