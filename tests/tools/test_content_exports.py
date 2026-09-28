@@ -76,6 +76,7 @@ async def test_create_course_export_starts_common_cartridge_without_notification
     assert result["export_created"] is True
     assert result["export_id"] == "91"
     assert result["next_action"]["tool"] == "get_course_export_status"
+    assert result["next_action"]["arguments"]["poll_attempt"] == 1
 
 
 @pytest.mark.asyncio
@@ -146,6 +147,58 @@ async def test_get_course_export_status_polls_once():
     assert request.await_args.args == ("get", "/courses/42/content_exports/91")
     assert result["poll_again"] is True
     assert result["terminal"] is False
+    assert result["retry_after_seconds"] == 5
+    assert result["recommended_poll_window_seconds"] == 900
+    assert result["next_action"]["arguments"]["poll_attempt"] == 1
+
+
+@pytest.mark.asyncio
+async def test_waiting_for_external_tool_is_transient_and_keeps_polling():
+    response = {
+        "id": 91,
+        "export_type": "common_cartridge",
+        "workflow_state": "waiting_for_external_tool",
+        "created_at": "2026-09-28T12:00:00Z",
+    }
+    with patch(
+        "canvas_mcp.tools.content_exports.get_course_id",
+        new=AsyncMock(return_value="42"),
+    ), patch(
+        "canvas_mcp.tools.content_exports.make_canvas_request",
+        new=AsyncMock(return_value=response),
+    ):
+        result = await (await _tools())["get_course_export_status"](
+            "ENG101", 91, poll_attempt=3
+        )
+
+    assert result["workflow_state"] == "waiting_for_external_tool"
+    assert result["terminal"] is False
+    assert result["poll_again"] is True
+    assert result["poll_attempt"] == 3
+    assert result["retry_after_seconds"] == 40
+    assert result["recommended_poll_window_seconds"] == 900
+    assert result["next_action"]["tool"] == "get_course_export_status"
+    assert result["next_action"]["arguments"]["poll_attempt"] == 4
+    assert "transient" in result["status_note"]
+    assert "New Quizzes" in result["status_note"]
+
+
+@pytest.mark.asyncio
+async def test_course_export_polling_backoff_is_capped():
+    response = {"id": 91, "workflow_state": "exporting"}
+    with patch(
+        "canvas_mcp.tools.content_exports.get_course_id",
+        new=AsyncMock(return_value="42"),
+    ), patch(
+        "canvas_mcp.tools.content_exports.make_canvas_request",
+        new=AsyncMock(return_value=response),
+    ):
+        result = await (await _tools())["get_course_export_status"](
+            "ENG101", 91, poll_attempt=100
+        )
+
+    assert result["retry_after_seconds"] == 60
+    assert result["next_action"]["arguments"]["poll_attempt"] == 101
 
 
 @pytest.mark.asyncio

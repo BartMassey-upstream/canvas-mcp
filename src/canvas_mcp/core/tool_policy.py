@@ -55,7 +55,7 @@ class Effect(StrEnum):
 
 
 TOOL_EFFECTS: dict[str, Effect] = {
-    # --- READ (63) ---
+    # --- READ (65) ---
     "analyze_peer_review_quality": Effect.READ,
     "check_enrollment": Effect.READ,
     "fetch_ufixit_report": Effect.READ,
@@ -69,6 +69,7 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "get_conversation_details": Effect.READ,
     "get_course_content_overview": Effect.READ,
     "get_course_details": Effect.READ,
+    "get_course_export_status": Effect.READ,
     "get_course_structure": Effect.READ,
     "get_discussion_entry_details": Effect.READ,
     "get_discussion_topic_details": Effect.READ,
@@ -101,6 +102,7 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "list_code_api_modules": Effect.READ,
     "list_conversations": Effect.READ,
     "list_course_files": Effect.READ,
+    "list_course_exports": Effect.READ,
     "list_course_navigation": Effect.READ,
     "list_courses": Effect.READ,
     "list_discussion_entries": Effect.READ,
@@ -119,7 +121,7 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "read_course_file": Effect.READ,
     "scan_course_content_accessibility": Effect.READ,
     "search_canvas_tools": Effect.READ,
-    # --- CANVAS_WRITE (54) ---
+    # --- CANVAS_WRITE (55) ---
     "add_module_item": Effect.CANVAS_WRITE,
     "assign_peer_review": Effect.CANVAS_WRITE,
     "associate_rubric": Effect.CANVAS_WRITE,
@@ -131,6 +133,7 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "create_assignment": Effect.CANVAS_WRITE,
     "create_assignment_group": Effect.CANVAS_WRITE,
     "create_content_migration": Effect.CANVAS_WRITE,
+    "create_course_export": Effect.CANVAS_WRITE,
     "create_discussion_topic": Effect.CANVAS_WRITE,
     "create_module": Effect.CANVAS_WRITE,
     "create_page": Effect.CANVAS_WRITE,
@@ -174,8 +177,9 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "update_rubric": Effect.CANVAS_WRITE,
     "update_syllabus": Effect.CANVAS_WRITE,
     "upload_course_file": Effect.CANVAS_WRITE,
-    # --- LOCAL_WRITE (4) ---
+    # --- LOCAL_WRITE (5) ---
     "create_student_anonymization_map": Effect.LOCAL_WRITE,
+    "download_course_export": Effect.LOCAL_WRITE,
     "download_course_file": Effect.LOCAL_WRITE,
     "extract_peer_review_dataset": Effect.LOCAL_WRITE,
     "generate_peer_review_report": Effect.LOCAL_WRITE,
