@@ -637,8 +637,8 @@ def main() -> None:
         choices=["student", "creator", "educator", "all"],
         default=None,
         help=(
-            "Tool profile: student (~37 tools), creator (course content only), "
-            "educator (~115 tools), all (default: all)"
+            "Tool profile: student (~37 tools), creator (~87 course-content "
+            "tools), educator (~128 tools), all (default: all)"
         )
     )
     parser.add_argument(

@@ -112,6 +112,7 @@ CREATOR_TOOLS = {
     "list_course_exports",
     "get_course_content_overview",
     "get_course_details",
+    "get_course_settings",
     "get_course_structure",
     "get_front_page",
     "get_my_enrollments",
@@ -146,6 +147,8 @@ CREATOR_TOOLS = {
     "update_announcement",
     "update_course_navigation",
     "update_course_file",
+    "update_course_dates",
+    "update_course_settings",
     "update_module",
     "update_module_item",
     "update_new_quiz",
@@ -178,6 +181,9 @@ EDUCATOR_ONLY_SAMPLE = {
     # Writing a syllabus needs an instructor-scoped token, so it must not leak
     # into the student profile even though its read twin get_syllabus is shared.
     "update_syllabus",
+    "get_course_settings",
+    "update_course_dates",
+    "update_course_settings",
     "list_users",
     "get_student_analytics",
 }
@@ -321,8 +327,8 @@ class TestRoleFiltering:
 
     @pytest.mark.asyncio
     async def test_educator_tool_count(self):
-        """Educator role should have approximately 88 tools."""
+        """Educator role should have approximately 128 tools."""
         mcp = FastMCP(name="test-educator")
         register_all_tools(mcp, role="educator")
         tools = await _get_tool_names(mcp)
-        assert 105 <= len(tools) <= 125, f"Expected ~119 educator tools, got {len(tools)}: {sorted(tools)}"
+        assert 115 <= len(tools) <= 135, f"Expected ~128 educator tools, got {len(tools)}: {sorted(tools)}"

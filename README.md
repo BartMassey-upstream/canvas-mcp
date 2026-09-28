@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![skills.sh](https://img.shields.io/badge/skills.sh-canvas--mcp-blue)](https://skills.sh)
 
-MCP server for Canvas LMS with **up to 126 tools** and **8 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
+MCP server for Canvas LMS with **up to 139 tools** and **8 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
 
 ## Quick Start
 
@@ -77,7 +77,7 @@ release tag.
   See CLAUDE.md "Documentation Maintenance" for full guidelines.
 -->
 
-Canvas MCP provides **up to 126 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 126. Tools are organized by user type:
+Canvas MCP provides **up to 139 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 139. Tools are organized by user type:
 
 <details>
 <summary><strong>Student Tools</strong> (click to expand)</summary>
@@ -107,6 +107,9 @@ Canvas MCP provides **up to 126 tools** for interacting with Canvas LMS; the def
 | `create_announcement` | Post announcements | "Announce the exam date change" |
 | `create_course_export` | Start a restorable course-content backup | "Back up this course before making changes" |
 | `download_course_export` | Save a completed backup locally | "Download the backup to my archive directory" |
+| `get_course_settings` | Read course, term, and general settings | "Show the availability settings for this course" |
+| `update_course_dates` | Safely change course availability dates | "End this course on December 12" |
+| `update_course_settings` | Change documented Canvas course settings | "Set the default due time to 11:59 PM" |
 | **Module Management** | | |
 | `create_module` | Create course module | "Create a module for Week 5" |
 | `update_module` | Update module settings | "Rename the midterm module" |
@@ -177,7 +180,8 @@ when the operator has enabled it.
 returned by `list_courses` (including spaces or punctuation), or an
 explicit SIS ID such as `sis_course_id:ABC123`.
 
-**Cannot do:** Create/delete courses, modify course settings, access other users' data
+**Cannot do:** Create/delete courses, bypass institution-managed settings, or
+access data outside the caller's Canvas permissions
 
 **Rate limits:** ~700 requests/10 min. Use `max_concurrent=5` for bulk operations.
 
@@ -327,7 +331,7 @@ Claude Code skills are located in `.claude/skills/` and can be customized for yo
 
 Set `CANVAS_ROLE=creator` (or pass `--role creator`) to expose course-building
 tools for assignments, assignment groups, Classic and New Quizzes, course
-navigation, syllabi, pages, modules, course files, rubrics,
+navigation, course settings, syllabi, pages, modules, course files, rubrics,
 announcements, local content backups, migrations, and accessible content
 without registering tools
 that read student records. The profile excludes rosters, submissions,

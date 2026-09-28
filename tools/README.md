@@ -1772,6 +1772,69 @@ Get detailed course information including syllabus.
 
 ---
 
+#### `get_course_settings`
+
+Read the course availability dates, governing term dates, publication state,
+and the settings returned by Canvas's dedicated course-settings endpoint.
+The result says whether course or term dates currently govern access and warns
+that section dates may still override both.
+
+```python
+get_course_settings(course_identifier: str | int) -> dict[str, Any]
+```
+
+This creator/educator tool reads no student records.
+
+---
+
+#### `update_course_dates`
+
+Change course-level availability dates through a mandatory preview and
+confirmation. The confirmation is bound to the current dates and requested
+replacement, so it stops matching if a co-instructor changes the course first.
+
+```python
+update_course_dates(
+    course_identifier: str | int,
+    start_at: str | None = None,
+    end_at: str | None = None,
+    clear_start_at: bool = False,
+    clear_end_at: bool = False,
+    restrict_enrollments_to_course_dates: bool | None = None,
+    confirmation_token: str | None = None,
+) -> str | dict[str, Any]
+```
+
+Dates use ISO 8601; include `Z` or an explicit UTC offset when possible.
+Setting a date requires course-date enforcement to be enabled already or in
+the same request, because Canvas otherwise ignores some date fields. Clearing
+a date requires its explicit `clear_*` flag. The tool validates the resulting
+date order, reads the course back after writing, and reports a mismatch when
+institutional policy or SIS management prevents the change.
+
+Every change is two-step because it can alter student access and course
+content exports do not restore course availability settings.
+
+---
+
+#### `update_course_settings`
+
+Update the settings officially supported by Canvas's course-settings
+endpoint. Supported fields include student discussion permissions, grade and
+distribution visibility, announcement behavior, usage-rights enforcement,
+pre/post-course visibility, syllabus summary visibility, the default due
+time, and conditional release.
+
+Ordinary settings update immediately. Changes involving course access, final
+grade visibility or override, or conditional release first return a preview
+and confirmation token. Every write is read back from Canvas before success
+is reported. `default_due_time` accepts `HH:MM:SS` or `inherit`; it does not
+change existing assignment due dates.
+
+Use `get_course_settings` first to inspect the current values.
+
+---
+
 #### `get_syllabus`
 Get the complete Canvas Syllabus tab content for a course, **untruncated**. Unlike `get_course_content_overview` (which returns only a ~1000-character preview), this returns the full syllabus body, so later sections such as grading policies, weighting, and final-exam details remain accessible.
 

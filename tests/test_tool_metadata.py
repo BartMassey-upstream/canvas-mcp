@@ -62,6 +62,8 @@ DESTRUCTIVE = {
     "fix_accessibility_issues",
     # Replaces existing settings/fields.
     "update_assignment",
+    "update_course_dates",
+    "update_course_settings",
     "update_new_quiz",
     "update_new_quiz_question",
     "update_syllabus",
@@ -257,7 +259,8 @@ async def test_repeatable_tools_declare_idempotency_honestly():
     # refuses, never deletes more.
     # extract_peer_review_dataset: fixed default filename + mode "w" means a repeat
     # overwrites the same file. Contrast generate_peer_review_report above.
-    for name in ("update_assignment", "update_new_quiz", "update_new_quiz_question",
+    for name in ("update_assignment", "update_course_dates", "update_course_settings",
+                 "update_new_quiz", "update_new_quiz_question",
                  "update_module", "update_discussion_topic",
                  "update_rubric", "edit_page_content", "delete_page", "bulk_delete_announcements",
                  "delete_announcements_by_criteria", "delete_assignment_with_confirmation",

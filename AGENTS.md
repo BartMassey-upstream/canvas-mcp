@@ -35,9 +35,9 @@ Reduce tool overhead by setting a role-based profile. Only tools relevant to the
 ```
 # In the platform config directory's env file:
 CANVAS_ROLE=student    # ~37 tools (student + shared)
-CANVAS_ROLE=creator    # 74 course-building tools; no student records
-CANVAS_ROLE=educator   # 115 tools (educator + shared)
-CANVAS_ROLE=all        # Default profile; 121 tools by default, 126 with all feature-gated tools enabled
+CANVAS_ROLE=creator    # 87 course-building tools; no student records
+CANVAS_ROLE=educator   # 128 tools (130 with all feature gates)
+CANVAS_ROLE=all        # Default profile; 134 tools by default, 139 with all feature-gated tools enabled
 ```
 
 Or via CLI flag: `canvas-mcp-server --role student` (CLI flag takes precedence over env var).
@@ -98,6 +98,9 @@ Course management, grading, and analytics. Requires instructor/TA role.
 |------|---------|
 | `list_assignments` | All assignments in a course, including assignment-group IDs |
 | `get_assignment_details` | Full assignment info including description and assignment-group ID |
+| `get_course_settings` | Read course dates, governing term dates, and general course settings |
+| `update_course_dates` | Preview and confirm course availability date changes, then verify them |
+| `update_course_settings` | Update documented Canvas settings with confirmation for access/grade-sensitive changes |
 | `list_submissions` | Student submissions for grading |
 | `get_assignment_analytics` | Performance statistics |
 | `create_assignment` | Create new assignment with due date, submission types, peer reviews |
@@ -355,7 +358,7 @@ usual cause).
 
 ### Cannot Do
 - Create or delete courses
-- Modify course settings other than the syllabus body (`update_syllabus`)
+- Bypass institution- or SIS-managed course settings
 - Access data outside user's Canvas permissions
 - Bypass Canvas API rate limits
 - Access other students' data (for student users)
