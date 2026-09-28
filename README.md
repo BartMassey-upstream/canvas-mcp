@@ -40,6 +40,8 @@ available so the changes can be reviewed upstream in smaller units:
 | `creator` | Student-data-free course-building role and tools | Stacked on `pathsafe` |
 | `nullnull` | Clearing nullable Canvas fields correctly | Standalone |
 | `fileops` | Course-file metadata updates and safe deletion | Currently based on the integrated `main` |
+| `ci-fixes` | Fork-safe Azure CI and Windows token ownership | Currently based on the integrated `main` |
+| `exports` | Local Common Cartridge course backups | Currently based on the integrated `main` |
 
 These changes are not all part of the published `canvas-mcp` package
 yet. To test the integrated fork rather than the latest release:
