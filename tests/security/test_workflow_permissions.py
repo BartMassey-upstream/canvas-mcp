@@ -24,9 +24,10 @@ WORKFLOWS_REQUIRING_CONTENTS_READ = {
     "deploy-prod.yml": None,
     "deploy-staging.yml": None,
 }
-AZURE_DEPLOYMENT_WORKFLOWS = {
-    "deploy-prod.yml",
-    "deploy-staging.yml",
+UPSTREAM_ONLY_JOBS = {
+    "deploy-prod.yml": ["build-and-deploy"],
+    "deploy-staging.yml": ["build-and-deploy"],
+    "publish-mcp.yml": ["publish-pypi", "publish-registry"],
 }
 JOBS_REQUIRING_CONTENTS_READ = {
     "security-testing.yml": [
@@ -156,11 +157,13 @@ class TestWorkflowPermissions:
                 f"{workflow_name}:{job_name} should declare least-privilege checkout permissions"
             )
 
-    @pytest.mark.parametrize("workflow_name", sorted(AZURE_DEPLOYMENT_WORKFLOWS))
-    def test_azure_deployment_is_limited_to_upstream(self, workflow_name):
+    @pytest.mark.parametrize(
+        ("workflow_name", "job_names"), sorted(UPSTREAM_ONLY_JOBS.items())
+    )
+    def test_publishing_is_limited_to_upstream(self, workflow_name, job_names):
         workflow = _load(WORKFLOWS / workflow_name)
-        condition = workflow["jobs"]["build-and-deploy"].get("if")
-        assert "github.repository == 'vishalsachdev/canvas-mcp'" in condition, (
-            f"{workflow_name} must not attempt the upstream Azure deployment "
-            "from a fork"
-        )
+        for job_name in job_names:
+            condition = workflow["jobs"][job_name].get("if", "")
+            assert "github.repository == 'vishalsachdev/canvas-mcp'" in condition, (
+                f"{workflow_name}:{job_name} must not publish from a fork"
+            )

@@ -22,6 +22,7 @@ concurrency:
 jobs:
   publish-pypi:
     name: Build & publish to PyPI
+    if: github.repository == 'vishalsachdev/canvas-mcp'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -72,6 +73,7 @@ jobs:
   publish-registry:
     name: Publish to MCP Registry
     needs: publish-pypi
+    if: github.repository == 'vishalsachdev/canvas-mcp'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
