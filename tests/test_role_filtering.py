@@ -103,6 +103,7 @@ CREATOR_TOOLS = {
     "get_content_migration_status",
     "get_course_content_overview",
     "get_course_details",
+    "get_course_settings",
     "get_course_structure",
     "get_front_page",
     "get_my_enrollments",
@@ -132,6 +133,8 @@ CREATOR_TOOLS = {
     "update_assignment_group",
     "update_announcement",
     "update_course_navigation",
+    "update_course_dates",
+    "update_course_settings",
     "update_module",
     "update_module_item",
     "update_page_settings",
@@ -156,6 +159,9 @@ EDUCATOR_ONLY_SAMPLE = {
     # Writing a syllabus needs an instructor-scoped token, so it must not leak
     # into the student profile even though its read twin get_syllabus is shared.
     "update_syllabus",
+    "get_course_settings",
+    "update_course_dates",
+    "update_course_settings",
     "list_users",
     "get_student_analytics",
 }

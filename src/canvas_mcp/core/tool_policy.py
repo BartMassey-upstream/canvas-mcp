@@ -55,7 +55,7 @@ class Effect(StrEnum):
 
 
 TOOL_EFFECTS: dict[str, Effect] = {
-    # --- READ (63) ---
+    # --- READ (64) ---
     "analyze_peer_review_quality": Effect.READ,
     "check_enrollment": Effect.READ,
     "fetch_ufixit_report": Effect.READ,
@@ -69,6 +69,7 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "get_conversation_details": Effect.READ,
     "get_course_content_overview": Effect.READ,
     "get_course_details": Effect.READ,
+    "get_course_settings": Effect.READ,
     "get_course_structure": Effect.READ,
     "get_discussion_entry_details": Effect.READ,
     "get_discussion_topic_details": Effect.READ,
@@ -119,7 +120,7 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "read_course_file": Effect.READ,
     "scan_course_content_accessibility": Effect.READ,
     "search_canvas_tools": Effect.READ,
-    # --- CANVAS_WRITE (52) ---
+    # --- CANVAS_WRITE (54) ---
     "add_module_item": Effect.CANVAS_WRITE,
     "assign_peer_review": Effect.CANVAS_WRITE,
     "associate_rubric": Effect.CANVAS_WRITE,
@@ -162,7 +163,9 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "update_assignment": Effect.CANVAS_WRITE,
     "update_assignment_group": Effect.CANVAS_WRITE,
     "update_announcement": Effect.CANVAS_WRITE,
+    "update_course_dates": Effect.CANVAS_WRITE,
     "update_course_navigation": Effect.CANVAS_WRITE,
+    "update_course_settings": Effect.CANVAS_WRITE,
     "update_discussion_topic": Effect.CANVAS_WRITE,
     "update_module": Effect.CANVAS_WRITE,
     "update_module_item": Effect.CANVAS_WRITE,

@@ -965,3 +965,225 @@ class TestUpdateSyllabus:
         assert "✅" in result, result
         assert "Verified by reading" not in result
         assert "Not verified" in result
+
+
+class TestCourseSettings:
+    @pytest.fixture
+    def mock_api(self):
+        with patch(
+            "canvas_mcp.tools.courses.get_course_id",
+            new=AsyncMock(return_value="60366"),
+        ), patch(
+            "canvas_mcp.tools.courses.get_course_code",
+            new=AsyncMock(return_value="CS101"),
+        ), patch(
+            "canvas_mcp.tools.courses.make_canvas_request",
+            new_callable=AsyncMock,
+        ) as request:
+            yield request
+
+    @pytest.mark.asyncio
+    async def test_get_course_settings_combines_dates_term_and_settings(
+        self, mock_api
+    ):
+        async def fake(method, path, params=None, data=None):
+            if path.endswith("/settings"):
+                return {
+                    "hide_final_grades": False,
+                    "default_due_time": "23:59:59",
+                }
+            return {
+                "id": 60366,
+                "course_code": "CS101",
+                "workflow_state": "available",
+                "start_at": "2026-09-28T15:00:00Z",
+                "end_at": "2026-12-12T07:59:59Z",
+                "restrict_enrollments_to_course_dates": False,
+                "term": {
+                    "id": 8,
+                    "name": "Fall 2026",
+                    "start_at": "2026-09-20T07:00:00Z",
+                    "end_at": "2026-12-20T07:59:59Z",
+                },
+            }
+
+        mock_api.side_effect = fake
+        result = await get_tool_function("get_course_settings")("CS101")
+
+        assert result["effective_date_source"] == "term"
+        assert result["course_dates"]["start_at"] == "2026-09-28T15:00:00Z"
+        assert result["term"]["name"] == "Fall 2026"
+        assert result["settings"]["default_due_time"] == "23:59:59"
+        assert mock_api.await_args_list[0].kwargs == {"params": {"include[]": "term"}}
+
+    @pytest.mark.asyncio
+    async def test_course_dates_require_preview_then_write_and_verify(self, mock_api):
+        state = {
+            "id": 60366,
+            "course_code": "CS101",
+            "start_at": None,
+            "end_at": None,
+            "restrict_enrollments_to_course_dates": False,
+        }
+        writes = []
+
+        async def fake(method, path, params=None, data=None):
+            if method == "put":
+                writes.append(data)
+                state.update(data["course"])
+            return dict(state)
+
+        mock_api.side_effect = fake
+        tool = get_tool_function("update_course_dates")
+        arguments = {
+            "start_at": "2026-09-28T08:00:00-07:00",
+            "end_at": "2026-12-11T23:59:59-08:00",
+            "restrict_enrollments_to_course_dates": True,
+        }
+
+        preview = await tool("CS101", **arguments)
+        assert "PREVIEW" in preview
+        assert writes == []
+        token = preview.split("Confirmation token: ", 1)[1].split("\n", 1)[0]
+
+        result = await tool("CS101", confirmation_token=token, **arguments)
+        assert result["updated"] is True
+        assert writes == [{"course": {
+            "start_at": "2026-09-28T08:00:00-07:00",
+            "end_at": "2026-12-11T23:59:59-08:00",
+            "restrict_enrollments_to_course_dates": True,
+        }}]
+
+    @pytest.mark.asyncio
+    async def test_course_dates_refuse_silently_ignored_date(self, mock_api):
+        mock_api.return_value = {
+            "course_code": "CS101",
+            "start_at": None,
+            "end_at": None,
+            "restrict_enrollments_to_course_dates": False,
+        }
+        result = await get_tool_function("update_course_dates")(
+            "CS101", end_at="2026-12-11T23:59:59-08:00"
+        )
+
+        assert "ignores course end dates" in result
+        assert all(call.args[0] != "put" for call in mock_api.await_args_list)
+
+    @pytest.mark.asyncio
+    async def test_course_dates_send_explicit_null_when_clearing(self, mock_api):
+        state = {
+            "course_code": "CS101",
+            "start_at": "2026-09-28T15:00:00Z",
+            "end_at": "2026-12-12T07:59:59Z",
+            "restrict_enrollments_to_course_dates": True,
+        }
+        sent = []
+
+        async def fake(method, path, params=None, data=None):
+            if method == "put":
+                sent.append(data)
+                state.update(data["course"])
+            return dict(state)
+
+        mock_api.side_effect = fake
+        tool = get_tool_function("update_course_dates")
+        preview = await tool("CS101", clear_end_at=True)
+        token = preview.split("Confirmation token: ", 1)[1].split("\n", 1)[0]
+        result = await tool("CS101", clear_end_at=True, confirmation_token=token)
+
+        assert result["updated"] is True
+        assert sent == [{"course": {"end_at": None}}]
+
+    @pytest.mark.asyncio
+    async def test_course_date_token_rejects_concurrent_change(self, mock_api):
+        state = {
+            "course_code": "CS101",
+            "start_at": None,
+            "end_at": "2026-12-12T07:59:59Z",
+            "restrict_enrollments_to_course_dates": True,
+        }
+
+        async def fake(method, path, params=None, data=None):
+            return dict(state)
+
+        mock_api.side_effect = fake
+        tool = get_tool_function("update_course_dates")
+        preview = await tool("CS101", end_at="2026-12-20T23:59:59-08:00")
+        token = preview.split("Confirmation token: ", 1)[1].split("\n", 1)[0]
+        state["end_at"] = "2026-12-19T07:59:59Z"
+
+        result = await tool(
+            "CS101",
+            end_at="2026-12-20T23:59:59-08:00",
+            confirmation_token=token,
+        )
+        assert "does not match" in result
+        assert all(call.args[0] != "put" for call in mock_api.await_args_list)
+
+    @pytest.mark.asyncio
+    async def test_ordinary_course_setting_updates_immediately(self, mock_api):
+        state = {"lock_all_announcements": False}
+        sent = []
+
+        async def fake(method, path, params=None, data=None):
+            if method == "put":
+                sent.append(data)
+                state.update(data)
+            return dict(state)
+
+        mock_api.side_effect = fake
+        result = await get_tool_function("update_course_settings")(
+            "CS101", lock_all_announcements=True
+        )
+
+        assert result["updated"] is True
+        assert sent == [{"lock_all_announcements": True}]
+
+    @pytest.mark.asyncio
+    async def test_sensitive_course_setting_requires_confirmation(self, mock_api):
+        state = {"restrict_student_future_view": False}
+        sent = []
+
+        async def fake(method, path, params=None, data=None):
+            if method == "put":
+                sent.append(data)
+                state.update(data)
+            return dict(state)
+
+        mock_api.side_effect = fake
+        tool = get_tool_function("update_course_settings")
+        preview = await tool("CS101", restrict_student_future_view=True)
+        assert "PREVIEW" in preview
+        assert sent == []
+        token = preview.split("Confirmation token: ", 1)[1].split("\n", 1)[0]
+
+        result = await tool(
+            "CS101",
+            restrict_student_future_view=True,
+            confirmation_token=token,
+        )
+        assert result["updated"] is True
+        assert sent == [{"restrict_student_future_view": True}]
+
+    @pytest.mark.asyncio
+    async def test_course_setting_readback_mismatch_is_not_success(self, mock_api):
+        mock_api.side_effect = [
+            {"lock_all_announcements": False},
+            {"lock_all_announcements": True},
+            {"lock_all_announcements": False},
+        ]
+        result = await get_tool_function("update_course_settings")(
+            "CS101", lock_all_announcements=True
+        )
+
+        assert result["error"].startswith("Canvas accepted")
+        assert result["mismatches"][0]["field"] == "lock_all_announcements"
+
+    @pytest.mark.asyncio
+    async def test_course_setting_validates_default_due_time(self, mock_api):
+        result = await get_tool_function("update_course_settings")(
+            "CS101", default_due_time="25:00"
+        )
+
+        assert "HH:MM:SS" in result
+        mock_api.assert_not_awaited()

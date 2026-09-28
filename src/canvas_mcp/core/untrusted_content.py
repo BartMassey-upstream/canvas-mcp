@@ -81,6 +81,9 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     "get_course_details": _deferred(
         "Returns course name/code plus platform metadata; course identity is the documented low-risk exception."
     ),
+    "get_course_settings": _deferred(
+        "Returns course/term identity plus platform-controlled dates and settings; no student-authored free text."
+    ),
     "get_course_structure": _fenced("fence_untrusted_inline"),
     "get_discussion_entry_details": _fenced("fence_untrusted"),
     "get_discussion_topic_details": _fenced("fence_untrusted"),

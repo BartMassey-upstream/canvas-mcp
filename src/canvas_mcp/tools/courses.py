@@ -1,6 +1,7 @@
 """Course-related MCP tools for Canvas API."""
 
 import html
+import json
 import re
 from html.parser import HTMLParser
 from typing import Any
@@ -16,7 +17,7 @@ from ..core.cache import (
 )
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.config import get_config
-from ..core.dates import format_date
+from ..core.dates import format_date, parse_date
 from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
@@ -41,6 +42,51 @@ from .self_identity import _own_roles
 _UPDATE_SYLLABUS_GUARD = ConfirmationGuard(
     nothing_done="The syllabus was not changed."
 )
+_UPDATE_COURSE_DATES_GUARD = ConfirmationGuard(
+    nothing_done="The course dates were not changed."
+)
+_UPDATE_COURSE_SETTINGS_GUARD = ConfirmationGuard(
+    nothing_done="The course settings were not changed."
+)
+
+_CONFIRMED_COURSE_SETTINGS = frozenset({
+    "allow_final_grade_override",
+    "hide_final_grades",
+    "restrict_student_past_view",
+    "restrict_student_future_view",
+    "conditional_release",
+})
+_DEFAULT_DUE_TIME = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$")
+
+
+def _course_date_state(course: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "start_at": course.get("start_at"),
+        "end_at": course.get("end_at"),
+        "restrict_enrollments_to_course_dates": bool(
+            course.get("restrict_enrollments_to_course_dates", False)
+        ),
+    }
+
+
+def _normalize_course_date(value: str, field: str) -> tuple[str | None, str | None]:
+    parsed = parse_date(value)
+    if parsed is None:
+        return None, (
+            f"Invalid date format for {field}: '{value}'. Use ISO 8601 "
+            "format, preferably with Z or an explicit UTC offset."
+        )
+    return parsed.isoformat(), None
+
+
+def _dates_match(expected: object, actual: object) -> bool:
+    if expected is None or actual is None:
+        return expected is actual
+    if not isinstance(expected, str) or not isinstance(actual, str):
+        return expected == actual
+    expected_date = parse_date(expected)
+    actual_date = parse_date(actual)
+    return bool(expected_date and actual_date and expected_date == actual_date)
 
 
 def _syllabus_text(body: str) -> str:
@@ -254,7 +300,11 @@ def register_course_tools(mcp: FastMCP) -> None:
         """
         course_id = await get_course_id(course_identifier)
 
-        response = await make_canvas_request("get", canvas_path('courses', course_id))
+        response = await make_canvas_request(
+            "get",
+            canvas_path('courses', course_id),
+            params={"include[]": "term"},
+        )
 
         if "error" in response:
             return f"Error fetching course details: {response['error']}"
@@ -267,13 +317,28 @@ def register_course_tools(mcp: FastMCP) -> None:
         details = [
             f"Code: {response.get('course_code', 'N/A')}",
             f"Name: {response.get('name', 'N/A')}",
+            f"Workflow State: {response.get('workflow_state', 'N/A')}",
             f"Start Date: {format_date(response.get('start_at'))}",
             f"End Date: {format_date(response.get('end_at'))}",
+            "Course Dates Enforced: "
+            + (
+                "Yes"
+                if response.get("restrict_enrollments_to_course_dates")
+                else "No; term dates normally govern access"
+            ),
             f"Time Zone: {response.get('time_zone', 'N/A')}",
             f"Default View: {response.get('default_view', 'N/A')}",
             f"Public: {response.get('is_public', False)}",
             f"Blueprint: {response.get('blueprint', False)}"
         ]
+
+        term = response.get("term")
+        if isinstance(term, dict):
+            details.extend([
+                f"Term: {term.get('name', 'N/A')}",
+                f"Term Start Date: {format_date(term.get('start_at'))}",
+                f"Term End Date: {format_date(term.get('end_at'))}",
+            ])
 
         # Surface the caller's own role. Say so explicitly when there is none —
         # silence reads as "unknown" and sends agents to roster tools they cannot
@@ -814,6 +879,438 @@ def register_educator_course_tools(mcp: FastMCP) -> None:
     the tool there would only produce 401s and widen the student profile's
     write surface for no gain.
     """
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def get_course_settings(
+        course_identifier: str | int,
+    ) -> dict[str, Any]:
+        """Read course availability dates, term dates, and course settings.
+
+        The result identifies whether course or term dates govern access.
+        Section dates can still override both and are not changed here.
+
+        Args:
+            course_identifier: Course code or Canvas ID.
+        """
+        course_id = await get_course_id(course_identifier)
+        course = await make_canvas_request(
+            "get",
+            canvas_path("courses", course_id),
+            params={"include[]": "term"},
+        )
+        if not isinstance(course, dict):
+            return {"error": "Canvas returned an invalid course response."}
+        if "error" in course:
+            return {"error": f"Could not read the course: {course['error']}"}
+
+        settings = await make_canvas_request(
+            "get", canvas_path("courses", course_id, "settings")
+        )
+        if not isinstance(settings, dict):
+            return {"error": "Canvas returned an invalid course settings response."}
+        if "error" in settings:
+            return {"error": f"Could not read course settings: {settings['error']}"}
+
+        term = course.get("term")
+        if not isinstance(term, dict):
+            term = {}
+        restrict_dates = bool(course.get("restrict_enrollments_to_course_dates"))
+        return {
+            "course_id": str(course_id),
+            "course_code": course.get("course_code"),
+            "workflow_state": course.get("workflow_state"),
+            "course_dates": {
+                "start_at": course.get("start_at"),
+                "start_at_display": format_date(course.get("start_at")),
+                "end_at": course.get("end_at"),
+                "end_at_display": format_date(course.get("end_at")),
+                "restrict_enrollments_to_course_dates": restrict_dates,
+            },
+            "term": {
+                "id": term.get("id"),
+                "name": term.get("name"),
+                "start_at": term.get("start_at"),
+                "start_at_display": format_date(term.get("start_at")),
+                "end_at": term.get("end_at"),
+                "end_at_display": format_date(term.get("end_at")),
+            },
+            "effective_date_source": "course" if restrict_dates else "term",
+            "settings": settings,
+            "notes": [
+                "Section-specific dates may override course and term dates.",
+                "Institutional policy may prevent teachers from editing course availability.",
+            ],
+        }
+
+    @mcp.tool(
+        annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True)
+    )
+    @validate_params
+    async def update_course_dates(
+        course_identifier: str | int,
+        start_at: str | None = None,
+        end_at: str | None = None,
+        clear_start_at: bool = False,
+        clear_end_at: bool = False,
+        restrict_enrollments_to_course_dates: bool | None = None,
+        confirmation_token: str | None = None,
+    ) -> str | dict[str, Any]:
+        """Preview and confirm changes to course availability dates.
+
+        Dates use ISO 8601. A date and its matching clear flag are mutually
+        exclusive. Every change is two-step because course availability can
+        remove student access and is not restored by a course-content export.
+
+        Args:
+            course_identifier: Course code or Canvas ID.
+            start_at: New ISO 8601 course start date.
+            end_at: New ISO 8601 course end date.
+            clear_start_at: Explicitly remove the course start date.
+            clear_end_at: Explicitly remove the course end date.
+            restrict_enrollments_to_course_dates: Make course dates govern
+                enrollment access rather than term dates.
+            confirmation_token: Single-use token from the preview call.
+        """
+        if start_at is not None and clear_start_at:
+            return "Error: provide start_at or clear_start_at, not both."
+        if end_at is not None and clear_end_at:
+            return "Error: provide end_at or clear_end_at, not both."
+        if (
+            start_at is None
+            and end_at is None
+            and not clear_start_at
+            and not clear_end_at
+            and restrict_enrollments_to_course_dates is None
+        ):
+            return "Error: no course date fields were provided to update."
+
+        updates: dict[str, Any] = {}
+        if clear_start_at:
+            updates["start_at"] = None
+        elif start_at is not None:
+            normalized, error = _normalize_course_date(start_at, "start_at")
+            if error:
+                return f"Error: {error}"
+            updates["start_at"] = normalized
+
+        if clear_end_at:
+            updates["end_at"] = None
+        elif end_at is not None:
+            normalized, error = _normalize_course_date(end_at, "end_at")
+            if error:
+                return f"Error: {error}"
+            updates["end_at"] = normalized
+
+        if restrict_enrollments_to_course_dates is not None:
+            updates["restrict_enrollments_to_course_dates"] = (
+                restrict_enrollments_to_course_dates
+            )
+
+        course_id = await get_course_id(course_identifier)
+        current = await make_canvas_request(
+            "get",
+            canvas_path("courses", course_id),
+            params={"include[]": "term"},
+        )
+        if not isinstance(current, dict):
+            return "Error: Canvas returned an invalid course response."
+        if "error" in current:
+            return f"Error fetching current course dates: {current['error']}"
+
+        current_state = _course_date_state(current)
+        proposed_state = {**current_state, **updates}
+        setting_a_date = any(
+            updates.get(field) is not None for field in ("start_at", "end_at")
+        )
+        if setting_a_date and not proposed_state["restrict_enrollments_to_course_dates"]:
+            return (
+                "Error: Canvas ignores course end dates, and may ignore start "
+                "dates, unless restrict_enrollments_to_course_dates is true. "
+                "Enable it in the same request."
+            )
+
+        proposed_start = proposed_state.get("start_at")
+        proposed_end = proposed_state.get("end_at")
+        if proposed_start and proposed_end:
+            parsed_start = parse_date(str(proposed_start))
+            parsed_end = parse_date(str(proposed_end))
+            if parsed_start and parsed_end and parsed_end <= parsed_start:
+                return "Error: end_at must be later than start_at."
+
+        changed = {
+            key: value
+            for key, value in updates.items()
+            if (
+                not _dates_match(current_state.get(key), value)
+                if key in ("start_at", "end_at")
+                else current_state.get(key) != value
+            )
+        }
+        if not changed:
+            return "Error: the requested course date settings are already in effect."
+
+        fingerprint = _UPDATE_COURSE_DATES_GUARD.fingerprint(
+            "update_course_dates",
+            str(course_id),
+            json.dumps(current_state, sort_keys=True),
+            json.dumps(updates, sort_keys=True),
+        )
+        course_display = current.get("course_code") or course_identifier
+        if not confirmation_token:
+            lines = [
+                f"Would update availability dates for course {course_display}.",
+                f"Current: {json.dumps(current_state, sort_keys=True)}",
+                f"Requested: {json.dumps(updates, sort_keys=True)}",
+                "This can change when students can access the course.",
+                "Section-specific dates may still override these values.",
+            ]
+            if updates.get("restrict_enrollments_to_course_dates") is False:
+                lines.append(
+                    "Canvas may remove stored course dates when date restriction is disabled."
+                )
+            return preview_with_token(
+                _UPDATE_COURSE_DATES_GUARD,
+                fingerprint,
+                "update_course_dates",
+                "\n".join(lines),
+                action="update the course dates",
+            )
+
+        error = redeem_confirmation(
+            _UPDATE_COURSE_DATES_GUARD, confirmation_token, fingerprint
+        )
+        if error:
+            return error
+
+        response = await make_canvas_request(
+            "put",
+            canvas_path("courses", course_id),
+            data={"course": updates},
+        )
+        if not isinstance(response, dict):
+            return "Error: Canvas returned an invalid course update response."
+        if "error" in response:
+            return f"Error updating course dates: {response['error']}"
+
+        verify = await make_canvas_request(
+            "get", canvas_path("courses", course_id), params={"include[]": "term"}
+        )
+        if not isinstance(verify, dict) or "error" in verify:
+            return unconfirmed_write_warning(
+                "the course date update",
+                {"Course": course_display, "Requested": updates},
+                "Open Course Settings in Canvas and verify the availability dates.",
+            )
+
+        mismatches = []
+        for key, expected in updates.items():
+            actual = verify.get(key)
+            matches = (
+                _dates_match(expected, actual)
+                if key in ("start_at", "end_at")
+                else actual == expected
+            )
+            if not matches:
+                mismatches.append({"field": key, "expected": expected, "actual": actual})
+        if mismatches:
+            return {
+                "error": (
+                    "Canvas accepted the request but did not store every course "
+                    "date setting. Institutional policy or SIS management may "
+                    "prevent teacher edits."
+                ),
+                "course_id": str(course_id),
+                "mismatches": mismatches,
+            }
+
+        return {
+            "updated": True,
+            "course_id": str(course_id),
+            "course_code": verify.get("course_code") or course_display,
+            "course_dates": _course_date_state(verify),
+            "note": "Section-specific dates may override these course dates.",
+        }
+
+    @mcp.tool(
+        annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True)
+    )
+    @validate_params
+    async def update_course_settings(
+        course_identifier: str | int,
+        allow_final_grade_override: bool | None = None,
+        allow_student_discussion_topics: bool | None = None,
+        allow_student_forum_attachments: bool | None = None,
+        allow_student_discussion_editing: bool | None = None,
+        allow_student_organized_groups: bool | None = None,
+        allow_student_discussion_reporting: bool | None = None,
+        allow_student_anonymous_discussion_topics: bool | None = None,
+        filter_speed_grader_by_student_group: bool | None = None,
+        hide_final_grades: bool | None = None,
+        hide_distribution_graphs: bool | None = None,
+        hide_sections_on_course_users_page: bool | None = None,
+        lock_all_announcements: bool | None = None,
+        usage_rights_required: bool | None = None,
+        restrict_student_past_view: bool | None = None,
+        restrict_student_future_view: bool | None = None,
+        show_announcements_on_home_page: bool | None = None,
+        home_page_announcement_limit: int | None = None,
+        syllabus_course_summary: bool | None = None,
+        default_due_time: str | None = None,
+        conditional_release: bool | None = None,
+        confirmation_token: str | None = None,
+    ) -> str | dict[str, Any]:
+        """Update the documented Canvas course-settings whitelist.
+
+        Access restrictions, grade visibility/override, and conditional
+        release changes require preview and confirmation. Other settings are
+        written immediately. Every write is verified by reading settings back.
+
+        Args:
+            course_identifier: Course code or Canvas ID.
+            allow_final_grade_override: Allow final-grade overrides.
+            allow_student_discussion_topics: Let students create topics.
+            allow_student_forum_attachments: Let students attach discussion files.
+            allow_student_discussion_editing: Let students edit/delete replies.
+            allow_student_organized_groups: Let students organize groups.
+            allow_student_discussion_reporting: Let students report content.
+            allow_student_anonymous_discussion_topics: Let students create
+                anonymous discussion topics.
+            filter_speed_grader_by_student_group: Filter SpeedGrader by group.
+            hide_final_grades: Hide totals in student grade summaries.
+            hide_distribution_graphs: Hide grade distribution graphs.
+            hide_sections_on_course_users_page: Hide other sections from students.
+            lock_all_announcements: Disable announcement comments.
+            usage_rights_required: Require file copyright/license information.
+            restrict_student_past_view: Hide the course after its end date.
+            restrict_student_future_view: Hide the course before its start date.
+            show_announcements_on_home_page: Show announcements on the home page.
+            home_page_announcement_limit: Number of home-page announcements.
+            syllabus_course_summary: Show assignments/events on the syllabus.
+            default_due_time: UI default in HH:MM:SS format, or ``inherit``.
+                This does not change existing assignment due dates.
+            conditional_release: Enable conditional learning paths.
+            confirmation_token: Token required for sensitive changes.
+        """
+        candidates: dict[str, Any] = {
+            "allow_final_grade_override": allow_final_grade_override,
+            "allow_student_discussion_topics": allow_student_discussion_topics,
+            "allow_student_forum_attachments": allow_student_forum_attachments,
+            "allow_student_discussion_editing": allow_student_discussion_editing,
+            "allow_student_organized_groups": allow_student_organized_groups,
+            "allow_student_discussion_reporting": allow_student_discussion_reporting,
+            "allow_student_anonymous_" "discussion_topics": (
+                allow_student_anonymous_discussion_topics
+            ),
+            "filter_speed_grader_by_student_group": (
+                filter_speed_grader_by_student_group
+            ),
+            "hide_final_grades": hide_final_grades,
+            "hide_distribution_graphs": hide_distribution_graphs,
+            "hide_sections_on_course_users_page": hide_sections_on_course_users_page,
+            "lock_all_announcements": lock_all_announcements,
+            "usage_rights_required": usage_rights_required,
+            "restrict_student_past_view": restrict_student_past_view,
+            "restrict_student_future_view": restrict_student_future_view,
+            "show_announcements_on_home_page": show_announcements_on_home_page,
+            "home_page_announcement_limit": home_page_announcement_limit,
+            "syllabus_course_summary": syllabus_course_summary,
+            "default_due_time": default_due_time,
+            "conditional_release": conditional_release,
+        }
+        updates = {key: value for key, value in candidates.items() if value is not None}
+        if not updates:
+            return "Error: no course settings were provided to update."
+        if home_page_announcement_limit is not None and home_page_announcement_limit < 1:
+            return "Error: home_page_announcement_limit must be at least 1."
+        if default_due_time is not None and not (
+            default_due_time == "inherit" or _DEFAULT_DUE_TIME.fullmatch(default_due_time)
+        ):
+            return (
+                "Error: default_due_time must be 'inherit' or a 24-hour time "
+                "in HH:MM:SS format."
+            )
+
+        course_id = await get_course_id(course_identifier)
+        current = await make_canvas_request(
+            "get", canvas_path("courses", course_id, "settings")
+        )
+        if not isinstance(current, dict):
+            return "Error: Canvas returned an invalid course settings response."
+        if "error" in current:
+            return f"Error fetching current course settings: {current['error']}"
+
+        changed = {key: value for key, value in updates.items() if current.get(key) != value}
+        if not changed:
+            return "Error: the requested course settings are already in effect."
+        current_values = {key: current.get(key) for key in changed}
+        needs_confirmation = bool(_CONFIRMED_COURSE_SETTINGS.intersection(changed))
+        fingerprint = _UPDATE_COURSE_SETTINGS_GUARD.fingerprint(
+            "update_course_settings",
+            str(course_id),
+            json.dumps(current_values, sort_keys=True),
+            json.dumps(changed, sort_keys=True),
+        )
+
+        if needs_confirmation and not confirmation_token:
+            course_display = await get_course_code(course_id) or course_identifier
+            preview = (
+                f"Would update sensitive settings for course {course_display}.\n"
+                f"Current: {json.dumps(current_values, sort_keys=True)}\n"
+                f"Requested: {json.dumps(changed, sort_keys=True)}\n"
+                "These changes can affect student access, grade visibility, "
+                "or conditional-release behavior."
+            )
+            return preview_with_token(
+                _UPDATE_COURSE_SETTINGS_GUARD,
+                fingerprint,
+                "update_course_settings",
+                preview,
+                action="update the course settings",
+            )
+        if needs_confirmation:
+            error = redeem_confirmation(
+                _UPDATE_COURSE_SETTINGS_GUARD, confirmation_token or "", fingerprint
+            )
+            if error:
+                return error
+
+        response = await make_canvas_request(
+            "put", canvas_path("courses", course_id, "settings"), data=changed
+        )
+        if not isinstance(response, dict):
+            return "Error: Canvas returned an invalid course settings update response."
+        if "error" in response:
+            return f"Error updating course settings: {response['error']}"
+
+        verify = await make_canvas_request(
+            "get", canvas_path("courses", course_id, "settings")
+        )
+        if not isinstance(verify, dict) or "error" in verify:
+            return unconfirmed_write_warning(
+                "the course settings update",
+                {"Course ID": course_id, "Requested": changed},
+                "Open Course Settings in Canvas and verify the changed fields.",
+            )
+        mismatches = [
+            {"field": key, "expected": value, "actual": verify.get(key)}
+            for key, value in changed.items()
+            if verify.get(key) != value
+        ]
+        if mismatches:
+            return {
+                "error": (
+                    "Canvas accepted the request but did not store every course "
+                    "setting. The setting may be unavailable or institution-managed."
+                ),
+                "course_id": str(course_id),
+                "mismatches": mismatches,
+            }
+        return {
+            "updated": True,
+            "course_id": str(course_id),
+            "changed_settings": changed,
+        }
 
     # idempotent_hint=False: a replace converges, but mode="append"/"prepend"
     # adds the same block again on every repeat, and the hint is per-tool (a

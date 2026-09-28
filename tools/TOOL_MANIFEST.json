@@ -819,6 +819,79 @@
       ]
     },
     {
+      "name": "get_course_settings",
+      "category": "educator",
+      "description": "Read course availability dates, governing term dates, publication state, and general course settings.",
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true,
+          "description": "Course code or Canvas ID"
+        }
+      ],
+      "returns": "Structured course dates, term dates, effective date source, and Canvas settings",
+      "examples": [
+        "Show the availability and general settings for CS101"
+      ],
+      "notes": "Reads no student records. Section-specific dates may override course and term dates."
+    },
+    {
+      "name": "update_course_dates",
+      "category": "educator",
+      "description": "Preview and confirm changes to course-level availability dates, then verify them by reading Canvas back.",
+      "parameters": [
+        {"name": "course_identifier", "type": "string | integer", "required": true, "description": "Course code or Canvas ID"},
+        {"name": "start_at", "type": "string", "required": false, "description": "New ISO 8601 course start date"},
+        {"name": "end_at", "type": "string", "required": false, "description": "New ISO 8601 course end date"},
+        {"name": "clear_start_at", "type": "boolean", "required": false, "default": false, "description": "Explicitly remove the course start date"},
+        {"name": "clear_end_at", "type": "boolean", "required": false, "default": false, "description": "Explicitly remove the course end date"},
+        {"name": "restrict_enrollments_to_course_dates", "type": "boolean", "required": false, "description": "Make course dates govern enrollment access"},
+        {"name": "confirmation_token", "type": "string", "required": false, "description": "Single-use token from the mandatory preview call"}
+      ],
+      "returns": "A preview and confirmation token first, then verified course date settings",
+      "examples": [
+        "Make CS101 available from September 28 through December 12",
+        "Clear the end date for CS101"
+      ],
+      "notes": "All changes require confirmation. Setting dates requires restrict_enrollments_to_course_dates to be true already or in the same request."
+    },
+    {
+      "name": "update_course_settings",
+      "category": "educator",
+      "description": "Update the documented Canvas course-settings whitelist and verify the stored values.",
+      "parameters": [
+        {"name": "course_identifier", "type": "string | integer", "required": true, "description": "Course code or Canvas ID"},
+        {"name": "allow_final_grade_override", "type": "boolean", "required": false},
+        {"name": "allow_student_discussion_topics", "type": "boolean", "required": false},
+        {"name": "allow_student_forum_attachments", "type": "boolean", "required": false},
+        {"name": "allow_student_discussion_editing", "type": "boolean", "required": false},
+        {"name": "allow_student_organized_groups", "type": "boolean", "required": false},
+        {"name": "allow_student_discussion_reporting", "type": "boolean", "required": false},
+        {"name": "allow_student_anonymous_discussion_topics", "type": "boolean", "required": false},
+        {"name": "filter_speed_grader_by_student_group", "type": "boolean", "required": false},
+        {"name": "hide_final_grades", "type": "boolean", "required": false},
+        {"name": "hide_distribution_graphs", "type": "boolean", "required": false},
+        {"name": "hide_sections_on_course_users_page", "type": "boolean", "required": false},
+        {"name": "lock_all_announcements", "type": "boolean", "required": false},
+        {"name": "usage_rights_required", "type": "boolean", "required": false},
+        {"name": "restrict_student_past_view", "type": "boolean", "required": false},
+        {"name": "restrict_student_future_view", "type": "boolean", "required": false},
+        {"name": "show_announcements_on_home_page", "type": "boolean", "required": false},
+        {"name": "home_page_announcement_limit", "type": "integer", "required": false},
+        {"name": "syllabus_course_summary", "type": "boolean", "required": false},
+        {"name": "default_due_time", "type": "string", "required": false, "description": "HH:MM:SS or inherit"},
+        {"name": "conditional_release", "type": "boolean", "required": false},
+        {"name": "confirmation_token", "type": "string", "required": false, "description": "Required for access-, grade-, or conditional-release-sensitive changes"}
+      ],
+      "returns": "Verified changed settings, or a preview token for sensitive changes",
+      "examples": [
+        "Set the default due time in CS101 to 23:59:59",
+        "Prevent students from viewing CS101 before its start date"
+      ],
+      "notes": "Ordinary changes are immediate. Access restrictions, final-grade visibility or override, and conditional release require preview and confirmation."
+    },
+    {
       "name": "get_syllabus",
       "category": "shared",
       "description": "Get the complete Canvas Syllabus tab content for a course, untruncated (unlike the overview preview)",
