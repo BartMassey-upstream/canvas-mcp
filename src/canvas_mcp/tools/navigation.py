@@ -8,6 +8,7 @@ from mcp.types import ToolAnnotations
 
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import make_canvas_request
+from ..core.path import canvas_path
 from ..core.untrusted_content import fence_untrusted_inline
 from ..core.validation import validate_params
 
@@ -34,7 +35,7 @@ def register_navigation_tools(mcp: FastMCP) -> None:
     async def list_course_navigation(course_identifier: str | int) -> str:
         """List the tabs in a course's left-hand navigation."""
         course_id = await get_course_id(course_identifier)
-        tabs = await make_canvas_request("get", f"/courses/{course_id}/tabs")
+        tabs = await make_canvas_request("get", canvas_path('courses', course_id, 'tabs'))
         if isinstance(tabs, dict) and "error" in tabs:
             return f"Error listing course navigation: {tabs['error']}"
         if not tabs:
@@ -68,7 +69,7 @@ def register_navigation_tools(mcp: FastMCP) -> None:
 
         course_id = await get_course_id(course_identifier)
         tab = await make_canvas_request(
-            "put", f"/courses/{course_id}/tabs/{tab_id}", data=data
+            "put", canvas_path('courses', course_id, 'tabs', tab_id), data=data
         )
         if "error" in tab:
             return f"Error updating course navigation: {tab['error']}"

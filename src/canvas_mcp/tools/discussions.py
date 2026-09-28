@@ -65,7 +65,7 @@ async def _find_announcement(
 ) -> dict[str, Any] | str:
     """Resolve an ID only through Canvas's announcement-only collection."""
     announcements = await fetch_all_paginated_results(
-        f"/courses/{course_id}/discussion_topics",
+        canvas_path('courses', course_id, 'discussion_topics'),
         {"only_announcements": True, "per_page": 100},
     )
     if isinstance(announcements, dict) and "error" in announcements:
@@ -1206,7 +1206,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             return announcement
         response = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/discussion_topics/{announcement_id}",
+            canvas_path('courses', course_id, 'discussion_topics', announcement_id),
             data=data,
         )
         if "error" in response:

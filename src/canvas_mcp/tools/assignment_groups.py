@@ -7,6 +7,7 @@ from mcp.types import ToolAnnotations
 
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
+from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
@@ -79,7 +80,7 @@ def register_assignment_group_tools(mcp: FastMCP) -> None:
         if include_assignments:
             params["include[]"] = ["assignments"]
         groups = await fetch_all_paginated_results(
-            f"/courses/{course_id}/assignment_groups",
+            canvas_path('courses', course_id, 'assignment_groups'),
             params,
         )
         if isinstance(groups, dict) and "error" in groups:
@@ -115,7 +116,7 @@ def register_assignment_group_tools(mcp: FastMCP) -> None:
 
         course_id = await get_course_id(course_identifier)
         response = await make_canvas_request(
-            "post", f"/courses/{course_id}/assignment_groups", data=data
+            "post", canvas_path('courses', course_id, 'assignment_groups'), data=data
         )
         if "error" in response:
             return f"Error creating assignment group: {response['error']}"
@@ -151,7 +152,7 @@ def register_assignment_group_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
         response = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/assignment_groups/{assignment_group_id}",
+            canvas_path('courses', course_id, 'assignment_groups', assignment_group_id),
             data=data,
         )
         if "error" in response:
@@ -175,14 +176,14 @@ def register_assignment_group_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
         source = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/assignment_groups/{assignment_group_id}",
+            canvas_path('courses', course_id, 'assignment_groups', assignment_group_id),
             params={"override_assignment_dates": False},
         )
         if "error" in source:
             return f"Error fetching assignment group: {source['error']}"
         target = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/assignment_groups/{move_assignments_to}",
+            canvas_path('courses', course_id, 'assignment_groups', move_assignments_to),
             params={"override_assignment_dates": False},
         )
         if "error" in target:
@@ -224,7 +225,7 @@ def register_assignment_group_tools(mcp: FastMCP) -> None:
 
         response = await make_canvas_request(
             "delete",
-            f"/courses/{course_id}/assignment_groups/{assignment_group_id}",
+            canvas_path('courses', course_id, 'assignment_groups', assignment_group_id),
             params={"move_assignments_to": move_assignments_to},
         )
         if isinstance(response, dict) and "error" in response:

@@ -8,6 +8,7 @@ from mcp.types import ToolAnnotations
 
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
+from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
@@ -174,7 +175,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         """List Classic Quizzes without submissions, attempts, or statistics."""
         course_id = await get_course_id(course_identifier)
         quizzes = await fetch_all_paginated_results(
-            f"/courses/{course_id}/quizzes", {"per_page": 100}
+            canvas_path('courses', course_id, 'quizzes'), {"per_page": 100}
         )
         if isinstance(quizzes, dict) and "error" in quizzes:
             return f"Error listing quizzes: {quizzes['error']}"
@@ -191,7 +192,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         """Get one Classic Quiz definition without student activity."""
         course_id = await get_course_id(course_identifier)
         quiz = await make_canvas_request(
-            "get", f"/courses/{course_id}/quizzes/{quiz_id}"
+            "get", canvas_path('courses', course_id, 'quizzes', quiz_id)
         )
         if "error" in quiz:
             return f"Error fetching quiz: {quiz['error']}"
@@ -237,7 +238,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
             return payload
         course_id = await get_course_id(course_identifier)
         quiz = await make_canvas_request(
-            "post", f"/courses/{course_id}/quizzes", data={"quiz": payload}
+            "post", canvas_path('courses', course_id, 'quizzes'), data={"quiz": payload}
         )
         if "error" in quiz:
             return f"Error creating quiz: {quiz['error']}"
@@ -314,7 +315,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
         quiz = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/quizzes/{quiz_id}",
+            canvas_path('courses', course_id, 'quizzes', quiz_id),
             data={"quiz": payload},
         )
         if "error" in quiz:
@@ -332,7 +333,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         """Delete a Classic Quiz after safety checks and confirmation."""
         course_id = await get_course_id(course_identifier)
         quiz = await make_canvas_request(
-            "get", f"/courses/{course_id}/quizzes/{quiz_id}"
+            "get", canvas_path('courses', course_id, 'quizzes', quiz_id)
         )
         if "error" in quiz:
             return f"Error fetching quiz: {quiz['error']}"
@@ -370,7 +371,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         if error:
             return error
         response = await make_canvas_request(
-            "delete", f"/courses/{course_id}/quizzes/{quiz_id}"
+            "delete", canvas_path('courses', course_id, 'quizzes', quiz_id)
         )
         if isinstance(response, dict) and "error" in response:
             return f"Error deleting quiz: {response['error']}"
@@ -384,7 +385,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         """List question definitions for a Classic Quiz, never responses."""
         course_id = await get_course_id(course_identifier)
         questions = await fetch_all_paginated_results(
-            f"/courses/{course_id}/quizzes/{quiz_id}/questions",
+            canvas_path('courses', course_id, 'quizzes', quiz_id, 'questions'),
             {"per_page": 100},
         )
         if isinstance(questions, dict) and "error" in questions:
@@ -421,7 +422,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
         question = await make_canvas_request(
             "post",
-            f"/courses/{course_id}/quizzes/{quiz_id}/questions",
+            canvas_path('courses', course_id, 'quizzes', quiz_id, 'questions'),
             data={"question": payload},
         )
         if "error" in question:
@@ -457,7 +458,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
         question = await make_canvas_request(
             "put",
-            f"/courses/{course_id}/quizzes/{quiz_id}/questions/{question_id}",
+            canvas_path('courses', course_id, 'quizzes', quiz_id, 'questions', question_id),
             data={"question": payload},
         )
         if "error" in question:
@@ -476,7 +477,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         """Delete a quiz question after student-work checks and confirmation."""
         course_id = await get_course_id(course_identifier)
         quiz = await make_canvas_request(
-            "get", f"/courses/{course_id}/quizzes/{quiz_id}"
+            "get", canvas_path('courses', course_id, 'quizzes', quiz_id)
         )
         if "error" in quiz:
             return f"Error fetching quiz: {quiz['error']}"
@@ -485,7 +486,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
             return _student_work_delete_error("quiz")
         question = await make_canvas_request(
             "get",
-            f"/courses/{course_id}/quizzes/{quiz_id}/questions/{question_id}",
+            canvas_path('courses', course_id, 'quizzes', quiz_id, 'questions', question_id),
         )
         if "error" in question:
             return f"Error fetching quiz question: {question['error']}"
@@ -522,7 +523,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
             return error
         response = await make_canvas_request(
             "delete",
-            f"/courses/{course_id}/quizzes/{quiz_id}/questions/{question_id}",
+            canvas_path('courses', course_id, 'quizzes', quiz_id, 'questions', question_id),
         )
         if isinstance(response, dict) and "error" in response:
             return f"Error deleting quiz question: {response['error']}"
