@@ -216,7 +216,7 @@ wheels = [
 
 [[package]]
 name = "canvas-mcp"
-version = "1.13.0"
+version = "1.13.0+bart.1"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
@@ -225,6 +225,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-dateutil" },
     { name = "python-dotenv" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
     { name = "uvicorn" },
 ]
 
@@ -256,6 +257,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.13.1,<3" },
     { name = "python-dateutil", specifier = ">=2.9.0,<3" },
     { name = "python-dotenv", specifier = ">=1.2.2,<2" },
+    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = "==312" },
     { name = "uvicorn", specifier = ">=0.50.0,<1" },
 ]
 provides-extras = ["hosted"]
