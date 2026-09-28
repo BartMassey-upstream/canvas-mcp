@@ -80,6 +80,8 @@ CREATOR_TOOLS = {
     "create_assignment_group",
     "create_content_migration",
     "create_module",
+    "create_new_quiz",
+    "create_new_quiz_question",
     "create_page",
     "create_quiz",
     "create_quiz_question",
@@ -90,6 +92,8 @@ CREATOR_TOOLS = {
     "delete_assignment_with_confirmation",
     "delete_module",
     "delete_module_item",
+    "delete_new_quiz",
+    "delete_new_quiz_item",
     "delete_page",
     "delete_quiz",
     "delete_quiz_question",
@@ -107,6 +111,8 @@ CREATOR_TOOLS = {
     "get_front_page",
     "get_my_enrollments",
     "get_my_profile",
+    "get_new_quiz",
+    "get_new_quiz_item",
     "get_page_content",
     "get_page_details",
     "get_quiz",
@@ -120,6 +126,8 @@ CREATOR_TOOLS = {
     "list_courses",
     "list_module_items",
     "list_modules",
+    "list_new_quiz_items",
+    "list_new_quizzes",
     "list_pages",
     "list_quiz_questions",
     "list_quizzes",
@@ -134,6 +142,8 @@ CREATOR_TOOLS = {
     "update_course_navigation",
     "update_module",
     "update_module_item",
+    "update_new_quiz",
+    "update_new_quiz_question",
     "update_page_settings",
     "update_quiz",
     "update_quiz_question",
@@ -303,4 +313,4 @@ class TestRoleFiltering:
         mcp = FastMCP(name="test-educator")
         register_all_tools(mcp, role="educator")
         tools = await _get_tool_names(mcp)
-        assert 95 <= len(tools) <= 115, f"Expected ~109 educator tools, got {len(tools)}: {sorted(tools)}"
+        assert 105 <= len(tools) <= 125, f"Expected ~119 educator tools, got {len(tools)}: {sorted(tools)}"

@@ -27,6 +27,7 @@ from .messaging import (
 )
 from .modules import register_educator_module_tools, register_shared_module_tools
 from .navigation import register_navigation_tools
+from .new_quizzes import register_new_quiz_tools
 from .pages import register_educator_page_crud_tools, register_page_tools
 from .peer_review_comments import register_peer_review_comment_tools
 from .peer_reviews import register_peer_review_tools
@@ -53,6 +54,7 @@ __all__ = [
     'register_educator_module_tools',
     'register_educator_page_crud_tools',
     'register_navigation_tools',
+    'register_new_quiz_tools',
     'register_page_tools',
     'register_peer_review_comment_tools',
     'register_peer_review_tools',

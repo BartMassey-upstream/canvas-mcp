@@ -99,6 +99,39 @@ class TestMakeCanvasRequestApiRoot:
             {"id": 101, "name": "Alice"}, "/courses/42/users"
         )
 
+    @pytest.mark.asyncio
+    async def test_patch_dispatches_json_to_quiz_api_root(self):
+        mock_config = SimpleNamespace(
+            canvas_api_url="https://canvas.school.edu/api/v1",
+            max_concurrent_requests=5,
+            api_timeout=30,
+            log_api_requests=False,
+            enable_data_anonymization=False,
+            anonymization_debug=False,
+        )
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"id": 12, "title": "Updated"}
+        mock_client = AsyncMock()
+        mock_client.patch = AsyncMock(return_value=mock_response)
+
+        with (
+            patch("canvas_mcp.core.config.get_config", return_value=mock_config),
+            patch("canvas_mcp.core.client._get_http_client", return_value=mock_client),
+        ):
+            result = await client_module.make_canvas_request(
+                "patch",
+                "/courses/42/quizzes/12",
+                data={"quiz": {"title": "Updated"}},
+                api_root="quiz",
+            )
+
+        assert result == {"id": 12, "title": "Updated"}
+        mock_client.patch.assert_awaited_once_with(
+            "https://canvas.school.edu/api/quiz/v1/courses/42/quizzes/12",
+            json={"quiz": {"title": "Updated"}},
+        )
+
 
 class TestPaginatedFetchApiRoot:
     """`api_root` must reach the paginated path without weakening the gate.

@@ -53,6 +53,7 @@ from .tools import (
     register_educator_page_crud_tools,
     register_enrollment_tools,
     register_navigation_tools,
+    register_new_quiz_tools,
     register_page_tools,
     register_peer_review_comment_tools,
     register_peer_review_tools,
@@ -499,6 +500,7 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
         register_educator_module_tools(mcp)
         register_educator_file_tools(mcp)
         register_navigation_tools(mcp)
+        register_new_quiz_tools(mcp)
         register_page_tools(mcp)
         register_educator_page_crud_tools(mcp)
         register_quiz_tools(mcp)

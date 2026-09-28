@@ -416,7 +416,7 @@ async def make_canvas_request(
     Automatically retries on rate limit errors (429) with exponential backoff.
 
     Args:
-        method: HTTP method (get, post, put, delete)
+        method: HTTP method (get, post, put, patch, delete)
         endpoint: Canvas API endpoint
         params: Query parameters
         data: Request body data
@@ -559,6 +559,19 @@ async def make_canvas_request(
                                 response = await client.put(url, data=data)
                         else:
                             response = await client.put(url, json=data)
+                    elif method.lower() == "patch":
+                        if use_form_data:
+                            if isinstance(data, list):
+                                encoded = urlencode(data)
+                                response = await client.patch(
+                                    url,
+                                    content=encoded,
+                                    headers={"Content-Type": "application/x-www-form-urlencoded"}
+                                )
+                            else:
+                                response = await client.patch(url, data=data)
+                        else:
+                            response = await client.patch(url, json=data)
                     elif method.lower() == "delete":
                         response = await client.delete(url, params=params)
                     else:
