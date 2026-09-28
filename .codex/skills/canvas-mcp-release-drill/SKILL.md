@@ -23,9 +23,12 @@ When the user requests the full local drill:
    reviewable feature-branch commit and use an explicit merge commit unless the
    user asks for a different history. Resolve conflicts by retaining both the
    feature and newer integration-branch behavior.
-4. Verify the integrated worktree and graph. Do not push unless the user gives
-   explicit push permission; saying they will push is not permission for Codex
-   to do it.
+4. Verify the integrated worktree, graph, and branch tracking. Every local PR
+   branch whose same-named `origin/<branch>` ref exists should track that ref;
+   repair missing associations with `git branch --set-upstream-to`. If the
+   remote ref does not exist, do not push merely to create it—report the
+   missing upstream instead. Do not push unless the user gives explicit push
+   permission; saying they will push is not permission for Codex to do it.
 5. When installation is requested, refresh the user-level editable tool from
    the integrated checkout with `uv tool install --force --editable .`. Locate
    `uv` on `PATH`, falling back to `$HOME/.local/bin/uv`; do not install a
