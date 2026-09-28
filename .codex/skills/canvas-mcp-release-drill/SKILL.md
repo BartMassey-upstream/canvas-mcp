@@ -63,9 +63,20 @@ When the user requests the full local drill:
    tag on the resulting `main` commit. Do not create a release tag for a
    feature-only drill or unless the user requested the full release drill.
 
-   Keep repository-local `push.followTags=false`. A branch-only push must use
-   `git push --no-follow-tags --all origin`; push the one intended tag by its
-   exact ref in a separate command. Each push still requires explicit user
+   Keep repository-local `push.followTags=false`. After creating the tag,
+   refresh a repository-local alias pinned to that exact tag:
+
+   ```bash
+   tag="<tag>"
+   git config --local alias.publish-bart \
+     "push --atomic origin refs/heads/*:refs/heads/* refs/tags/$tag:refs/tags/$tag"
+   git config --show-origin --get alias.publish-bart
+   ```
+
+   Replace `<tag>` with the new tag. This makes `git publish-bart` push all
+   local branches and only the intended tag in one atomic SSH operation. The
+   alias must be refreshed for every release. Configuring it does not
+   authorize or execute a push; running it still requires explicit user
    authorization. Never rely on `push.followTags`: it can publish unrelated
    upstream tags reachable from the same history.
 6. When installation is requested, refresh the user-level editable tool from
