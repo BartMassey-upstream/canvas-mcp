@@ -54,7 +54,21 @@ When the user requests the full local drill:
    separate `git push -u`. Do not push merely to create the ref, and do not
    push unless the user gives explicit push permission; saying they will push
    is not permission for Codex to do it.
-5. When installation is requested, refresh the user-level editable tool from
+5. For a full drill that will publish the integrated fork state, prepare an
+   immutable fork release after validation. Use
+   `v<upstream-version>+bart.<serial>` and increment the serial rather than
+   moving or reusing a tag. Keep `pyproject.toml`,
+   `src/canvas_mcp/__init__.py`, `server.json`, and `uv.lock` equal to the tag
+   without its leading `v`, commit that version change, and create an annotated
+   tag on the resulting `main` commit. Do not create a release tag for a
+   feature-only drill or unless the user requested the full release drill.
+
+   Keep repository-local `push.followTags=false`. A branch-only push must use
+   `git push --no-follow-tags --all origin`; push the one intended tag by its
+   exact ref in a separate command. Each push still requires explicit user
+   authorization. Never rely on `push.followTags`: it can publish unrelated
+   upstream tags reachable from the same history.
+6. When installation is requested, refresh the user-level editable tool from
    the integrated checkout with `uv tool install --force --editable .`. Do not
    install a system-level package. Confirm the launcher imports `canvas_mcp`
    from this checkout and perform a local registry or help smoke test that
