@@ -35,16 +35,16 @@ Reduce tool overhead by setting a role-based profile. Only tools relevant to the
 ```
 # In the platform config directory's env file:
 CANVAS_ROLE=student    # ~37 tools (student + shared)
-CANVAS_ROLE=creator    # 70 course-building tools; no student records
-CANVAS_ROLE=educator   # 109 tools (educator + shared)
-CANVAS_ROLE=all        # Default profile; 117 tools by default, 122 with all feature-gated tools enabled
+CANVAS_ROLE=creator    # 74 course-building tools; no student records
+CANVAS_ROLE=educator   # 115 tools (educator + shared)
+CANVAS_ROLE=all        # Default profile; 121 tools by default, 126 with all feature-gated tools enabled
 ```
 
 Or via CLI flag: `canvas-mcp-server --role student` (CLI flag takes precedence over env var).
 
 Use `creator` while building course content without exposing student records.
 It includes assignments, assignment groups, Classic Quizzes, course navigation, syllabus, pages, modules, course files, rubrics,
-announcements, migrations, and accessibility tools. It excludes rosters,
+announcements, local content backups, migrations, and accessibility tools. It excludes rosters,
 submissions, grading, analytics, peer reviews, conversations, discussions,
 messaging, anonymization maps, and code execution.
 
@@ -103,6 +103,10 @@ Course management, grading, and analytics. Requires instructor/TA role.
 | `create_assignment` | Create new assignment with due date, submission types, peer reviews |
 | `update_assignment` | Update existing assignment (name, due date, points, published, etc.) |
 | `delete_assignment_with_confirmation` | Delete an assignment; existing student work additionally requires `allow_deleting_student_work=true`, followed by preview and confirmation |
+| `create_course_export` | Start a Common Cartridge course-content backup; excludes student records |
+| `list_course_exports` | Recover current and previous export IDs and states without signed URLs |
+| `get_course_export_status` | Poll one course export once without exposing its signed download URL |
+| `download_course_export` | Save a completed `.imscc` backup locally without overwriting and return its SHA-256 digest |
 | `create_content_migration` | Preview target occupancy, then request a full course-copy migration after explicit confirmation |
 | `get_content_migration_status` | Poll one migration once and review terminal migration issues |
 | `get_student_analytics` | Individual student performance |

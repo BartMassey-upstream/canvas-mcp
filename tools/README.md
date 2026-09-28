@@ -59,7 +59,8 @@ Use this — not [`check_enrollment`](#check_enrollment) — for any question ab
 Set `CANVAS_ROLE=creator` to expose course-construction tools without tools
 that read student records. The profile supports assignments, assignment groups, Classic Quizzes, course navigation, syllabus, pages,
 modules, course files, rubrics, announcements, content migrations, and
-accessibility review. It excludes rosters, submissions, grading, analytics,
+local course-content backups. It also includes accessibility review and
+excludes rosters, submissions, grading, analytics,
 peer reviews, conversations, discussions, messaging,
 anonymization maps, and code execution.
 
@@ -529,6 +530,88 @@ Delete an assignment. **Permanent, and it takes every submission and grade with 
 **Returns:** An error when student work exists without explicit permission;
 otherwise a preview with name, due date, points, and submission impact, then
 the deletion result after confirmation.
+
+---
+
+### Course Content Backups
+
+Canvas course exports are restorable Common Cartridge (`.imscc`) packages.
+They contain course content but not enrollments, submissions, student
+interactions, or grades. Completed exports remain available in Canvas for a
+limited time, so download them promptly.
+
+#### `create_course_export`
+
+Start a full asynchronous course-content export. Canvas notifications are
+suppressed.
+
+```python
+create_course_export(course_identifier: str | int) -> dict[str, Any]
+```
+
+The result includes the numeric export ID and a `next_action` for
+`get_course_export_status`. A timeout is reported as an unconfirmed start;
+call `list_course_exports` before retrying because Canvas may already have
+queued the export.
+
+---
+
+#### `list_course_exports`
+
+List current and previous course-content exports newest first.
+
+```python
+list_course_exports(course_identifier: str | int) -> dict[str, Any]
+```
+
+The result includes export IDs and status snapshots but omits signed download
+URLs. Use it to recover safely after an ambiguous export-creation response.
+
+---
+
+#### `get_course_export_status`
+
+Read one export status snapshot without waiting.
+
+```python
+get_course_export_status(
+    course_identifier: str | int,
+    export_id: str | int,
+) -> dict[str, Any]
+```
+
+Call again only while `poll_again=true`. A completed result reports
+`download_available=true` without exposing Canvas's signed attachment URL to
+the model.
+
+---
+
+#### `download_course_export`
+
+Save a completed export on the MCP server's local filesystem.
+
+```python
+download_course_export(
+    course_identifier: str | int,
+    export_id: str | int,
+    save_directory: str,
+) -> dict[str, Any]
+```
+
+This tool is available only on a local stdio server. The destination directory
+must already exist. The tool creates a unique filename (mode `0600` on POSIX)
+containing the Canvas export ID, refuses to overwrite an existing backup,
+verifies the download against Canvas's reported size, removes incomplete
+downloads, and returns a SHA-256 digest.
+
+Typical session-start workflow:
+
+```text
+1. create_course_export(course_identifier)
+2. get_course_export_status(course_identifier, export_id)
+   Repeat only while poll_again=true.
+3. download_course_export(course_identifier, export_id, save_directory)
+```
 
 ---
 
