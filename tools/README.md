@@ -604,10 +604,21 @@ Read one export status snapshot without waiting.
 get_course_export_status(
     course_identifier: str | int,
     export_id: str | int,
+    poll_attempt: int = 0,
 ) -> dict[str, Any]
 ```
 
-Call again only while `poll_again=true`. A completed result reports
+Call again only while `poll_again=true`, waiting the returned
+`retry_after_seconds` between calls and passing the returned `next_action`
+arguments unchanged. The `poll_attempt` value applies capped exponential
+backoff: 5, 10, 20, 40, and then 60 seconds between calls. Keep polling for up
+to the returned `recommended_poll_window_seconds` (currently 15 minutes).
+Canvas may report
+`waiting_for_external_tool` while an external content service prepares an
+export, particularly when the course contains New Quizzes. This is a
+transient state that can last several minutes, not a failed or completed
+export. If the recommended window expires, report that the export is still
+processing rather than describing it as failed. A completed result reports
 `download_available=true` without exposing Canvas's signed attachment URL to
 the model.
 
@@ -636,7 +647,8 @@ Typical session-start workflow:
 ```text
 1. create_course_export(course_identifier)
 2. get_course_export_status(course_identifier, export_id)
-   Repeat only while poll_again=true.
+   While poll_again=true, wait retry_after_seconds, then repeat with the
+   returned next_action arguments for up to recommended_poll_window_seconds.
 3. download_course_export(course_identifier, export_id, save_directory)
 ```
 

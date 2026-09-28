@@ -26,7 +26,10 @@ from ..core.validation import coerce_canvas_id, validate_params
 from ..core.write_confirmation import unconfirmed_write_warning
 
 _EXPORT_TYPE = "common_cartridge"
-_ACTIVE_STATES = {"created", "exporting"}
+_ACTIVE_STATES = {"created", "exporting", "waiting_for_external_tool"}
+_INITIAL_POLL_RETRY_SECONDS = 5
+_MAX_POLL_RETRY_SECONDS = 60
+_RECOMMENDED_POLL_WINDOW_SECONDS = 15 * 60
 
 
 def _same_canvas_origin(url: object) -> bool:
@@ -46,7 +49,17 @@ def _same_canvas_origin(url: object) -> bool:
     )
 
 
-def _export_status(export: dict[str, Any], course_id: str) -> dict[str, Any]:
+def _poll_retry_seconds(poll_attempt: int) -> int:
+    exponent = min(poll_attempt, 4)
+    return min(
+        _INITIAL_POLL_RETRY_SECONDS * (1 << exponent),
+        _MAX_POLL_RETRY_SECONDS,
+    )
+
+
+def _export_status(
+    export: dict[str, Any], course_id: str, poll_attempt: int = 0
+) -> dict[str, Any]:
     export_id = coerce_canvas_id(export.get("id", ""))
     state = str(export.get("workflow_state") or "unknown")
     attachment = export.get("attachment")
@@ -78,6 +91,18 @@ def _export_status(export: dict[str, Any], course_id: str) -> dict[str, Any]:
         ),
         "attachment": attachment_info,
     }
+    if result["poll_again"]:
+        result["poll_attempt"] = poll_attempt
+        result["retry_after_seconds"] = _poll_retry_seconds(poll_attempt)
+        result["recommended_poll_window_seconds"] = (
+            _RECOMMENDED_POLL_WINDOW_SECONDS
+        )
+    if state == "waiting_for_external_tool":
+        result["status_note"] = (
+            "Canvas is waiting for an external content service. This is a "
+            "transient export state, commonly caused by New Quizzes, and can "
+            "last several minutes. Keep polling; do not treat it as a failure."
+        )
     if export_id is not None and (
         result["poll_again"] or result["download_available"]
     ):
@@ -90,6 +115,11 @@ def _export_status(export: dict[str, Any], course_id: str) -> dict[str, Any]:
             "arguments": {
                 "course_identifier": course_id,
                 "export_id": export_id,
+                **(
+                    {"poll_attempt": poll_attempt + 1}
+                    if result["poll_again"]
+                    else {}
+                ),
             },
         }
     if state == "failed":
@@ -128,7 +158,8 @@ def register_content_export_tools(mcp: FastMCP) -> None:
 
         The export contains course content, not enrollments, submissions,
         student interactions, or grades. Canvas builds it asynchronously; use
-        get_course_export_status until poll_again is false.
+        get_course_export_status until poll_again is false. New Quiz content
+        can leave an export waiting_for_external_tool for several minutes.
         """
         course_id = await get_course_id(course_identifier)
         try:
@@ -162,6 +193,7 @@ def register_content_export_tools(mcp: FastMCP) -> None:
                 "arguments": {
                     "course_identifier": str(course_id),
                     "export_id": export_id,
+                    "poll_attempt": 1,
                 },
             },
         }
@@ -197,12 +229,23 @@ def register_content_export_tools(mcp: FastMCP) -> None:
     async def get_course_export_status(
         course_identifier: str | int,
         export_id: str | int,
+        poll_attempt: int = 0,
     ) -> dict[str, Any]:
-        """Read one course-content export status without waiting or polling."""
+        """Read one course-content export status without waiting.
+
+        Pass the next_action arguments unchanged so poll_attempt increases and
+        retry_after_seconds backs off from 5 to at most 60 seconds. Continue
+        for up to recommended_poll_window_seconds. The
+        waiting_for_external_tool state is transient and can last several
+        minutes, especially when an export contains New Quizzes. Reaching the
+        recommended window means the export is still processing, not failed.
+        """
         course_id = await get_course_id(course_identifier)
         canonical_export_id = coerce_canvas_id(export_id)
         if canonical_export_id is None:
             return {"error": "export_id must be a positive numeric Canvas ID."}
+        if isinstance(poll_attempt, bool) or poll_attempt < 0:
+            return {"error": "poll_attempt must be a non-negative integer."}
         response = await make_canvas_request(
             "get",
             canvas_path(
@@ -213,7 +256,7 @@ def register_content_export_tools(mcp: FastMCP) -> None:
             return {"error": "Canvas returned an invalid course export response."}
         if "error" in response:
             return {"error": f"Could not read the course export: {response['error']}"}
-        return _export_status(response, str(course_id))
+        return _export_status(response, str(course_id), poll_attempt)
 
     @mcp.tool(
         annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=True)

@@ -689,14 +689,21 @@
           "type": "string | integer",
           "required": true,
           "description": "Numeric content export ID"
+        },
+        {
+          "name": "poll_attempt",
+          "type": "integer",
+          "required": false,
+          "default": 0,
+          "description": "Retry number from the previous next_action; increases the capped exponential polling delay"
         }
       ],
-      "returns": "One export state snapshot with poll_again and download_available flags",
+      "returns": "One export state snapshot with poll_again, retry timing, and download_available flags",
       "examples": [
         "Check whether course export 91 is ready",
         "Poll this course backup once"
       ],
-      "notes": "Signed attachment URLs are never returned to the model. Call again only when poll_again is true."
+      "notes": "Signed attachment URLs are never returned to the model. While poll_again is true, wait retry_after_seconds and repeat with the returned next_action arguments so poll_attempt applies capped exponential backoff (5, 10, 20, 40, then 60 seconds). Keep polling for up to recommended_poll_window_seconds. waiting_for_external_tool is a transient state, often caused by New Quiz export work, and can last several minutes; exhausting the recommended polling window does not mean the export failed."
     },
     {
       "name": "download_course_export",
