@@ -62,6 +62,8 @@ DESTRUCTIVE = {
     "fix_accessibility_issues",
     # Replaces existing settings/fields.
     "update_assignment",
+    "update_new_quiz",
+    "update_new_quiz_question",
     "update_syllabus",
     "update_module",
     "update_module_item",
@@ -90,6 +92,8 @@ DESTRUCTIVE = {
     "delete_module_item",
     "delete_announcement_with_confirmation",
     "delete_assignment_with_confirmation",
+    "delete_new_quiz",
+    "delete_new_quiz_item",
     "delete_announcements_by_criteria",
     "bulk_delete_announcements",
 }
@@ -103,6 +107,8 @@ ADDITIVE = {
     "create_course_export",
     "create_discussion_topic",
     "create_module",
+    "create_new_quiz",
+    "create_new_quiz_question",
     "create_rubric_from_csv",
     "post_discussion_entry",
     "reply_to_discussion_entry",
@@ -139,6 +145,8 @@ NOT_IDEMPOTENT = {
     "create_course_export",
     "create_discussion_topic",
     "create_module",
+    "create_new_quiz",
+    "create_new_quiz_question",
     "create_page",
     "create_rubric",
     "create_rubric_from_csv",
@@ -249,9 +257,11 @@ async def test_repeatable_tools_declare_idempotency_honestly():
     # refuses, never deletes more.
     # extract_peer_review_dataset: fixed default filename + mode "w" means a repeat
     # overwrites the same file. Contrast generate_peer_review_report above.
-    for name in ("update_assignment", "update_module", "update_discussion_topic",
+    for name in ("update_assignment", "update_new_quiz", "update_new_quiz_question",
+                 "update_module", "update_discussion_topic",
                  "update_rubric", "edit_page_content", "delete_page", "bulk_delete_announcements",
                  "delete_announcements_by_criteria", "delete_assignment_with_confirmation",
+                 "delete_new_quiz", "delete_new_quiz_item",
                  "extract_peer_review_dataset"):
         assert tools[name].annotations.idempotent_hint is True, (
             f"{name} converges on the same end state when repeated"

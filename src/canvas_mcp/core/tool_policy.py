@@ -55,7 +55,7 @@ class Effect(StrEnum):
 
 
 TOOL_EFFECTS: dict[str, Effect] = {
-    # --- READ (63) ---
+    # --- READ (67) ---
     "analyze_peer_review_quality": Effect.READ,
     "check_enrollment": Effect.READ,
     "fetch_ufixit_report": Effect.READ,
@@ -82,6 +82,8 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "get_my_submission_status": Effect.READ,
     "get_my_todo_items": Effect.READ,
     "get_my_upcoming_assignments": Effect.READ,
+    "get_new_quiz": Effect.READ,
+    "get_new_quiz_item": Effect.READ,
     "get_page_content": Effect.READ,
     "get_page_details": Effect.READ,
     "get_peer_review_assignments": Effect.READ,
@@ -108,6 +110,8 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "list_groups": Effect.READ,
     "list_module_items": Effect.READ,
     "list_modules": Effect.READ,
+    "list_new_quiz_items": Effect.READ,
+    "list_new_quizzes": Effect.READ,
     "list_pages": Effect.READ,
     "list_peer_reviews": Effect.READ,
     "list_quiz_questions": Effect.READ,
@@ -119,7 +123,7 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "read_course_file": Effect.READ,
     "scan_course_content_accessibility": Effect.READ,
     "search_canvas_tools": Effect.READ,
-    # --- CANVAS_WRITE (54) ---
+    # --- CANVAS_WRITE (60) ---
     "add_module_item": Effect.CANVAS_WRITE,
     "assign_peer_review": Effect.CANVAS_WRITE,
     "associate_rubric": Effect.CANVAS_WRITE,
@@ -133,6 +137,8 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "create_content_migration": Effect.CANVAS_WRITE,
     "create_discussion_topic": Effect.CANVAS_WRITE,
     "create_module": Effect.CANVAS_WRITE,
+    "create_new_quiz": Effect.CANVAS_WRITE,
+    "create_new_quiz_question": Effect.CANVAS_WRITE,
     "create_page": Effect.CANVAS_WRITE,
     "create_quiz": Effect.CANVAS_WRITE,
     "create_quiz_question": Effect.CANVAS_WRITE,
@@ -145,6 +151,8 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "delete_course_file": Effect.CANVAS_WRITE,
     "delete_module": Effect.CANVAS_WRITE,
     "delete_module_item": Effect.CANVAS_WRITE,
+    "delete_new_quiz": Effect.CANVAS_WRITE,
+    "delete_new_quiz_item": Effect.CANVAS_WRITE,
     "delete_page": Effect.CANVAS_WRITE,
     "delete_quiz": Effect.CANVAS_WRITE,
     "delete_quiz_question": Effect.CANVAS_WRITE,
@@ -168,6 +176,8 @@ TOOL_EFFECTS: dict[str, Effect] = {
     "update_discussion_topic": Effect.CANVAS_WRITE,
     "update_module": Effect.CANVAS_WRITE,
     "update_module_item": Effect.CANVAS_WRITE,
+    "update_new_quiz": Effect.CANVAS_WRITE,
+    "update_new_quiz_question": Effect.CANVAS_WRITE,
     "update_page_settings": Effect.CANVAS_WRITE,
     "update_quiz": Effect.CANVAS_WRITE,
     "update_quiz_question": Effect.CANVAS_WRITE,

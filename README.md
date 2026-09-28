@@ -325,9 +325,11 @@ Claude Code skills are located in `.claude/skills/` and can be customized for yo
 
 ### Course Creation Without Student Records
 
-Set `CANVAS_ROLE=creator` (or pass `--role creator`) to expose 74 tools for
-building assignments, assignment groups, Classic Quizzes, course navigation, syllabi, pages, modules, course files, rubrics,
-announcements, local content backups, migrations, and accessible content without registering tools
+Set `CANVAS_ROLE=creator` (or pass `--role creator`) to expose course-building
+tools for assignments, assignment groups, Classic and New Quizzes, course
+navigation, syllabi, pages, modules, course files, rubrics,
+announcements, local content backups, migrations, and accessible content
+without registering tools
 that read student records. The profile excludes rosters, submissions,
 grading, analytics, peer reviews, conversations, discussions,
 messaging, anonymization maps, and arbitrary TypeScript execution.

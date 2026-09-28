@@ -354,6 +354,127 @@
       "examples": ["Delete question 9 from Classic Quiz 7"]
     },
     {
+      "name": "list_new_quizzes",
+      "category": "educator",
+      "description": "List New Quiz definitions without student activity",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}],
+      "returns": "Backing assignment IDs, titles, assignment groups, points, dates, publication state, and fenced settings",
+      "examples": ["List the New Quizzes in ENG 101"]
+    },
+    {
+      "name": "get_new_quiz",
+      "category": "educator",
+      "description": "Get one New Quiz definition by its backing assignment ID",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "assignment_id", "type": "string | integer", "required": true}],
+      "returns": "The New Quiz definition with all settings and fenced author content",
+      "examples": ["Show the New Quiz backed by assignment 12"]
+    },
+    {
+      "name": "create_new_quiz",
+      "category": "educator",
+      "description": "Create a New Quiz and its backing assignment with all documented settings",
+      "parameters": [
+        {"name": "course_identifier", "type": "string | integer", "required": true},
+        {"name": "title", "type": "string", "required": true},
+        {"name": "instructions", "type": "string", "required": false},
+        {"name": "assignment_group_id", "type": "string | integer", "required": false},
+        {"name": "points_possible", "type": "number", "required": false},
+        {"name": "due_at", "type": "string", "required": false},
+        {"name": "lock_at", "type": "string", "required": false},
+        {"name": "unlock_at", "type": "string", "required": false},
+        {"name": "grading_type", "type": "string", "required": false, "default": "points"},
+        {"name": "quiz_settings", "type": "object", "required": false}
+      ],
+      "returns": "The created New Quiz definition and backing assignment ID",
+      "examples": ["Create an unpublished New Quiz named Midterm"]
+    },
+    {
+      "name": "update_new_quiz",
+      "category": "educator",
+      "description": "Update all documented New Quiz settings and clear nullable dates",
+      "parameters": [
+        {"name": "course_identifier", "type": "string | integer", "required": true},
+        {"name": "assignment_id", "type": "string | integer", "required": true},
+        {"name": "title", "type": "string", "required": false},
+        {"name": "instructions", "type": "string", "required": false},
+        {"name": "assignment_group_id", "type": "string | integer", "required": false},
+        {"name": "points_possible", "type": "number", "required": false},
+        {"name": "due_at", "type": "string", "required": false},
+        {"name": "lock_at", "type": "string", "required": false},
+        {"name": "unlock_at", "type": "string", "required": false},
+        {"name": "grading_type", "type": "string", "required": false},
+        {"name": "quiz_settings", "type": "object", "required": false},
+        {"name": "clear_due_at", "type": "boolean", "required": false, "default": false},
+        {"name": "clear_lock_at", "type": "boolean", "required": false, "default": false},
+        {"name": "clear_unlock_at", "type": "boolean", "required": false, "default": false}
+      ],
+      "returns": "The updated New Quiz definition",
+      "examples": ["Give New Quiz assignment 12 a one-hour time limit"]
+    },
+    {
+      "name": "delete_new_quiz",
+      "category": "educator",
+      "description": "Delete a New Quiz and backing assignment after student-work checks and confirmation",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "assignment_id", "type": "string | integer", "required": true}, {"name": "allow_deleting_student_work", "type": "boolean", "required": false, "default": false}],
+      "returns": "An error if student work exists without explicit permission; otherwise a preview and confirmation token, then deletion status",
+      "examples": ["Delete the New Quiz backed by assignment 12"]
+    },
+    {
+      "name": "list_new_quiz_items",
+      "category": "educator",
+      "description": "List New Quiz item definitions without attempts or responses",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "assignment_id", "type": "string | integer", "required": true}],
+      "returns": "Fenced definitions for questions, stimuli, and item-bank entries",
+      "examples": ["List items in New Quiz assignment 12"]
+    },
+    {
+      "name": "get_new_quiz_item",
+      "category": "educator",
+      "description": "Get one New Quiz item definition without student responses",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "assignment_id", "type": "string | integer", "required": true}, {"name": "item_id", "type": "string | integer", "required": true}],
+      "returns": "The fenced item definition",
+      "examples": ["Show item 35 in New Quiz assignment 12"]
+    },
+    {
+      "name": "create_new_quiz_question",
+      "category": "educator",
+      "description": "Create any QuestionItem type supported by the New Quizzes API",
+      "parameters": [
+        {"name": "course_identifier", "type": "string | integer", "required": true},
+        {"name": "assignment_id", "type": "string | integer", "required": true},
+        {"name": "item_body", "type": "string", "required": true},
+        {"name": "interaction_type_slug", "type": "string", "required": true},
+        {"name": "scoring_algorithm", "type": "string", "required": true},
+        {"name": "scoring_data", "type": "object", "required": true},
+        {"name": "title", "type": "string", "required": false},
+        {"name": "points_possible", "type": "number", "required": false, "default": 1},
+        {"name": "position", "type": "integer", "required": false},
+        {"name": "calculator_type", "type": "string", "required": false, "default": "none"},
+        {"name": "interaction_data", "type": "object", "required": false},
+        {"name": "properties", "type": "object", "required": false},
+        {"name": "feedback", "type": "object", "required": false},
+        {"name": "answer_feedback", "type": "object", "required": false}
+      ],
+      "returns": "The created QuestionItem definition",
+      "examples": ["Add a multiple-choice question to New Quiz assignment 12"]
+    },
+    {
+      "name": "update_new_quiz_question",
+      "category": "educator",
+      "description": "Update an API-writable QuestionItem in a New Quiz",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "assignment_id", "type": "string | integer", "required": true}, {"name": "item_id", "type": "string | integer", "required": true}],
+      "returns": "The updated QuestionItem definition",
+      "examples": ["Make New Quiz item 35 worth two points"]
+    },
+    {
+      "name": "delete_new_quiz_item",
+      "category": "educator",
+      "description": "Delete a New Quiz item after student-work checks and confirmation",
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "assignment_id", "type": "string | integer", "required": true}, {"name": "item_id", "type": "string | integer", "required": true}, {"name": "allow_deleting_student_work", "type": "boolean", "required": false, "default": false}],
+      "returns": "An error if student work exists without explicit permission; otherwise a preview and confirmation token, then deletion status",
+      "examples": ["Delete item 35 from New Quiz assignment 12"]
+    },
+    {
       "name": "list_course_navigation",
       "category": "educator",
       "description": "List course navigation tabs, positions, and visibility",

@@ -57,7 +57,8 @@ Use this — not [`check_enrollment`](#check_enrollment) — for any question ab
 ## Creator Profile
 
 Set `CANVAS_ROLE=creator` to expose course-construction tools without tools
-that read student records. The profile supports assignments, assignment groups, Classic Quizzes, course navigation, syllabus, pages,
+that read student records. The profile supports assignments, assignment groups,
+Classic and New Quizzes, course navigation, syllabus, pages,
 modules, course files, rubrics, announcements, content migrations, and
 local course-content backups. It also includes accessibility review and
 excludes rosters, submissions, grading, analytics,
@@ -384,8 +385,34 @@ assignment-group ID.
 - `delete_quiz_question`: apply the same student-work opt-in before previewing
   and confirming question deletion
 
-These tools target Canvas Classic Quizzes. They do not expose New Quizzes or
-any student quiz activity.
+These tools target Canvas Classic Quizzes and expose no student quiz activity.
+
+---
+
+#### New Quiz authoring tools
+
+- `list_new_quizzes` and `get_new_quiz`: read New Quiz definitions and every
+  quiz-level setting without attempts, responses, reports, or accommodations
+- `create_new_quiz` and `update_new_quiz`: author dates, points, grading type,
+  instructions, assignment-group membership, timing, calculator, IP and access
+  restrictions, question and answer shuffling, navigation, multiple-attempt
+  policy, and result visibility. These tools use the backing assignment ID;
+  publish or unpublish it with `update_assignment`
+- `delete_new_quiz`: check the backing assignment for student work, then
+  preview and confirm deletion
+- `list_new_quiz_items` and `get_new_quiz_item`: read questions, stimuli, and
+  item-bank entries without student activity
+- `create_new_quiz_question` and `update_new_quiz_question`: author every
+  QuestionItem type supported by Canvas's API using its nested interaction,
+  properties, scoring, and feedback objects. Hot-spot questions require media
+  uploaded separately; the presigned media-upload workflow is not exposed
+- `delete_new_quiz_item`: apply the same student-work opt-in before previewing
+  and confirming item deletion
+
+Canvas's API only permits creating and updating QuestionItem entries. Stimulus
+and item-bank entries remain readable but must be authored in the Canvas UI.
+The API also does not document `published` as writable, so publication goes
+through the ordinary backing assignment.
 
 ---
 
