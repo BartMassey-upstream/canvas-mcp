@@ -78,6 +78,7 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     "get_conversation_details": _fenced("_fence_conversation_fields"),
     "get_course_content_overview": _fenced("fence_untrusted"),
     "get_content_migration_status": _fenced("fence_untrusted"),
+    "get_course_export_status": _fenced("_export_status"),
     "get_course_details": _deferred(
         "Returns course name/code plus platform metadata; course identity is the documented low-risk exception."
     ),
@@ -124,6 +125,7 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     "list_course_navigation": _fenced("_format_tab"),
     "list_conversations": _fenced("_fence_conversation_fields"),
     "list_course_files": _fenced("fence_untrusted_inline"),
+    "list_course_exports": _fenced("_export_status"),
     "list_courses": _deferred(
         "Returns course name/code and the caller's role; course identity is the documented low-risk exception."
     ),

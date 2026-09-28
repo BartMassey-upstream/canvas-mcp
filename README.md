@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![skills.sh](https://img.shields.io/badge/skills.sh-canvas--mcp-blue)](https://skills.sh)
 
-MCP server for Canvas LMS with **up to 122 tools** and **8 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
+MCP server for Canvas LMS with **up to 126 tools** and **8 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
 
 ## Quick Start
 
@@ -75,7 +75,7 @@ release tag.
   See CLAUDE.md "Documentation Maintenance" for full guidelines.
 -->
 
-Canvas MCP provides **up to 122 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 122. Tools are organized by user type:
+Canvas MCP provides **up to 126 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 126. Tools are organized by user type:
 
 <details>
 <summary><strong>Student Tools</strong> (click to expand)</summary>
@@ -103,6 +103,8 @@ Canvas MCP provides **up to 122 tools** for interacting with Canvas LMS; the def
 | `get_assignment_analytics` | Performance stats | "Show analytics for Quiz 2" |
 | `send_conversation` | Message students | "Message students who haven't submitted" |
 | `create_announcement` | Post announcements | "Announce the exam date change" |
+| `create_course_export` | Start a restorable course-content backup | "Back up this course before making changes" |
+| `download_course_export` | Save a completed backup locally | "Download the backup to my archive directory" |
 | **Module Management** | | |
 | `create_module` | Create course module | "Create a module for Week 5" |
 | `update_module` | Update module settings | "Rename the midterm module" |
@@ -321,9 +323,9 @@ Claude Code skills are located in `.claude/skills/` and can be customized for yo
 
 ### Course Creation Without Student Records
 
-Set `CANVAS_ROLE=creator` (or pass `--role creator`) to expose 70 tools for
+Set `CANVAS_ROLE=creator` (or pass `--role creator`) to expose 74 tools for
 building assignments, assignment groups, Classic Quizzes, course navigation, syllabi, pages, modules, course files, rubrics,
-announcements, migrations, and accessible content without registering tools
+announcements, local content backups, migrations, and accessible content without registering tools
 that read student records. The profile excludes rosters, submissions,
 grading, analytics, peer reviews, conversations, discussions,
 messaging, anonymization maps, and arbitrary TypeScript execution.

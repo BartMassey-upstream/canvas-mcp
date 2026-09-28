@@ -515,6 +515,100 @@
       ]
     },
     {
+      "name": "create_course_export",
+      "category": "educator",
+      "description": "Start a full Common Cartridge export of course content without student records.",
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true,
+          "description": "Course code or Canvas ID"
+        }
+      ],
+      "returns": "Created export ID, current state, and the next status action",
+      "examples": [
+        "Start a local-backup export of ENG 101",
+        "Create a Common Cartridge backup of this course"
+      ],
+      "notes": "Starts an asynchronous Canvas export with notifications suppressed. The package contains course content, not student records."
+    },
+    {
+      "name": "list_course_exports",
+      "category": "educator",
+      "description": "List current and previous course-content exports without exposing signed download URLs.",
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true,
+          "description": "Course code or Canvas ID"
+        }
+      ],
+      "returns": "All export IDs and status snapshots, newest first",
+      "examples": [
+        "List the backups Canvas has generated for ENG 101",
+        "Check whether my previous course export request succeeded"
+      ],
+      "notes": "Use this after an ambiguous create timeout to recover the export ID before considering a retry."
+    },
+    {
+      "name": "get_course_export_status",
+      "category": "educator",
+      "description": "Poll one course-content export once and report whether it can be downloaded.",
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true,
+          "description": "Course code or Canvas ID"
+        },
+        {
+          "name": "export_id",
+          "type": "string | integer",
+          "required": true,
+          "description": "Numeric content export ID"
+        }
+      ],
+      "returns": "One export state snapshot with poll_again and download_available flags",
+      "examples": [
+        "Check whether course export 91 is ready",
+        "Poll this course backup once"
+      ],
+      "notes": "Signed attachment URLs are never returned to the model. Call again only when poll_again is true."
+    },
+    {
+      "name": "download_course_export",
+      "category": "educator",
+      "description": "Download a completed Common Cartridge course export to the local filesystem.",
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true,
+          "description": "Course code or Canvas ID"
+        },
+        {
+          "name": "export_id",
+          "type": "string | integer",
+          "required": true,
+          "description": "Numeric content export ID"
+        },
+        {
+          "name": "save_directory",
+          "type": "string",
+          "required": true,
+          "description": "Existing directory on the local MCP server"
+        }
+      ],
+      "returns": "Exclusive local path, size, and SHA-256 digest of the downloaded .imscc package",
+      "examples": [
+        "Download export 91 to /home/me/canvas-backups",
+        "Save this completed course backup locally"
+      ],
+      "notes": "Local stdio servers only. Creates a mode-0600 file on POSIX, refuses overwrites, verifies Canvas's reported size, and removes incomplete downloads."
+    },
+    {
       "name": "create_content_migration",
       "category": "educator",
       "description": "Preview target-course occupancy, then request a full course-copy migration after explicit confirmation.",
