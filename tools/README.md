@@ -483,6 +483,9 @@ Update an existing assignment in a course.
 - `due_at`: New due date in ISO 8601 format
 - `unlock_at`: New availability date (ISO 8601)
 - `lock_at`: New lock date (ISO 8601)
+- `clear_due_at`: Remove the existing due date
+- `clear_unlock_at`: Remove the existing availability date
+- `clear_lock_at`: Remove the existing lock date
 - `points_possible`: New maximum points
 - `grading_type`: One of `points`, `letter_grade`, `pass_fail`, `percent`, `not_graded`
 - `published`: Whether the assignment should be published
@@ -494,6 +497,7 @@ Update an existing assignment in a course.
 **Example:**
 ```
 "Change the due date for Assignment 3 to Feb 15 at midnight"
+"Remove the due date from Assignment 3"
 "Update Quiz 1 to be worth 50 points instead of 25"
 "Publish Assignment 4"
 ```
@@ -1258,6 +1262,8 @@ Edit an existing discussion topic or announcement (title, body, publish state, e
 - `delayed_post_at`: Schedule posting, ISO 8601 (optional)
 - `lock_at`: Auto-lock datetime, ISO 8601 (optional)
 - `require_initial_post`: Require initial post before viewing replies (optional)
+- `clear_delayed_post_at`: Remove the scheduled posting time (optional)
+- `clear_lock_at`: Remove the automatic lock time (optional)
 
 **Example:**
 ```
