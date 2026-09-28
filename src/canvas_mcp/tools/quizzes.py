@@ -262,8 +262,30 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         unlock_at: str | None = None,
         lock_at: str | None = None,
         published: bool | None = None,
+        clear_time_limit: bool = False,
+        clear_due_at: bool = False,
+        clear_unlock_at: bool = False,
+        clear_lock_at: bool = False,
     ) -> str:
-        """Update a Classic Quiz definition."""
+        """Update a Classic Quiz definition, including clearing its dates."""
+        if time_limit is not None and clear_time_limit:
+            return (
+                "Invalid configuration: time_limit and clear_time_limit cannot "
+                "both be provided."
+            )
+
+        date_updates = (
+            ("due_at", due_at, clear_due_at),
+            ("unlock_at", unlock_at, clear_unlock_at),
+            ("lock_at", lock_at, clear_lock_at),
+        )
+        for field_name, value, clear in date_updates:
+            if value is not None and clear:
+                return (
+                    f"Invalid configuration: {field_name} and clear_{field_name} "
+                    "cannot both be provided."
+                )
+
         payload = _quiz_payload(
             title=title,
             description=description,
@@ -282,6 +304,11 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         )
         if isinstance(payload, str):
             return payload
+        if clear_time_limit:
+            payload["time_limit"] = None
+        for field_name, _value, clear in date_updates:
+            if clear:
+                payload[field_name] = None
         if not payload:
             return "No quiz fields were provided to update."
         course_id = await get_course_id(course_identifier)

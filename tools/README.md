@@ -369,7 +369,9 @@ assignment-group ID.
 - `list_quizzes` and `get_quiz`: read quiz definitions, assignment-group IDs,
   and backing assignment IDs without attempts, submissions, responses, or
   statistics
-- `create_quiz` and `update_quiz`: author Classic Quiz settings
+- `create_quiz` and `update_quiz`: author Classic Quiz settings; the update
+  tool's `clear_time_limit`, `clear_due_at`, `clear_unlock_at`, and
+  `clear_lock_at` flags remove existing limits and dates
 - `delete_quiz`: refuse when student work exists unless
   `allow_deleting_student_work=true`, then preview and confirm deletion
 - `list_quiz_questions`, `create_quiz_question`, and
@@ -394,7 +396,8 @@ any student quiz activity.
 
 - `get_announcement`: read one announcement's body and settings
 - `update_announcement`: edit only an ID verified through Canvas's
-  announcement-only collection
+  announcement-only collection; `clear_delayed_post_at` and `clear_lock_at`
+  remove its scheduled posting and automatic lock times
 
 The creator profile omits the older ID-based single and bulk announcement
 delete tools because those Canvas endpoints also address ordinary discussion

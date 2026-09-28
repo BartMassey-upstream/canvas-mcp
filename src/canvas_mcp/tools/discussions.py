@@ -70,7 +70,11 @@ async def _find_announcement(
     )
     if isinstance(announcements, dict) and "error" in announcements:
         return f"Error fetching announcements: {announcements['error']}"
-    for announcement in announcements or []:
+    if not isinstance(announcements, list):
+        return "Error fetching announcements: Canvas returned an invalid response."
+    for announcement in announcements:
+        if not isinstance(announcement, dict):
+            return "Error fetching announcements: Canvas returned an invalid response."
         if str(announcement.get("id")) == str(announcement_id):
             return announcement
     return f"Announcement {announcement_id} was not found in this course."
@@ -1154,12 +1158,29 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         published: bool | None = None,
         delayed_post_at: str | None = None,
         lock_at: str | None = None,
+        clear_delayed_post_at: bool = False,
+        clear_lock_at: bool = False,
     ) -> str:
-        """Update a verified announcement, never an ordinary discussion."""
+        """Update a verified announcement, never an ordinary discussion.
+
+        Set clear_delayed_post_at or clear_lock_at to remove the corresponding
+        scheduled time. A date cannot be set and cleared in the same request.
+        """
         if (title is not None and contains_fence_markers(title)) or (
             message is not None and contains_fence_markers(message)
         ):
             return FENCE_LEAK_ERROR
+
+        date_updates = (
+            ("delayed_post_at", delayed_post_at, clear_delayed_post_at),
+            ("lock_at", lock_at, clear_lock_at),
+        )
+        for field, value, clear in date_updates:
+            if value is not None and clear:
+                return (
+                    f"Invalid configuration: {field} and clear_{field} "
+                    "cannot both be provided."
+                )
 
         data: dict[str, str | bool] = {}
         if title is not None:
@@ -1168,11 +1189,10 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             data["message"] = message
         if published is not None:
             data["published"] = published
-        for field, value in (
-            ("delayed_post_at", delayed_post_at),
-            ("lock_at", lock_at),
-        ):
-            if value is not None:
+        for field, value, clear in date_updates:
+            if clear:
+                data[field] = ""
+            elif value is not None:
                 parsed = parse_date(value)
                 if not parsed:
                     return f"Invalid date format for {field}: '{value}'. Use ISO 8601 format."

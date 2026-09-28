@@ -261,7 +261,7 @@ def strip_fence_markers(text: str) -> str:
     return _FENCE_LINE.sub("", _coerce_text(text))
 
 
-def contains_fence_markers(text: str) -> bool:
+def contains_fence_markers(text: object) -> bool:
     """True if ``text`` carries one of our provenance markers.
 
     Read tools fence Canvas-authored content; if a caller pastes a fenced read

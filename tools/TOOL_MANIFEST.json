@@ -230,7 +230,7 @@
       "name": "get_quiz",
       "category": "educator",
       "description": "Get one Classic Quiz definition without student activity",
-      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}],
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "clear_time_limit", "type": "boolean", "required": false, "default": false}, {"name": "clear_due_at", "type": "boolean", "required": false, "default": false}, {"name": "clear_unlock_at", "type": "boolean", "required": false, "default": false}, {"name": "clear_lock_at", "type": "boolean", "required": false, "default": false}],
       "returns": "Quiz definition with assignment-group ID, backing assignment ID, and fenced description",
       "examples": ["Show the settings for Classic Quiz 7"]
     },
@@ -715,7 +715,7 @@
       "name": "get_announcement",
       "category": "educator",
       "description": "Get one announcement through the announcement-only collection",
-      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "announcement_id", "type": "string | integer", "required": true}],
+      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "announcement_id", "type": "string | integer", "required": true}, {"name": "clear_delayed_post_at", "type": "boolean", "required": false, "default": false}, {"name": "clear_lock_at", "type": "boolean", "required": false, "default": false}],
       "returns": "The fenced announcement title, body, and publication settings",
       "examples": ["Show announcement 7 in ENG 101"]
     },

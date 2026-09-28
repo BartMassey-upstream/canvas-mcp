@@ -58,6 +58,25 @@ async def test_get_announcement_rejects_an_id_absent_from_announcement_listing()
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("invalid_response", ["unexpected", [None]])
+async def test_get_announcement_rejects_invalid_collection_response(
+    invalid_response,
+):
+    with patch(
+        "canvas_mcp.tools.discussions.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.discussions.fetch_all_paginated_results",
+        new=AsyncMock(return_value=invalid_response),
+    ), patch(
+        "canvas_mcp.tools.discussions.make_canvas_request", new_callable=AsyncMock
+    ) as request:
+        result = await (await _tools())["get_announcement"]("ENG101", 7)
+
+    assert "invalid response" in result
+    request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_update_announcement_verifies_before_writing():
     announcement = {"id": 7, "title": "Welcome", "is_announcement": True}
     updated = {
@@ -106,3 +125,46 @@ async def test_update_announcement_never_writes_unverified_id():
 
     assert "not found" in result
     request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("clear_argument", "field_name"),
+    [
+        ("clear_delayed_post_at", "delayed_post_at"),
+        ("clear_lock_at", "lock_at"),
+    ],
+)
+async def test_update_announcement_clears_date(clear_argument, field_name):
+    announcement = {"id": 7, "title": "Welcome", "is_announcement": True}
+    with patch(
+        "canvas_mcp.tools.discussions.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.discussions.fetch_all_paginated_results",
+        new=AsyncMock(return_value=[announcement]),
+    ), patch(
+        "canvas_mcp.tools.discussions.make_canvas_request",
+        new=AsyncMock(return_value=announcement),
+    ) as request:
+        result = await (await _tools())["update_announcement"](
+            "ENG101", 7, **{clear_argument: True}
+        )
+
+    assert request.await_args.kwargs["data"] == {field_name: ""}
+    assert "updated" in result
+
+
+@pytest.mark.asyncio
+async def test_update_announcement_rejects_set_and_clear_date():
+    with patch(
+        "canvas_mcp.tools.discussions.get_course_id", new_callable=AsyncMock
+    ) as course_id:
+        result = await (await _tools())["update_announcement"](
+            "ENG101",
+            7,
+            lock_at="2026-02-01T23:59:00Z",
+            clear_lock_at=True,
+        )
+
+    assert "lock_at and clear_lock_at cannot both be provided" in result
+    course_id.assert_not_awaited()

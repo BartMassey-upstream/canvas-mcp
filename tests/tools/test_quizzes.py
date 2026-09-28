@@ -106,6 +106,78 @@ async def test_update_quiz_requires_a_change():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("clear_argument", "field_name"),
+    [
+        ("clear_due_at", "due_at"),
+        ("clear_unlock_at", "unlock_at"),
+        ("clear_lock_at", "lock_at"),
+    ],
+)
+async def test_update_quiz_clears_date(clear_argument, field_name):
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(return_value={"id": 7, "title": "Midterm"}),
+    ) as request:
+        result = await (await _tools())["update_quiz"](
+            "ENG101", 7, **{clear_argument: True}
+        )
+
+    assert request.await_args.kwargs["data"] == {
+        "quiz": {field_name: None}
+    }
+    assert "updated" in result
+
+
+@pytest.mark.asyncio
+async def test_update_quiz_rejects_set_and_clear_date():
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new_callable=AsyncMock
+    ) as course_id:
+        result = await (await _tools())["update_quiz"](
+            "ENG101",
+            7,
+            due_at="2026-02-15T23:59:00Z",
+            clear_due_at=True,
+        )
+
+    assert "due_at and clear_due_at cannot both be provided" in result
+    course_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_quiz_clears_time_limit():
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(return_value={"id": 7, "title": "Midterm"}),
+    ) as request:
+        await (await _tools())["update_quiz"](
+            "ENG101", 7, clear_time_limit=True
+        )
+
+    assert request.await_args.kwargs["data"] == {
+        "quiz": {"time_limit": None}
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_quiz_rejects_set_and_clear_time_limit():
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new_callable=AsyncMock
+    ) as course_id:
+        result = await (await _tools())["update_quiz"](
+            "ENG101", 7, time_limit=45, clear_time_limit=True
+        )
+
+    assert "time_limit and clear_time_limit cannot both be provided" in result
+    course_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_delete_quiz_requires_matching_confirmation():
     quiz = {"id": 7, "title": "Midterm", "question_count": 12, "published": False}
     with patch(
