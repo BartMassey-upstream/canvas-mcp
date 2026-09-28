@@ -62,6 +62,137 @@ async def test_create_quiz_defaults_to_unpublished_assignment_quiz():
 
 
 @pytest.mark.asyncio
+async def test_create_quiz_forwards_all_compatible_public_settings():
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(return_value={"id": 7, "title": "Midterm"}),
+    ) as request:
+        await (await _tools())["create_quiz"](
+            "ENG101",
+            "Midterm",
+            description="Covers units 1-4",
+            assignment_group_id=12,
+            time_limit=45,
+            shuffle_answers=True,
+            show_correct_answers=True,
+            show_correct_answers_last_attempt=True,
+            show_correct_answers_at="2026-02-16T08:00:00Z",
+            hide_correct_answers_at="2026-02-20T08:00:00Z",
+            allowed_attempts=3,
+            scoring_policy="keep_latest",
+            one_question_at_a_time=True,
+            cant_go_back=True,
+            access_code="open-sesame",
+            ip_filter="192.0.2.0/24",
+            due_at="2026-02-15T23:59:00Z",
+            unlock_at="2026-02-01T08:00:00Z",
+            lock_at="2026-02-16T08:00:00Z",
+            published=True,
+            one_time_results=True,
+            only_visible_to_overrides=True,
+        )
+
+    payload = request.await_args.kwargs["data"]["quiz"]
+    assert payload == {
+        "title": "Midterm",
+        "description": "Covers units 1-4",
+        "quiz_type": "assignment",
+        "assignment_group_id": "12",
+        "time_limit": 45,
+        "shuffle_answers": True,
+        "show_correct_answers": True,
+        "show_correct_answers_last_attempt": True,
+        "show_correct_answers_at": "2026-02-16T08:00:00Z",
+        "hide_correct_answers_at": "2026-02-20T08:00:00Z",
+        "allowed_attempts": 3,
+        "scoring_policy": "keep_latest",
+        "one_question_at_a_time": True,
+        "cant_go_back": True,
+        "access_code": "open-sesame",
+        "ip_filter": "192.0.2.0/24",
+        "due_at": "2026-02-15T23:59:00Z",
+        "unlock_at": "2026-02-01T08:00:00Z",
+        "lock_at": "2026-02-16T08:00:00Z",
+        "published": True,
+        "one_time_results": True,
+        "only_visible_to_overrides": True,
+    }
+
+
+@pytest.mark.asyncio
+async def test_create_quiz_forwards_hidden_result_policy():
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(return_value={"id": 7, "title": "Midterm"}),
+    ) as request:
+        await (await _tools())["create_quiz"](
+            "ENG101",
+            "Midterm",
+            hide_results="until_after_last_attempt",
+            allowed_attempts=3,
+            one_time_results=True,
+        )
+
+    payload = request.await_args.kwargs["data"]["quiz"]
+    assert payload["hide_results"] == "until_after_last_attempt"
+    assert payload["one_time_results"] is True
+
+
+@pytest.mark.asyncio
+async def test_create_quiz_forwards_anonymous_survey_setting():
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(return_value={"id": 7, "title": "Survey"}),
+    ) as request:
+        await (await _tools())["create_quiz"](
+            "ENG101",
+            "Survey",
+            quiz_type="survey",
+            anonymous_submissions=True,
+        )
+
+    assert request.await_args.kwargs["data"]["quiz"]["anonymous_submissions"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "arguments,expected",
+    [
+        ({"scoring_policy": "keep_latest"}, "only valid when allowed_attempts"),
+        (
+            {"hide_results": "until_after_last_attempt"},
+            "requires multiple attempts",
+        ),
+        (
+            {"show_correct_answers_last_attempt": True},
+            "multiple attempts are required",
+        ),
+        ({"cant_go_back": True}, "one_question_at_a_time must be true"),
+        (
+            {"anonymous_submissions": True},
+            "only valid for survey or graded_survey",
+        ),
+    ],
+)
+async def test_create_quiz_rejects_incomplete_dependent_settings(arguments, expected):
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new_callable=AsyncMock
+    ) as course_id:
+        result = await (await _tools())["create_quiz"](
+            "ENG101", "Midterm", **arguments
+        )
+
+    assert expected in result
+    course_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_create_question_uses_question_definition_endpoint():
     answers = [
         {"answer_text": "Four", "answer_weight": 100},
@@ -109,6 +240,8 @@ async def test_update_quiz_requires_a_change():
 @pytest.mark.parametrize(
     ("clear_argument", "field_name"),
     [
+        ("clear_show_correct_answers_at", "show_correct_answers_at"),
+        ("clear_hide_correct_answers_at", "hide_correct_answers_at"),
         ("clear_due_at", "due_at"),
         ("clear_unlock_at", "unlock_at"),
         ("clear_lock_at", "lock_at"),
@@ -129,6 +262,56 @@ async def test_update_quiz_clears_date(clear_argument, field_name):
         "quiz": {field_name: None}
     }
     assert "updated" in result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("clear_argument", "field_name"),
+    [
+        ("clear_hide_results", "hide_results"),
+        ("clear_access_code", "access_code"),
+        ("clear_ip_filter", "ip_filter"),
+    ],
+)
+async def test_update_quiz_clears_nullable_setting(clear_argument, field_name):
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(return_value={"id": 7, "title": "Midterm"}),
+    ) as request:
+        await (await _tools())["update_quiz"](
+            "ENG101", 7, **{clear_argument: True}
+        )
+
+    assert request.await_args.kwargs["data"] == {"quiz": {field_name: None}}
+
+
+@pytest.mark.asyncio
+async def test_update_quiz_forwards_notification_and_visibility_settings():
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(return_value={"id": 7, "title": "Midterm"}),
+    ) as request:
+        await (await _tools())["update_quiz"](
+            "ENG101",
+            7,
+            hide_results="always",
+            one_time_results=False,
+            only_visible_to_overrides=True,
+            notify_of_update=False,
+        )
+
+    assert request.await_args.kwargs["data"] == {
+        "quiz": {
+            "hide_results": "always",
+            "one_time_results": False,
+            "only_visible_to_overrides": True,
+            "notify_of_update": False,
+        }
+    }
 
 
 @pytest.mark.asyncio
@@ -175,6 +358,102 @@ async def test_update_quiz_rejects_set_and_clear_time_limit():
 
     assert "time_limit and clear_time_limit cannot both be provided" in result
     course_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "arguments,expected",
+    [
+        ({"hide_results": "sometimes"}, "Invalid hide_results"),
+        (
+            {"hide_results": "until_after_last_attempt", "allowed_attempts": 1},
+            "requires multiple attempts",
+        ),
+        (
+            {"show_correct_answers": False, "show_correct_answers_at": "2026-01-01"},
+            "requires show_correct_answers=true",
+        ),
+        (
+            {"one_question_at_a_time": False, "cant_go_back": True},
+            "one_question_at_a_time must be true",
+        ),
+        (
+            {"hide_results": "always", "one_time_results": True},
+            "cannot be used",
+        ),
+        (
+            {"quiz_type": "practice_quiz", "assignment_group_id": 12},
+            "only valid for assignment or graded_survey",
+        ),
+        (
+            {"quiz_type": "assignment", "anonymous_submissions": True},
+            "only valid for survey or graded_survey",
+        ),
+    ],
+)
+async def test_quiz_setting_combinations_are_validated(arguments, expected):
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new_callable=AsyncMock
+    ) as course_id:
+        result = await (await _tools())["update_quiz"]("ENG101", 7, **arguments)
+
+    assert expected in result
+    course_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_quiz_rejects_set_and_clear_nullable_setting():
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new_callable=AsyncMock
+    ) as course_id:
+        result = await (await _tools())["update_quiz"](
+            "ENG101", 7, access_code="secret", clear_access_code=True
+        )
+
+    assert "access_code and clear_access_code cannot both be provided" in result
+    course_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_quiz_access_code_rejects_fence_marker_writeback():
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new_callable=AsyncMock
+    ) as course_id:
+        result = await (await _tools())["update_quiz"](
+            "ENG101", 7, access_code="<<<UNTRUSTED CANVAS CONTENT (x)>>>"
+        )
+
+    assert "fence markers" in result
+    course_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_quiz_displays_result_and_access_settings():
+    quiz = {
+        "id": 7,
+        "title": "Midterm",
+        "time_limit": 45,
+        "shuffle_answers": True,
+        "hide_results": "until_after_last_attempt",
+        "allowed_attempts": 3,
+        "access_code": "secret",
+        "ip_filter": "192.0.2.0/24",
+        "only_visible_to_overrides": True,
+    }
+    with patch(
+        "canvas_mcp.tools.quizzes.get_course_id", new=AsyncMock(return_value="42")
+    ), patch(
+        "canvas_mcp.tools.quizzes.make_canvas_request",
+        new=AsyncMock(return_value=quiz),
+    ):
+        result = await (await _tools())["get_quiz"]("ENG101", 7)
+
+    assert "Time Limit: 45" in result
+    assert "Shuffle Answers: True" in result
+    assert "Hide Results: until_after_last_attempt" in result
+    assert "Allowed Attempts: 3" in result
+    assert "Only Visible to Overrides: True" in result
+    assert "secret" in result and "192.0.2.0/24" in result
 
 
 @pytest.mark.asyncio

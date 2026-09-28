@@ -369,9 +369,13 @@ assignment-group ID.
 - `list_quizzes` and `get_quiz`: read quiz definitions, assignment-group IDs,
   and backing assignment IDs without attempts, submissions, responses, or
   statistics
-- `create_quiz` and `update_quiz`: author Classic Quiz settings; the update
-  tool's `clear_time_limit`, `clear_due_at`, `clear_unlock_at`, and
-  `clear_lock_at` flags remove existing limits and dates
+- `create_quiz` and `update_quiz`: author every public Classic Quiz setting,
+  including time limits, answer shuffling, attempts and scoring, one-question
+  navigation, access-code and IP restrictions, differentiated visibility,
+  result visibility, correct-answer release windows, and anonymous surveys.
+  `update_quiz` also
+  exposes Canvas's update-notification action. Explicit `clear_*` flags remove
+  the time limit, result policy, access restrictions, and scheduled dates
 - `delete_quiz`: refuse when student work exists unless
   `allow_deleting_student_work=true`, then preview and confirm deletion
 - `list_quiz_questions`, `create_quiz_question`, and
