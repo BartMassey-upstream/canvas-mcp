@@ -800,6 +800,20 @@
           "type": "boolean",
           "required": false,
           "description": "Students must post before seeing others"
+        },
+        {
+          "name": "clear_delayed_post_at",
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Remove the scheduled posting time"
+        },
+        {
+          "name": "clear_lock_at",
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Remove the automatic lock time"
         }
       ],
       "returns": "Confirmation with updated fields and topic type",
@@ -2755,6 +2769,27 @@
           "type": "string",
           "required": false,
           "description": "Comma-separated file extensions (e.g., \"pdf,docx,txt\")"
+        },
+        {
+          "name": "clear_due_at",
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Remove the existing due date"
+        },
+        {
+          "name": "clear_unlock_at",
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Remove the existing availability date"
+        },
+        {
+          "name": "clear_lock_at",
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Remove the existing lock date"
         }
       ],
       "returns": "Updated assignment details confirming the changes",

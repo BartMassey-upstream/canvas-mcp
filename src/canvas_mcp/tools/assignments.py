@@ -794,7 +794,10 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         assignment_group_id: str | int | None = None,
         peer_reviews: bool | None = None,
         automatic_peer_reviews: bool | None = None,
-        allowed_extensions: str | None = None
+        allowed_extensions: str | None = None,
+        clear_due_at: bool = False,
+        clear_unlock_at: bool = False,
+        clear_lock_at: bool = False,
     ) -> str:
         """Update an existing assignment in a course.
 
@@ -814,12 +817,27 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             peer_reviews: Enable peer reviews
             automatic_peer_reviews: Auto-assign peer reviews
             allowed_extensions: Comma-separated file extensions (e.g., "pdf,docx,txt")
+            clear_due_at: Remove the existing due date
+            clear_unlock_at: Remove the existing availability date
+            clear_lock_at: Remove the existing lock date
         """
         # Backstop for issue 239: never publish our provenance markers.
         if (name is not None and contains_fence_markers(name)) or (
             description is not None and contains_fence_markers(description)
         ):
             return FENCE_LEAK_ERROR
+
+        date_updates = (
+            ("due_at", due_at, clear_due_at),
+            ("unlock_at", unlock_at, clear_unlock_at),
+            ("lock_at", lock_at, clear_lock_at),
+        )
+        for field_name, value, clear in date_updates:
+            if value is not None and clear:
+                return (
+                    f"Invalid configuration: {field_name} and clear_{field_name} "
+                    "cannot both be provided."
+                )
 
         course_id = await get_course_id(course_identifier)
 
@@ -845,19 +863,25 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             assignment_data["submission_types"] = submission_types_list
 
         # Validate and parse date fields
-        if due_at is not None:
+        if clear_due_at:
+            assignment_data["due_at"] = None
+        elif due_at is not None:
             parsed_due = parse_date(due_at)
             if not parsed_due:
                 return f"Invalid date format for due_at: '{due_at}'. Use ISO 8601 format (e.g., '2026-01-26T23:59:00Z')."
             assignment_data["due_at"] = parsed_due.isoformat()
 
-        if unlock_at is not None:
+        if clear_unlock_at:
+            assignment_data["unlock_at"] = None
+        elif unlock_at is not None:
             parsed_unlock = parse_date(unlock_at)
             if not parsed_unlock:
                 return f"Invalid date format for unlock_at: '{unlock_at}'. Use ISO 8601 format (e.g., '2026-01-26T00:00:00Z')."
             assignment_data["unlock_at"] = parsed_unlock.isoformat()
 
-        if lock_at is not None:
+        if clear_lock_at:
+            assignment_data["lock_at"] = None
+        elif lock_at is not None:
             parsed_lock = parse_date(lock_at)
             if not parsed_lock:
                 return f"Invalid date format for lock_at: '{lock_at}'. Use ISO 8601 format (e.g., '2026-02-01T23:59:00Z')."

@@ -161,6 +161,51 @@ class TestUpdateDiscussionTopic:
         mock_canvas_api['make_canvas_request'].assert_not_called()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("clear_argument", "field_name"),
+        [
+            ("clear_delayed_post_at", "delayed_post_at"),
+            ("clear_lock_at", "lock_at"),
+        ],
+    )
+    async def test_update_discussion_topic_clears_date(
+        self, mock_canvas_api, clear_argument, field_name
+    ):
+        """Explicit clear flags send the blank value Canvas expects."""
+        mock_canvas_api['make_canvas_request'].return_value = {
+            "id": 42,
+            "title": "Week 1 Discussion",
+            "published": True,
+            "is_announcement": False,
+        }
+
+        update_discussion_topic = get_tool_function('update_discussion_topic')
+        result = await update_discussion_topic(
+            "badm_350_120251", 42, **{clear_argument: True}
+        )
+
+        data = mock_canvas_api['make_canvas_request'].call_args[1]['data']
+        assert data == {field_name: ""}
+        assert f"Updated fields: {field_name}" in result
+
+    @pytest.mark.asyncio
+    async def test_update_discussion_topic_rejects_set_and_clear_date(
+        self, mock_canvas_api
+    ):
+        """A schedule cannot be set and cleared in the same request."""
+        update_discussion_topic = get_tool_function('update_discussion_topic')
+        result = await update_discussion_topic(
+            "badm_350_120251",
+            42,
+            lock_at="2026-02-01T23:59:00Z",
+            clear_lock_at=True,
+        )
+
+        assert "lock_at and clear_lock_at cannot both be provided" in result
+        mock_canvas_api['get_course_id'].assert_not_called()
+        mock_canvas_api['make_canvas_request'].assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_update_discussion_topic_announcement(self, mock_canvas_api):
         """Test that announcement topics are labeled correctly in output."""
         mock_canvas_api['make_canvas_request'].return_value = {

@@ -997,6 +997,8 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         delayed_post_at: str | None = None,
         lock_at: str | None = None,
         require_initial_post: bool | None = None,
+        clear_delayed_post_at: bool = False,
+        clear_lock_at: bool = False,
     ) -> str:
         """Update an existing discussion topic or announcement.
 
@@ -1011,14 +1013,27 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             delayed_post_at: ISO 8601 datetime to schedule posting
             lock_at: ISO 8601 datetime to auto-lock the discussion
             require_initial_post: Students must post before seeing others
+            clear_delayed_post_at: Remove the scheduled posting time
+            clear_lock_at: Remove the automatic lock time
         """
-        course_id = await get_course_id(course_identifier)
-
         # Backstop for issue 239: never publish our provenance fence markers.
         if (message is not None and contains_fence_markers(message)) or (
             title is not None and contains_fence_markers(title)
         ):
             return FENCE_LEAK_ERROR
+
+        date_updates = (
+            ("delayed_post_at", delayed_post_at, clear_delayed_post_at),
+            ("lock_at", lock_at, clear_lock_at),
+        )
+        for field_name, value, clear in date_updates:
+            if value is not None and clear:
+                return (
+                    f"Invalid configuration: {field_name} and clear_{field_name} "
+                    "cannot both be provided."
+                )
+
+        course_id = await get_course_id(course_identifier)
 
         data: dict[str, str | bool] = {}
 
@@ -1040,7 +1055,9 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         if require_initial_post is not None:
             data["require_initial_post"] = require_initial_post
 
-        if delayed_post_at is not None:
+        if clear_delayed_post_at:
+            data["delayed_post_at"] = ""
+        elif delayed_post_at is not None:
             parsed_delayed = parse_date(delayed_post_at)
             if not parsed_delayed:
                 return (
@@ -1049,7 +1066,9 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
                 )
             data["delayed_post_at"] = parsed_delayed.isoformat()
 
-        if lock_at is not None:
+        if clear_lock_at:
+            data["lock_at"] = ""
+        elif lock_at is not None:
             parsed_lock = parse_date(lock_at)
             if not parsed_lock:
                 return (

@@ -376,6 +376,54 @@ class TestUpdateAssignment:
         mock_canvas_api['make_canvas_request'].assert_not_called()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("clear_argument", "field_name"),
+        [
+            ("clear_due_at", "due_at"),
+            ("clear_unlock_at", "unlock_at"),
+            ("clear_lock_at", "lock_at"),
+        ],
+    )
+    async def test_update_assignment_clears_date(
+        self, mock_canvas_api, clear_argument, field_name
+    ):
+        """Explicit clear flags send JSON null for assignment dates."""
+        mock_canvas_api['make_canvas_request'].return_value = {
+            "id": 12345,
+            "name": "Undated Assignment",
+            "published": False,
+            "submission_types": ["none"],
+        }
+
+        update_assignment = get_tool_function('update_assignment')
+        result = await update_assignment(
+            "badm_350_120251", 12345, **{clear_argument: True}
+        )
+
+        assignment_data = mock_canvas_api['make_canvas_request'].call_args[1][
+            'data'
+        ]['assignment']
+        assert assignment_data == {field_name: None}
+        assert f"Updated fields: {field_name}" in result
+
+    @pytest.mark.asyncio
+    async def test_update_assignment_rejects_set_and_clear_date(
+        self, mock_canvas_api
+    ):
+        """A date cannot be set and cleared in the same request."""
+        update_assignment = get_tool_function('update_assignment')
+        result = await update_assignment(
+            "badm_350_120251",
+            12345,
+            due_at="2026-02-15T23:59:00Z",
+            clear_due_at=True,
+        )
+
+        assert "due_at and clear_due_at cannot both be provided" in result
+        mock_canvas_api['get_course_id'].assert_not_called()
+        mock_canvas_api['make_canvas_request'].assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_update_assignment_error_handling(self, mock_canvas_api):
         """Test error handling when API fails."""
         mock_canvas_api['make_canvas_request'].return_value = {"error": "Assignment not found"}
