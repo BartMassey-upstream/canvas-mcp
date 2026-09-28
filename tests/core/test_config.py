@@ -1,11 +1,131 @@
 """Tests for configuration management (singleton lifecycle, env parsing)."""
 
+import os
+import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 import canvas_mcp.core.config as config_module
 from canvas_mcp.core.config import _normalize_canvas_url
+
+
+def test_canvas_env_file_uses_visible_user_config_path(monkeypatch, tmp_path):
+    monkeypatch.setattr(config_module.sys, "platform", "linux")
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setattr(config_module.Path, "home", lambda: tmp_path)
+
+    assert config_module._canvas_env_file_path() == tmp_path / ".config/canvas-mcp/env"
+
+
+def test_canvas_env_file_honors_xdg_config_home(monkeypatch, tmp_path):
+    monkeypatch.setattr(config_module.sys, "platform", "linux")
+    config_home = tmp_path / "xdg"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+
+    assert config_module._canvas_env_file_path() == config_home / "canvas-mcp/env"
+
+
+def test_canvas_paths_use_macos_application_support(monkeypatch, tmp_path):
+    monkeypatch.setattr(config_module.sys, "platform", "darwin")
+    monkeypatch.setattr(config_module.Path, "home", lambda: tmp_path)
+
+    expected = tmp_path / "Library/Application Support/canvas-mcp"
+    assert config_module._canvas_config_dir() == expected
+    assert config_module._canvas_env_file_path() == expected / "env"
+
+
+def test_canvas_paths_use_windows_roaming_appdata(monkeypatch, tmp_path):
+    monkeypatch.setattr(config_module.sys, "platform", "win32")
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+
+    expected = tmp_path / "Roaming/canvas-mcp"
+    assert config_module._canvas_config_dir() == expected
+    assert config_module._canvas_env_file_path() == expected / "env"
+
+
+def test_windows_config_path_falls_back_when_appdata_is_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(config_module.sys, "platform", "win32")
+    monkeypatch.delenv("APPDATA", raising=False)
+    monkeypatch.setattr(config_module.Path, "home", lambda: tmp_path)
+
+    expected = tmp_path / "AppData/Roaming/canvas-mcp"
+    assert config_module._canvas_env_file_path() == expected / "env"
+
+
+def test_user_config_loads_before_legacy_dotenv(monkeypatch, tmp_path):
+    user_env = tmp_path / "canvas-mcp/env"
+    calls = []
+    monkeypatch.setattr(config_module, "_canvas_env_file_path", lambda: user_env)
+    monkeypatch.setattr(
+        config_module,
+        "load_dotenv",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    config_module._load_environment_files()
+
+    assert calls == [
+        ((), {"dotenv_path": user_env, "override": False}),
+        ((), {"override": False}),
+    ]
+
+
+def test_fresh_process_loads_user_config_with_process_env_precedence(tmp_path):
+    home = tmp_path / "home"
+    if sys.platform == "win32":
+        config_base = tmp_path / "roaming"
+        config_dir = config_base / "canvas-mcp"
+    elif sys.platform == "darwin":
+        config_base = None
+        config_dir = home / "Library/Application Support/canvas-mcp"
+    else:
+        config_base = None
+        config_dir = home / ".config/canvas-mcp"
+    config_dir.mkdir(parents=True)
+    (config_dir / "env").write_text(
+        "MCP_SERVER_NAME=from-user-config\n", encoding="utf-8"
+    )
+
+    repo_root = Path(__file__).resolve().parents[2]
+    child_env = os.environ.copy()
+    child_env["HOME"] = str(home)
+    child_env.pop("XDG_CONFIG_HOME", None)
+    if config_base is not None:
+        child_env["APPDATA"] = str(config_base)
+    child_env.pop("MCP_SERVER_NAME", None)
+    child_env["PYTHONPATH"] = os.pathsep.join(
+        [str(repo_root / "src"), *(path for path in sys.path if path)]
+    )
+    command = [
+        sys.executable,
+        "-c",
+        "from canvas_mcp.core.config import get_config; "
+        "print(get_config().mcp_server_name)",
+    ]
+
+    configured = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=child_env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert configured.stdout.strip() == "from-user-config"
+
+    child_env["MCP_SERVER_NAME"] = "from-process-env"
+    overridden = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=child_env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert overridden.stdout.strip() == "from-process-env"
 
 
 def test_get_config_returns_cached_singleton():

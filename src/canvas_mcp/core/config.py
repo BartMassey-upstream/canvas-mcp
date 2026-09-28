@@ -1,15 +1,50 @@
 """Configuration management for Canvas MCP server."""
 
+import importlib
 import os
 import re
+import stat
+import sys
+from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 from dotenv import load_dotenv
 
 from .logging import log_error, log_info, log_warning
 
-# Load environment variables from .env file
-load_dotenv()
+
+def _canvas_config_dir() -> Path:
+    """Return the platform-native per-user Canvas MCP configuration directory."""
+    if sys.platform == "win32":
+        appdata = os.getenv("APPDATA", "").strip()
+        base = Path(appdata).expanduser() if appdata else Path.home() / "AppData/Roaming"
+        return base / "canvas-mcp"
+    if sys.platform == "darwin":
+        return Path.home() / "Library/Application Support/canvas-mcp"
+
+    config_home = os.getenv("XDG_CONFIG_HOME", "").strip()
+    base = Path(config_home).expanduser() if config_home else Path.home() / ".config"
+    return base / "canvas-mcp"
+
+
+def _canvas_env_file_path() -> Path:
+    """Return the explicit per-user dotenv-style configuration path."""
+    return _canvas_config_dir() / "env"
+
+
+def _load_environment_files() -> None:
+    """Load user configuration, then fill gaps from a legacy ``.env`` file.
+
+    ``override=False`` preserves variables already supplied by the process.
+    Loading the explicit user file first gives it precedence over the old
+    implicit python-dotenv search while retaining compatibility for source
+    checkouts that still keep a project-local ``.env``.
+    """
+    load_dotenv(dotenv_path=_canvas_env_file_path(), override=False)
+    load_dotenv(override=False)
+
+
+_load_environment_files()
 
 _INVALID_INT_ENV_VARS: dict[str, str] = {}
 _INVALID_FLOAT_ENV_VARS: dict[str, str] = {}
@@ -26,6 +61,194 @@ STUDENT_WRITE_TOOL_NAMES = frozenset({
     "comment_on_my_submission",
     "mark_module_item_done",
 })
+
+
+class CanvasTokenFileError(RuntimeError):
+    """Raised when the per-user Canvas token file is present but unsafe."""
+
+
+def _canvas_token_file_path() -> Path:
+    """Return the conventional per-user Canvas token file path."""
+    return _canvas_config_dir() / "token"
+
+
+def _legacy_canvas_token_file_path() -> Path:
+    """Return the original token path retained as a migration fallback."""
+    return Path.home() / ".canvas-mcp"
+
+
+def _open_canvas_token_file() -> tuple[int, Path] | None:
+    """Open the native token file, falling back to the original home path."""
+    paths = [_canvas_token_file_path()]
+    legacy_path = _legacy_canvas_token_file_path()
+    if legacy_path not in paths:
+        paths.append(legacy_path)
+
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    for token_path in paths:
+        if os.name == "nt":
+            try:
+                link_stat = os.lstat(token_path)
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise CanvasTokenFileError(
+                    f"Cannot inspect Canvas token file {token_path}: {exc.strerror}"
+                ) from exc
+            reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+            file_attributes = getattr(link_stat, "st_file_attributes", 0)
+            if stat.S_ISLNK(link_stat.st_mode) or file_attributes & reparse_flag:
+                raise CanvasTokenFileError(
+                    f"Canvas token file {token_path} must not be a link or reparse point"
+                )
+        try:
+            return os.open(token_path, flags), token_path
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise CanvasTokenFileError(
+                f"Cannot safely open Canvas token file {token_path}: {exc.strerror}"
+            ) from exc
+    return None
+
+
+def _validate_windows_token_acl(fd: int, token_path: Path) -> None:
+    """Require a Windows DACL equivalent to a private Unix token file."""
+    try:
+        msvcrt = importlib.import_module("msvcrt")
+        ntsecuritycon = importlib.import_module("ntsecuritycon")
+        win32api = importlib.import_module("win32api")
+        win32con = importlib.import_module("win32con")
+        win32security = importlib.import_module("win32security")
+    except ImportError as exc:
+        raise CanvasTokenFileError(
+            "Cannot validate the Canvas token file ACL because pywin32 is unavailable"
+        ) from exc
+
+    security_info = (
+        win32security.OWNER_SECURITY_INFORMATION
+        | win32security.DACL_SECURITY_INFORMATION
+    )
+    handle = msvcrt.get_osfhandle(fd)
+    descriptor = win32security.GetKernelObjectSecurity(handle, security_info)
+    owner_sid = descriptor.GetSecurityDescriptorOwner()
+    dacl = descriptor.GetSecurityDescriptorDacl()
+    if dacl is None:
+        raise CanvasTokenFileError(
+            f"Canvas token file {token_path} has no Windows DACL"
+        )
+
+    process_token = win32security.OpenProcessToken(
+        win32api.GetCurrentProcess(), win32con.TOKEN_QUERY
+    )
+    try:
+        current_sid = win32security.GetTokenInformation(
+            process_token, win32security.TokenUser
+        )[0]
+    finally:
+        process_token.Close()
+
+    sid_text = win32security.ConvertSidToStringSid
+    current_sid_text = sid_text(current_sid)
+    if sid_text(owner_sid) != current_sid_text:
+        raise CanvasTokenFileError(
+            f"Canvas token file {token_path} must be owned by the current Windows user"
+        )
+
+    allowed_sids = {
+        current_sid_text,
+        sid_text(
+            win32security.CreateWellKnownSid(
+                win32security.WinLocalSystemSid, None
+            )
+        ),
+        sid_text(
+            win32security.CreateWellKnownSid(
+                win32security.WinBuiltinAdministratorsSid, None
+            )
+        ),
+    }
+    allowed_ace_types = {
+        getattr(win32security, name)
+        for name in (
+            "ACCESS_ALLOWED_ACE_TYPE",
+            "ACCESS_ALLOWED_OBJECT_ACE_TYPE",
+            "ACCESS_ALLOWED_CALLBACK_" "ACE_TYPE",
+            "ACCESS_ALLOWED_CALLBACK_" "OBJECT_ACE_TYPE",
+        )
+        if hasattr(win32security, name)
+    }
+    inherit_only = getattr(ntsecuritycon, "INHERIT_ONLY_ACE", 0)
+    for ace_index in range(dacl.GetAceCount()):
+        ace = dacl.GetAce(ace_index)
+        ace_type, ace_flags = ace[0]
+        if ace_type not in allowed_ace_types or ace_flags & inherit_only:
+            continue
+        access_mask = ace[1]
+        trustee_sid_text = sid_text(ace[-1])
+        if access_mask and trustee_sid_text not in allowed_sids:
+            raise CanvasTokenFileError(
+                f"Canvas token file {token_path} grants Windows access to "
+                f"an unauthorized principal ({trustee_sid_text})"
+            )
+
+
+def _read_canvas_api_token() -> str:
+    """Resolve the stdio Canvas token from the native per-user config directory.
+
+    The file contains the token itself (with an optional trailing newline), not
+    a dotenv assignment. On POSIX it must have mode 0600; on Windows its DACL
+    may grant access only to the current user, SYSTEM, and Administrators. An
+    unsafe or malformed file fails closed instead of falling back to
+    ``CANVAS_API_TOKEN`` and silently defeating the file's precedence.
+    """
+    opened = _open_canvas_token_file()
+    if opened is None:
+        return os.getenv("CANVAS_API_TOKEN", "")
+    fd, token_path = opened
+
+    try:
+        file_stat = os.fstat(fd)
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise CanvasTokenFileError(
+                f"Canvas token file {token_path} must be a regular file"
+            )
+
+        if os.name == "nt":
+            try:
+                _validate_windows_token_acl(fd, token_path)
+            except CanvasTokenFileError:
+                raise
+            except Exception as exc:
+                raise CanvasTokenFileError(
+                    f"Cannot validate the Windows ACL for Canvas token file {token_path}"
+                ) from exc
+        else:
+            mode = stat.S_IMODE(file_stat.st_mode)
+            if mode != 0o600:
+                raise CanvasTokenFileError(
+                    f"Canvas token file {token_path} must have permissions 0600 "
+                    f"(found {mode:04o})"
+                )
+
+        with os.fdopen(fd, encoding="utf-8") as token_file:
+            fd = -1
+            token = token_file.read().strip()
+    except UnicodeDecodeError as exc:
+        raise CanvasTokenFileError(
+            f"Canvas token file {token_path} must contain UTF-8 text"
+        ) from exc
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+    if not token:
+        raise CanvasTokenFileError(f"Canvas token file {token_path} is empty")
+    if any(character.isspace() for character in token):
+        raise CanvasTokenFileError(
+            f"Canvas token file {token_path} must contain only the token"
+        )
+    return token
 
 
 def _parse_keys(raw: str) -> frozenset[str]:
@@ -236,7 +459,7 @@ class Config:
 
     def __init__(self) -> None:
         # Required configuration
-        self.canvas_api_token = os.getenv("CANVAS_API_TOKEN", "")
+        self.canvas_api_token = _read_canvas_api_token()
         # Keep the configured (pre-normalization) value so validate_config()
         # can report the normalization delta from the same read that produced
         # canvas_api_url. Whitespace-trimmed, matching the normalizer's input.
@@ -434,8 +657,11 @@ def validate_config() -> bool:
     }
 
     if not config.canvas_api_token:
-        log_error("CANVAS_API_TOKEN environment variable is required")
-        log_error("Please set CANVAS_API_TOKEN in your .env file")
+        log_error("A Canvas API token is required")
+        log_error(
+            "Set CANVAS_API_TOKEN in the environment or put the raw token in "
+            f"{_canvas_token_file_path()} with private file permissions"
+        )
         return False
 
     if not config.canvas_api_url:

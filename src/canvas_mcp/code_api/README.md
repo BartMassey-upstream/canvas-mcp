@@ -37,7 +37,7 @@ code_api/
 The code execution API requires these environment variables:
 
 ```bash
-# These should be available from the MCP server's .env file
+# These should be available from the MCP server's user config or environment
 CANVAS_API_URL=https://canvas.instructure.com/api/v1
 CANVAS_API_TOKEN=your_canvas_api_token_here
 ```

@@ -6,11 +6,11 @@ configuration (CANVAS_API_URL), never supplied by the client. This module
 uses Python's contextvars to thread the per-request token through the async
 call stack without modifying any tool signatures.
 
-In stdio mode, the ContextVar remains unset (None), and the client falls
-back to the global .env-based configuration. To keep that fallback from
-leaking the server's own token in HTTP mode, an additional ``_http_request_active``
-marker distinguishes "HTTP request with no token" (must fail closed) from
-"stdio mode" (env fallback is intended).
+In stdio mode, the ContextVar remains unset (None), and the client falls back
+to the global local configuration (``~/.canvas-mcp`` or the environment). To
+keep that fallback from leaking the server's own token in HTTP mode, an
+additional ``_http_request_active`` marker distinguishes "HTTP request with no
+token" (must fail closed) from "stdio mode" (local fallback is intended).
 """
 
 from contextvars import ContextVar

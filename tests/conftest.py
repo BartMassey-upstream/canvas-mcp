@@ -8,7 +8,7 @@ from canvas_mcp.core.config import reset_config
 
 
 @pytest.fixture(autouse=True)
-def reset_config_between_tests(monkeypatch):
+def reset_config_between_tests(monkeypatch, tmp_path):
     """Discard the cached config singleton before and after each test.
 
     Without this, the first test to call get_config() freezes the singleton
@@ -21,6 +21,16 @@ def reset_config_between_tests(monkeypatch):
     override this through their own fixture.
     """
     monkeypatch.setenv("ACCESSIBILITY_CHECKERS", "ufixit")
+    # A developer's real ~/.canvas-mcp must not override the synthetic tokens
+    # used by the test suite. Individual token-file tests replace this path.
+    monkeypatch.setattr(
+        "canvas_mcp.core.config._canvas_token_file_path",
+        lambda: tmp_path / "canvas-mcp/token",
+    )
+    monkeypatch.setattr(
+        "canvas_mcp.core.config._legacy_canvas_token_file_path",
+        lambda: tmp_path / ".canvas-mcp",
+    )
     reset_config()
     yield
     reset_config()
