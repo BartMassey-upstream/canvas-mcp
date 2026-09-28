@@ -1,0 +1,4 @@
+interface:
+  display_name: "Canvas MCP Release Drill"
+  short_description: "Integrate and install Canvas MCP changes"
+  default_prompt: "Use $canvas-mcp-release-drill to commit, integrate, and locally install the completed feature without pushing."
