@@ -15,7 +15,7 @@ MCP server for Canvas LMS with **up to 122 tools** and **8 agent skills**. Desig
 **1. Install the MCP server** (everything else, including the skills, needs it running):
 
 - **Claude Desktop:** download `canvas-mcp.mcpb` from the [latest release](https://github.com/vishalsachdev/canvas-mcp/releases/latest) and double-click it. It prompts for your Canvas URL and token; no terminal needed. [Details](#install-as-a-claude-desktop-extension-easiest).
-- **Cursor, Zed, Windsurf, Continue, Claude Code and other clients:** install with `uv tool install canvas-mcp`, add `env` and `token` to the platform config directory below, and point your client at the `canvas-mcp-server` binary. [Local Installation](#local-installation) has the per-client config blocks.
+- **Cursor, Zed, Windsurf, Continue, Claude Code and other clients:** install with `uv tool install canvas-mcp` or `pipx install canvas-mcp`, add `env` and `token` to the platform config directory below, and point your client at the `canvas-mcp-server` binary. [Local Installation](#local-installation) has the per-client config blocks.
 
 **2. Verify:** `canvas-mcp-server --test` should report a successful Canvas connection. Then restart your client.
 
@@ -26,6 +26,45 @@ npx skills add vishalsachdev/canvas-mcp
 ```
 
 See [Agent Skills](#-agent-skills) for the list. If your agent is Claude Code, the same recipes are also available as slash commands.
+
+## Fork Development Status
+
+This fork's `main` branch is the local-use integration branch. It
+currently contains all of the work below. The topic branches remain
+available so the changes can be reviewed upstream in smaller units:
+
+| Branch | Scope | Relationship |
+|---|---|---|
+| `config` | Native per-platform `env` and token files | Standalone |
+| `pathsafe` | Safe Canvas API path construction | Standalone; prerequisite for `creator` |
+| `creator` | Student-data-free course-building role and tools | Stacked on `pathsafe` |
+| `nullnull` | Clearing nullable Canvas fields correctly | Standalone |
+| `fileops` | Course-file metadata updates and safe deletion | Currently based on the integrated `main` |
+
+These changes are not all part of the published `canvas-mcp` package
+yet. To test the integrated fork rather than the latest release:
+
+```bash
+git clone git@github.com:BartMassey-upstream/canvas-mcp.git
+cd canvas-mcp
+```
+
+Then install the checkout with uv:
+
+```bash
+uv tool install --force .
+```
+
+Or, with pipx:
+
+```bash
+pipx install --force .
+```
+
+For a separately reviewable `fileops` PR, rebase its single feature
+commit onto the upstream state that includes whichever prerequisite
+branches have landed. No branch in this table should be treated as a
+release tag.
 
 ## For AI Agents
 
@@ -120,9 +159,11 @@ Canvas MCP provides **up to 122 tools** for interacting with Canvas LMS; the def
 | Tool | Purpose | When to Use |
 |------|---------|-------------|
 | `search_canvas_tools` | Discover MCP tools and code API operations | Finding available tools and bulk ops |
-| `execute_typescript` | Run TypeScript locally | 30+ items, custom logic, local per-item processing |
+| `execute_typescript` (opt-in) | Run TypeScript locally | 30+ items, custom logic, local per-item processing |
 
-**Decision tree:** Simple query → MCP tools. Batch grading (10+) → `bulk_grade_submissions`. Complex bulk (30+) → `execute_typescript`.
+**Decision tree:** Simple query → MCP tools. Batch grading (10+) →
+`bulk_grade_submissions`. Complex bulk (30+) → `execute_typescript`
+when the operator has enabled it.
 
 </details>
 
@@ -317,6 +358,7 @@ The HTTP/streamable transport itself remains fully supported for **self-hosting 
 ## Prerequisites (Local Installation)
 
 - **Python 3.11+** - Required for modern features and type hints
+- **Application installer** - `uv` or `pipx` for an isolated installation
 - **Canvas API Access** - API token and institution URL
 - **MCP Client** - An MCP-compatible client (Claude Desktop, Cursor, Zed, Windsurf, Continue, etc.); setup and capabilities vary by client
 
@@ -338,15 +380,65 @@ The extension runs the server locally and calls Canvas with **your own** token, 
 
 ## Local Installation
 
-### 1. Install Dependencies
+### 1. Install the Server
+
+Install either [uv](https://docs.astral.sh/uv/getting-started/installation/)
+or [pipx](https://pipx.pypa.io/stable/installation/), then install
+Canvas MCP as an isolated user-level command.
+
+With uv:
 
 ```bash
-# (Recommended) Use a dedicated virtualenv so the MCP binary is in a stable location
-python3 -m venv .venv
-. .venv/bin/activate
+uv tool install canvas-mcp
+uv tool update-shell
+uv tool dir --bin
+```
 
-# Install the package editable
-pip install -e .
+With pipx:
+
+```bash
+pipx install canvas-mcp
+pipx ensurepath
+pipx environment --value PIPX_BIN_DIR
+```
+
+Restart your shell after `uv tool update-shell` or `pipx ensurepath` if
+you want to run the command by name. The last command in either block
+prints the directory containing `canvas-mcp-server`. Use that binary's
+absolute path in your MCP client configuration. Both installers keep
+the package isolated without requiring you to activate or manage a
+virtual environment.
+
+Upgrade later with the matching installer:
+
+```bash
+uv tool upgrade canvas-mcp
+```
+
+Or, with pipx:
+
+```bash
+pipx upgrade canvas-mcp
+```
+
+To run a source checkout instead of the published package, clone it and
+choose one installer:
+
+```bash
+git clone https://github.com/vishalsachdev/canvas-mcp.git
+cd canvas-mcp
+```
+
+Then install it with uv:
+
+```bash
+uv tool install --editable .
+```
+
+Or, after cloning and entering the checkout, with pipx:
+
+```bash
+pipx install --editable .
 ```
 
 ### 2. Configure Environment
@@ -364,18 +456,55 @@ Create two files there:
 - `env`: dotenv-format general settings, including `CANVAS_API_URL`
 - `token`: only the raw Canvas token, with no key name
 
+For example, `env` can begin with:
+
+```dotenv
+CANVAS_API_URL=https://your-institution.instructure.com/api/v1
+CANVAS_ROLE=all
+TIMEZONE=UTC
+```
+
+Replace `TIMEZONE` with your local IANA timezone, such as
+`America/Los_Angeles`, if you want displayed dates converted from UTC.
+Create the configuration directory first if it does not exist.
+
 On Linux or macOS, restrict both files to the current user:
 
 ```bash
 chmod 600 "<config-directory>/env" "<config-directory>/token"
 ```
 
-On Windows, files inherit the private ACL of the user's AppData directory.
-Canvas MCP verifies that the token is owned by the current user and grants
-access only to that user, SYSTEM, and Administrators.
+On Windows, protect both files with your user account's private ACL.
+Canvas MCP specifically verifies that the `token` file is owned by the
+current user and grants access only to that user, SYSTEM, and
+Administrators.
 
 Real process environment variables take precedence over `env`. A project-local
 `.env` remains a lowest-precedence compatibility fallback.
+
+Common optional settings in `env` are:
+
+```dotenv
+# Register only the tools needed for this use case.
+CANVAS_ROLE=creator
+
+# Off by default. Use a comma-separated allowlist of student writes.
+# STUDENT_WRITE_TOOLS=submit_assignment,comment_on_my_submission
+
+# Off by default. This powerful tool bypasses normal write safeguards.
+# EXECUTE_TYPESCRIPT_ENABLED=true
+
+# Use none when the Canvas instance has no UDOIT/UFIXIT integration.
+ACCESSIBILITY_CHECKERS=none
+```
+
+`CANVAS_ROLE` accepts `student`, `creator`, `educator`, or `all`.
+The `creator` profile excludes student records and code execution.
+Student write tools are absent unless individually allowlisted.
+`execute_typescript` is also absent unless explicitly enabled; enabling
+its sandbox does not itself register the tool. Setting
+`ACCESSIBILITY_CHECKERS=none` removes only the three UFIXIT pipeline
+tools and retains the built-in accessibility scanner.
 
 Get your Canvas API token from: **Canvas → Account → Settings → New Access Token**
 
@@ -423,13 +552,14 @@ Canvas MCP is designed for MCP-compatible clients. Below are configuration examp
 {
   "mcpServers": {
     "canvas-api": {
-      "command": "/absolute/path/to/canvas-mcp/.venv/bin/canvas-mcp-server"
+      "command": "/absolute/path/to/bin/canvas-mcp-server"
     }
   }
 }
 ```
 
-**Note**: Use the absolute path to your virtualenv binary to avoid issues with shell-specific PATH entries (e.g., pyenv shims).
+**Note**: Use the absolute binary directory printed by your selected
+installer to avoid issues with shell-specific PATH entries.
 
 </details>
 
@@ -440,7 +570,7 @@ Codex can launch the server as a local stdio MCP server. Add this entry to `~/.c
 
 ```toml
 [mcp_servers.canvas-api]
-command = "/absolute/path/to/canvas-mcp/.venv/bin/canvas-mcp-server"
+command = "/absolute/path/to/bin/canvas-mcp-server"
 ```
 
 The server reads its native per-user config directory, so its working directory
@@ -448,7 +578,7 @@ does not affect configuration discovery. Alternatively, register the command
 with the Codex CLI:
 
 ```bash
-codex mcp add canvas-api -- /absolute/path/to/canvas-mcp/.venv/bin/canvas-mcp-server
+codex mcp add canvas-api -- /absolute/path/to/bin/canvas-mcp-server
 ```
 
 Run `codex mcp list` to verify the registration, then restart Codex. In the Codex TUI, `/mcp` shows the active server and its tools.
@@ -467,7 +597,7 @@ Run `codex mcp list` to verify the registration, then restart Codex. In the Code
 {
   "mcpServers": {
     "canvas-api": {
-      "command": "/absolute/path/to/canvas-mcp/.venv/bin/canvas-mcp-server"
+      "command": "/absolute/path/to/bin/canvas-mcp-server"
     }
   }
 }
@@ -485,7 +615,7 @@ Run `codex mcp list` to verify the registration, then restart Codex. In the Code
   "context_servers": {
     "canvas-api": {
       "command": {
-        "path": "/absolute/path/to/canvas-mcp/.venv/bin/canvas-mcp-server",
+        "path": "/absolute/path/to/bin/canvas-mcp-server",
         "args": []
       }
     }
@@ -507,7 +637,7 @@ Run `codex mcp list` to verify the registration, then restart Codex. In the Code
 {
   "mcpServers": {
     "canvas-api": {
-      "command": "/absolute/path/to/canvas-mcp/.venv/bin/canvas-mcp-server"
+      "command": "/absolute/path/to/bin/canvas-mcp-server"
     }
   }
 }
@@ -524,7 +654,7 @@ Run `codex mcp list` to verify the registration, then restart Codex. In the Code
 {
   "mcpServers": {
     "canvas-api": {
-      "command": "/absolute/path/to/canvas-mcp/.venv/bin/canvas-mcp-server"
+      "command": "/absolute/path/to/bin/canvas-mcp-server"
     }
   }
 }
@@ -547,7 +677,9 @@ Consult your client's MCP documentation for specific configuration format and fi
 
 </details>
 
-> **Windows users**: Replace forward slashes with backslashes in paths (e.g., `C:\Users\YourName\canvas-mcp\.venv\Scripts\canvas-mcp-server.exe`)
+> **Windows users**: append `canvas-mcp-server.exe` to the binary
+> directory printed by your selected installer, and use that absolute
+> path.
 
 ## Verification
 
@@ -590,13 +722,18 @@ The Canvas MCP Server provides a set of tools for interacting with the Canvas LM
 
 **Developer Tools**
 9. **Discovery Tools** - Search registered MCP tools and code execution API operations with `search_canvas_tools`; list code execution modules with `list_code_api_modules`
-10. **Code Execution Tools** - Execute TypeScript code with `execute_typescript` so bulk item processing can stay out of the model's context
+10. **Code Execution Tools** - When explicitly enabled, execute TypeScript code with `execute_typescript` so bulk item processing can stay out of the model's context
 
 📖 [View Full Tool Documentation](tools/README.md) for detailed information about the available tools.
 
 ## Code Execution API
 
-For bulk operations (30+ items), Canvas MCP supports **TypeScript code execution**. Process bulk operations locally without loading every item into the model’s context.
+For bulk operations (30+ items), Canvas MCP optionally supports
+**TypeScript code execution**. It is absent by default; set
+`EXECUTE_TYPESCRIPT_ENABLED=true` and use the `educator` or `all`
+profile to register it. The `creator` profile always excludes it.
+Process bulk operations locally without loading every item into the
+model's context.
 
 | Approach | Best For | Context Behavior |
 |----------|----------|------------------|
@@ -631,7 +768,7 @@ await bulkGrade({
 
 | Mode | Config | What It Does |
 |------|--------|-------------|
-| Local sandbox (default) | None needed | Timeout 120s, memory 512MB, filtered environment, best-effort network controls |
+| Local sandbox (default after enabling the tool) | `EXECUTE_TYPESCRIPT_ENABLED=true` | Timeout 120s, memory 512MB, filtered environment, best-effort network controls |
 | Container sandbox | `TS_SANDBOX_MODE=container` | Container filesystem isolation via Docker/Podman; egress guarantees depend on deployment configuration |
 | No sandbox | `ENABLE_TS_SANDBOX=false` | Full local access (not recommended) |
 
