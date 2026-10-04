@@ -77,16 +77,24 @@ gh workflow run create-release.yml -f tag_name=v1.0.7-test
 ## Testing Workflows
 
 ### canvas-mcp-testing.yml
-**Purpose**: Runs the test suite.
+**Purpose**: Checks code quality, behavior and distributions.
 
 **Triggers**:
-- Pull requests
-- Push to main branch
-- Manual workflow dispatch
+- Pull requests targeting main
+- Pushes to main or development
 
 **What it does**:
-- Runs pytest with coverage reporting
-- Tests all Canvas MCP tools and functionality
+- Runs Ruff and mypy from the frozen `uv.lock` development group.
+- Tests Python 3.11–3.13 and focused macOS/Windows configuration.
+- Checks TypeScript and confirmation proofs.
+- Audits sdist/wheel contents and tests an isolated installed wheel.
+- Requires lint and all test jobs in `test-enhancements`.
+
+Use `uv run --frozen ruff check src/ tests/` and
+`uv run --frozen mypy src/` locally. Upgrade quality tools through
+`uv.lock` and validate that change before merging. Mocked Canvas
+tests provide their own configuration; a developer's Canvas URL
+or token must not be required for a passing run.
 
 ### security-testing.yml
 **Purpose**: Security scanning and vulnerability detection.

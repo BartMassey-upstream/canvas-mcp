@@ -253,7 +253,7 @@ def _fence_migration_issues(issues: list[Any]) -> list[Any]:
 
 
 def _migration_history_snapshot(migration: dict[str, Any]) -> dict[str, Any]:
-    result = {
+    result: dict[str, Any] = {
         field: migration[field]
         for field in ("id", "migration_type", "workflow_state", "created_at", "started_at",
                       "finished_at", "migration_issues_count")

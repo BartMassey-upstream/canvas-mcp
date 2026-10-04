@@ -1469,6 +1469,40 @@ Remaining boundaries:
   releases, upstream extraction and publication remain separate.
 
 
+### Post-merge CI repair (2026-10-04)
+
+The pushed `22a88e0` failed the Python matrix and mypy in
+[the fork CI run](https://github.com/BartMassey-upstream/canvas-mcp/actions/runs/37235278665).
+Five map-export tests relied on the local runner's Canvas URL;
+CI had none. CI also resolved mypy 2.4.0 while local validation
+used locked 1.20.2, hiding eleven type errors in four files.
+Both failures were reproduced locally before fixing them.
+
+- Mocked admin tests now provide their own synthetic Canvas URL
+  and check the precise saved origin. Missing/invalid origin
+  regressions retain the production rejection before roster reads.
+- Explicit dictionary annotations and DNS address narrowing fix
+  the mypy 2.4 errors without weakening checks or adding ignores.
+- `uv.lock` now includes mypy 2.4.0. CI quality checks install and
+  run the frozen development group, matching local commands.
+- The required `test-enhancements` result now includes lint.
+  A workflow regression checks locked tooling and this dependency.
+- Validation runs with Canvas URL/token absent and the MCP
+  compatibility bridge disabled. The installed-wheel smoke uses
+  only synthetic Canvas responses and records zero writes.
+
+Validation: Python 3.11.16, 3.12.14 and 3.13.5 each passed
+**2,950 tests with 22 skips**. Ruff and mypy 2.4.0 passed;
+Python 3.11 clean-wheel stdio passed all four profiles, and the
+sdist/wheel distribution audit passed. GitHub has not run this
+patch yet.
+
+Bart authorized committing this repair and merging it into local
+`main`. Bart will push; no agent push or Canvas writes are
+included. The two unintended Python launcher symlinks were
+removed with Bart's approval.
+
+
 ## Handoff checklist
 
 - Keep the tracked `PLAN.md` current as decisions and evidence

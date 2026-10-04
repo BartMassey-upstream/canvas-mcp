@@ -27,7 +27,7 @@ _GUARD = ConfirmationGuard(nothing_done="Nothing was changed.")
 
 
 def _view(raw: dict[str, Any]) -> dict[str, Any]:
-    result = {
+    result: dict[str, Any] = {
         key: raw[key]
         for key in (
             "id",

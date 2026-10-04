@@ -118,3 +118,21 @@ def test_python_symlink_keeps_selected_environment(tmp_path):
         },
         python,
     )
+
+
+def test_ci_quality_tools_use_lockfile_and_gate_required_result():
+    yaml = pytest.importorskip("yaml")
+    workflow = yaml.safe_load(
+        (Path(__file__).resolve().parents[2] / ".github/workflows/canvas-mcp-testing.yml").read_text()
+    )
+    jobs = workflow["jobs"]
+    commands = [step.get("run", "") for step in jobs["lint"]["steps"]]
+    assert any("uv sync --frozen --group dev" in command for command in commands)
+    for tool in ("ruff", "mypy"):
+        assert any(command.startswith(f"uv run --frozen {tool} ") for command in commands)
+        assert not any(f"pip install {tool}" in command for command in commands)
+    assert "lint" in jobs["test-enhancements"]["needs"]
+    assert any(
+        '"${{ needs.lint.result }}" != "success"' in step.get("run", "")
+        for step in jobs["test-enhancements"]["steps"]
+    )

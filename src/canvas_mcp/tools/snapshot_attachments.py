@@ -64,7 +64,12 @@ async def _public_ip(host: str, port: int) -> str:
         asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM),
         timeout=float(get_config().api_timeout),
     )
-    ips = {item[4][0] for item in addresses}
+    ips: set[str] = set()
+    for item in addresses:
+        address = item[4][0]
+        if not isinstance(address, str):
+            raise DownloadRejected("unsafe_download_address")
+        ips.add(address)
     if not ips or any(not ipaddress.ip_address(value).is_global for value in ips):
         raise DownloadRejected("unsafe_download_address")
     return sorted(ips)[0]
