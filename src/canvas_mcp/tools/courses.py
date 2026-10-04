@@ -808,17 +808,21 @@ def register_shared_content_tools(mcp: FastMCP) -> None:
     @validate_params
     async def list_module_items(course_identifier: str | int,
                                module_id: str | int,
-                               include_content_details: bool = True) -> str:
+                               include_content_details: bool = True,
+                               search_term: str | None = None) -> str:
         """List items within a specific module, including pages.
 
         Args:
             course_identifier: Course code or Canvas ID
             module_id: The module ID
             include_content_details: Include additional content details (default: True)
+            search_term: Match part of the module item title.
         """
         course_id = await get_course_id(course_identifier)
 
         params: dict[str, Any] = {"per_page": 100}
+        if search_term is not None:
+            params["search_term"] = search_term
         if include_content_details:
             params["include[]"] = ["content_details"]
 
@@ -880,6 +884,36 @@ def register_educator_course_tools(mcp: FastMCP) -> None:
     write surface for no gain.
     """
 
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=True))
+    @validate_params
+    async def update_course_home_page(
+        course_identifier: str | int,
+        default_view: str,
+    ) -> dict[str, Any]:
+        """Choose the course home: feed, wiki, modules, assignments, or syllabus.
+
+        Wiki uses the existing front page selected with update_page_settings.
+        The change is verified by reading the course back.
+        """
+        if default_view not in {"feed", "wiki", "modules", "assignments", "syllabus"}:
+            return {"error": "default_view must be feed, wiki, modules, assignments, or syllabus."}
+        course_id = await get_course_id(course_identifier)
+        if default_view == "wiki":
+            front_page = await make_canvas_request(
+                "get", canvas_path("courses", course_id, "front_page")
+            )
+            if not isinstance(front_page, dict) or "error" in front_page:
+                return {"error": "Select an existing course front page with update_page_settings first."}
+        response = await make_canvas_request(
+            "put", canvas_path("courses", course_id), data={"course": {"default_view": default_view}}
+        )
+        if not isinstance(response, dict) or "error" in response:
+            return {"error": "Canvas did not accept the home-page update."}
+        verified = await make_canvas_request("get", canvas_path("courses", course_id))
+        if not isinstance(verified, dict) or "error" in verified or verified.get("default_view") != default_view:
+            return {"warning": "The home-page update could not be verified.", "requested_default_view": default_view}
+        return {"course_id": str(course_id), "default_view": default_view, "verified": True}
+
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params
     async def get_course_settings(
@@ -920,6 +954,7 @@ def register_educator_course_tools(mcp: FastMCP) -> None:
             "course_id": str(course_id),
             "course_code": course.get("course_code"),
             "workflow_state": course.get("workflow_state"),
+            "default_view": course.get("default_view"),
             "course_dates": {
                 "start_at": course.get("start_at"),
                 "start_at_display": format_date(course.get("start_at")),

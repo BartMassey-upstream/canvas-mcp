@@ -57,6 +57,21 @@ def _deferred(rationale: str) -> ReadToolContentPolicy:
 # still exercise the returned values; this registry prevents coverage from
 # silently shrinking when a tool is added or its fencing path is removed.
 READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
+    "list_outcome_groups": _fenced("_snapshot"),
+    "get_outcome_group": _fenced("_snapshot"),
+    "list_course_outcomes": _fenced("_snapshot"),
+    "get_course_outcome": _fenced("_snapshot"),
+    "get_assignment_group": _fenced("_format_group"),
+    "get_module": _fenced("_module_content_snapshot"),
+    "get_module_item": _fenced("_module_content_snapshot"),
+    "list_content_migrations": _fenced("_migration_history_snapshot"),
+    "list_content_migrators": _fenced("fence_untrusted"),
+    "list_content_migration_issues": _fenced("_fence_migration_issues"),
+    "get_content_migration_issue": _fenced("_fence_migration_issues"),
+    "list_quiz_question_groups": _fenced("_format_groups_response"),
+    "get_quiz_question_group": _fenced("_format_group"),
+    "list_page_revisions": _fenced("_format_page_revision"),
+    "get_page_revision": _fenced("_format_page_revision"),
     "analyze_peer_review_quality": _fenced("fence_untrusted_fields"),
     "check_enrollment": _safe(
         "Returns only yes, no, or indeterminate enrollment state; no Canvas-authored text."

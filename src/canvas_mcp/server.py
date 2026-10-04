@@ -48,6 +48,7 @@ from .tools import (
     register_assignment_group_tools,
     register_code_execution_tools,
     register_content_export_tools,
+    register_content_import_tools,
     register_content_migration_tools,
     register_course_tools,
     register_discovery_tools,
@@ -61,6 +62,7 @@ from .tools import (
     register_enrollment_tools,
     register_navigation_tools,
     register_new_quiz_tools,
+    register_outcome_tools,
     register_page_tools,
     register_peer_review_comment_tools,
     register_peer_review_tools,
@@ -503,12 +505,14 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
         register_educator_assignment_tools(mcp)
         register_educator_course_tools(mcp)
         register_content_export_tools(mcp)
+        register_content_import_tools(mcp)
         register_content_migration_tools(mcp)
         register_educator_discussion_tools(mcp)
         register_educator_module_tools(mcp)
         register_educator_file_tools(mcp)
         register_navigation_tools(mcp)
         register_new_quiz_tools(mcp)
+        register_outcome_tools(mcp)
         register_page_tools(mcp)
         register_educator_page_crud_tools(mcp)
         register_quiz_tools(mcp)

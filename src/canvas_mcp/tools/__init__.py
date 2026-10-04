@@ -9,6 +9,7 @@ from .assignments import (
 )
 from .code_execution import register_code_execution_tools
 from .content_exports import register_content_export_tools
+from .content_imports import register_content_import_tools
 from .content_migrations import register_content_migration_tools
 from .courses import (
     register_course_tools,
@@ -29,6 +30,7 @@ from .messaging import (
 from .modules import register_educator_module_tools, register_shared_module_tools
 from .navigation import register_navigation_tools
 from .new_quizzes import register_new_quiz_tools
+from .outcomes import register_outcome_tools
 from .pages import register_educator_page_crud_tools, register_page_tools
 from .peer_review_comments import register_peer_review_comment_tools
 from .peer_reviews import register_peer_review_tools
@@ -44,6 +46,7 @@ __all__ = [
     'register_assignment_group_tools',
     'register_code_execution_tools',
     'register_content_export_tools',
+    'register_content_import_tools',
     'register_content_migration_tools',
     'register_course_tools',
     'register_discovery_tools',
@@ -57,6 +60,7 @@ __all__ = [
     'register_educator_page_crud_tools',
     'register_navigation_tools',
     'register_new_quiz_tools',
+    'register_outcome_tools',
     'register_page_tools',
     'register_peer_review_comment_tools',
     'register_peer_review_tools',

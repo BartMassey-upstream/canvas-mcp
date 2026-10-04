@@ -920,7 +920,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
             response = await make_canvas_request(
                 "get",
                 canvas_path('courses', course_id, 'rubrics', rubric_id_str),
-                params={"include[]": ["assessments", "associations"]}
+                params={"include[]": ["associations"]}
             )
 
             if "error" in response:
@@ -1840,7 +1840,10 @@ def register_rubric_tools(mcp: FastMCP) -> None:
                                              rubric_id: str | int,
                                              assignment_id: str | int,
                                              use_for_grading: bool = False,
-                                             purpose: str = "grading") -> str:
+                                             purpose: str = "grading",
+                                             hide_score_total: bool | None = None,
+                                             bookmarked: bool | None = None,
+                                             title: str | None = None) -> str:
         """Associate an existing rubric with an assignment.
 
         Args:
@@ -1849,7 +1852,16 @@ def register_rubric_tools(mcp: FastMCP) -> None:
             assignment_id: ID of the assignment to associate with
             use_for_grading: Use rubric for grade calculation (default: False)
             purpose: Association purpose: grading, bookmark (default: grading)
+            hide_score_total: Hide total when not used for grading
+            bookmarked: Whether the rubric appears in its context
+            title: Association title
         """
+        if purpose not in {"grading", "bookmark"}:
+            return "purpose must be grading or bookmark"
+        if title is not None and contains_fence_markers(title):
+            return FENCE_LEAK_ERROR
+        if use_for_grading and hide_score_total:
+            return "hide_score_total is available only when use_for_grading is false"
         course_id = await get_course_id(course_identifier)
         rubric_id_str = str(rubric_id)
         assignment_id_str = str(assignment_id)
@@ -1867,6 +1879,12 @@ def register_rubric_tools(mcp: FastMCP) -> None:
             "rubric_association[use_for_grading]": "1" if use_for_grading else "0",
             "rubric_association[purpose]": purpose,
         }
+
+        for field, value in (("hide_score_total", hide_score_total), ("bookmarked", bookmarked)):
+            if value is not None:
+                request_data[f"rubric_association[{field}]"] = "1" if value else "0"
+        if title is not None:
+            request_data["rubric_association[title]"] = title
 
         response = await make_canvas_request(
             "post",

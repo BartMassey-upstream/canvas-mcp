@@ -53,6 +53,7 @@ from ..core.write_confirmation import (
 from ..core.write_outcome import RequestFailure, WriteOutcome
 
 _DELETE_FILE_GUARD = ConfirmationGuard(nothing_done="Nothing was deleted.")
+_DELETE_FOLDER_GUARD = ConfirmationGuard(nothing_done="The folder was not deleted.")
 
 
 async def _file_module_references(
@@ -523,6 +524,134 @@ def register_shared_file_tools(mcp: FastMCP) -> None:
 
 def register_educator_file_tools(mcp: FastMCP) -> None:
     """Register educator-only file tools."""
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
+    @validate_params
+    async def delete_course_folder(
+        course_identifier: str | int,
+        folder_id: str | int,
+        confirmation_token: str | None = None,
+    ) -> str:
+        """Preview and delete an empty course folder; root and recursive deletion are refused.
+
+        Delete contained files individually using their guarded tools first.
+        Canvas is instructed to refuse if content appears after the preview.
+        """
+        course_id = await _folder_course_id(course_identifier)
+        if isinstance(course_id, dict):
+            return f"Error: {course_id['error']}"
+        folder = await _get_course_folder(course_id, folder_id)
+        if "error" in folder:
+            return f"Error: {folder['error']}"
+        if not folder.get("parent_folder_id"):
+            return "Error: The course root folder cannot be deleted."
+        for collection in ("files", "folders"):
+            contents = await fetch_all_paginated_results(canvas_path("folders", folder["id"], collection))
+            if not isinstance(contents, list):
+                return "Error: Could not verify that the folder is empty."
+            if contents:
+                return "Error: Only empty folders can be deleted. Remove contents using their guarded tools first."
+        fingerprint = _DELETE_FOLDER_GUARD.fingerprint(
+            "delete_course_folder", course_id, str(folder["id"]),
+            json.dumps(folder, sort_keys=True, default=str),
+        )
+        if not confirmation_token:
+            return preview_with_token(
+                _DELETE_FOLDER_GUARD, fingerprint, "delete_course_folder",
+                "Would delete this empty course folder:\n" + _format_course_folder(folder),
+            )
+        error = redeem_confirmation(_DELETE_FOLDER_GUARD, confirmation_token, fingerprint)
+        if error:
+            return error
+        response = await make_canvas_request(
+            "delete", canvas_path("folders", folder["id"]), params={"force": "false"},
+        )
+        if not isinstance(response, dict) or "error" in response:
+            return "Warning: Folder deletion was not confirmed. Read the folder before retrying."
+        return "Empty course folder deleted.\n" + _format_course_folder(folder)
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @validate_params
+    async def copy_course_folder(
+        course_identifier: str | int,
+        source_folder_id: str | int,
+        destination_folder_id: str | int,
+        source_course_identifier: str | int | None = None,
+    ) -> str:
+        """Copy a content folder into a verified course folder, renaming collisions.
+
+        The destination course is course_identifier. Source defaults to the
+        same course. Submission folders and copying into descendants are refused.
+        """
+        target_course = await _folder_course_id(course_identifier)
+        source_course = await _folder_course_id(
+            source_course_identifier if source_course_identifier is not None else course_identifier
+        )
+        if isinstance(target_course, dict) or isinstance(source_course, dict):
+            return "Error: Cannot resolve the source or destination course."
+        source = await _get_course_folder(source_course, source_folder_id)
+        target = await _get_course_folder(target_course, destination_folder_id)
+        if "error" in source or "error" in target:
+            return "Error: Cannot verify source and destination course-content folders."
+        folders = await fetch_all_paginated_results(canvas_path("courses", source_course, "folders"))
+        if not isinstance(folders, list) or any(not isinstance(item, dict) for item in folders):
+            return "Error: Cannot inspect the source folder tree."
+        descendants = {str(source["id"])}
+        pending = [source]
+        while pending:
+            current = pending.pop()
+            if _folder_ownership_error(current, source_course):
+                return "Error: Source tree contains an unverified or submission folder."
+            for child in folders:
+                if str(child.get("parent_folder_id")) == str(current["id"]):
+                    child_id = str(child.get("id"))
+                    if child_id in descendants:
+                        return "Error: Source folder tree contains duplicate or cyclic IDs."
+                    descendants.add(child_id)
+                    pending.append(child)
+        if source_course == target_course and str(target["id"]) in descendants:
+            return "Error: A folder cannot be copied into itself or a descendant."
+        copied = await make_canvas_request(
+            "post", canvas_path("folders", target["id"], "copy_folder"),
+            data={"source_folder_id": source["id"]}, use_form_data=True,
+        )
+        if _folder_ownership_error(copied, target_course) or str(copied.get("parent_folder_id")) != str(target["id"]):
+            return "Warning: Folder copy was not confirmed. List destination folders before retrying."
+        return "Course folder copied.\n" + _format_course_folder(copied)
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @validate_params
+    async def copy_course_file(
+        course_identifier: str | int,
+        source_file_id: str | int,
+        destination_folder_id: str | int,
+        source_course_identifier: str | int | None = None,
+    ) -> str:
+        """Copy a verified course file, always renaming collisions rather than overwriting."""
+        target_course = await _folder_course_id(course_identifier)
+        source_course = await _folder_course_id(
+            source_course_identifier if source_course_identifier is not None else course_identifier
+        )
+        if isinstance(target_course, dict) or isinstance(source_course, dict):
+            return "Error: Cannot resolve the source or destination course."
+        source = await make_canvas_request("get", canvas_path("courses", source_course, "files", source_file_id))
+        if not isinstance(source, dict) or "error" in source or str(source.get("id")) != str(source_file_id):
+            return "Error: Cannot verify source course file."
+        parent_id = source.get("folder_id")
+        if not _positive_folder_id(parent_id):
+            return "Error: Cannot verify source file folder."
+        parent = await _get_course_folder(source_course, str(parent_id))
+        target = await _get_course_folder(target_course, destination_folder_id)
+        if "error" in parent or "error" in target:
+            return "Error: Source and destination must be course-content folders."
+        copied = await make_canvas_request(
+            "post", canvas_path("folders", target["id"], "copy_file"),
+            data={"source_file_id": source["id"], "on_duplicate": "rename"}, use_form_data=True,
+        )
+        if not isinstance(copied, dict) or not _positive_folder_id(copied.get("id")) or str(copied.get("folder_id")) != str(target["id"]):
+            return "Warning: File copy was not confirmed. List destination files before retrying."
+        name = fence_untrusted_inline(copied.get("display_name") or copied.get("filename") or "Unnamed", "file name")
+        return f"Course file copied.\nFile ID: {copied['id']}\nFolder ID: {target['id']}\nName: {name}"
 
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
     @validate_params

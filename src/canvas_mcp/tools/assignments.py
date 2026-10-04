@@ -4,6 +4,7 @@ import asyncio
 import datetime
 from statistics import StatisticsError, mean, median, stdev
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -19,7 +20,7 @@ from ..core.untrusted_content import (
     fence_untrusted,
     fence_untrusted_inline,
 )
-from ..core.validation import validate_params
+from ..core.validation import coerce_canvas_id, validate_params
 from ..core.write_confirmation import (
     ConfirmationGuard,
     preview_with_token,
@@ -32,6 +33,53 @@ from .rubrics import (
 )
 
 _DELETE_ASSIGNMENT_GUARD = ConfirmationGuard(nothing_done="Nothing was deleted.")
+
+
+def _assignment_authoring_options(
+    allowed_attempts: int | None,
+    position: int | None,
+    external_tool_url: str | None,
+    external_tool_new_tab: bool | None,
+    omit_from_final_grade: bool | None,
+    hide_in_gradebook: bool | None,
+    grading_standard_id: int | None,
+    annotatable_attachment_id: int | None,
+) -> dict[str, Any] | str:
+    if allowed_attempts is not None and allowed_attempts != -1 and allowed_attempts < 1:
+        return "Error: allowed_attempts must be positive or -1 for unlimited."
+    for key, value in (
+        ("position", position),
+        ("grading_standard_id", grading_standard_id),
+        ("annotatable_attachment_id", annotatable_attachment_id),
+    ):
+        if value is not None and value < 1:
+            return f"Error: {key} must be positive."
+    data: dict[str, Any] = {
+        key: value for key, value in (
+            ("allowed_attempts", allowed_attempts),
+            ("position", position),
+            ("omit_from_final_grade", omit_from_final_grade),
+            ("hide_in_gradebook", hide_in_gradebook),
+            ("grading_standard_id", grading_standard_id),
+            ("annotatable_attachment_id", annotatable_attachment_id),
+        ) if value is not None
+    }
+    external: dict[str, Any] = {}
+    if external_tool_url is not None:
+        if contains_fence_markers(external_tool_url):
+            return FENCE_LEAK_ERROR
+        try:
+            url = urlsplit(external_tool_url)
+            if url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password:
+                return "Error: external_tool_url must be an HTTP(S) URL without credentials."
+        except ValueError:
+            return "Error: external_tool_url is invalid."
+        external["url"] = external_tool_url
+    if external_tool_new_tab is not None:
+        external["new_tab"] = external_tool_new_tab
+    if external:
+        data["external_tool_tag_attributes"] = external
+    return data
 
 
 def register_shared_assignment_tools(mcp: FastMCP) -> None:
@@ -639,7 +687,15 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         assignment_group_id: str | int | None = None,
         peer_reviews: bool = False,
         automatic_peer_reviews: bool = False,
-        allowed_extensions: str | None = None
+        allowed_extensions: str | None = None,
+        allowed_attempts: int | None = None,
+        position: int | None = None,
+        external_tool_url: str | None = None,
+        external_tool_new_tab: bool | None = None,
+        omit_from_final_grade: bool | None = None,
+        hide_in_gradebook: bool | None = None,
+        grading_standard_id: int | None = None,
+        annotatable_attachment_id: int | None = None,
     ) -> str:
         """Create a new assignment in a course.
 
@@ -647,17 +703,25 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             course_identifier: Course code or Canvas ID
             name: Assignment name/title
             description: HTML description
-            submission_types: Comma-separated types (online_text_entry, online_url, online_upload, discussion_topic, none, on_paper, external_tool)
+            submission_types: Comma-separated types (online_text_entry, online_url, online_upload, discussion_topic, none, on_paper, external_tool, media_recording, student_annotation)
             due_at: Due date in ISO 8601 format
             unlock_at: Available date in ISO 8601 format
             lock_at: Lock date in ISO 8601 format
             points_possible: Maximum points
-            grading_type: One of: points, letter_grade, pass_fail, percent, not_graded
+            grading_type: points, letter_grade, gpa_scale, pass_fail, percent, not_graded
             published: Whether to publish immediately (default: False)
             assignment_group_id: Assignment group ID
             peer_reviews: Enable peer reviews
             automatic_peer_reviews: Auto-assign peer reviews
             allowed_extensions: Comma-separated file extensions (e.g., "pdf,docx,txt")
+            allowed_attempts: Positive attempt limit, or -1 for unlimited.
+            position: Positive position within the assignment group.
+            external_tool_url: HTTP(S) launch URL for external-tool submission.
+            external_tool_new_tab: Open the external tool in a new tab.
+            omit_from_final_grade: Exclude this assignment from final grades.
+            hide_in_gradebook: Hide this assignment in gradebooks.
+            grading_standard_id: Existing grading standard for letter/GPA grades.
+            annotatable_attachment_id: Course file for student annotation.
         """
         # Backstop for issue 239: a fenced read result (read→clone) must not
         # publish our provenance markers into live Canvas.
@@ -669,14 +733,15 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
 
         # Validate grading_type if provided
-        valid_grading_types = ["points", "letter_grade", "pass_fail", "percent", "not_graded"]
+        valid_grading_types = ["points", "letter_grade", "pass_fail", "percent", "not_graded", "gpa_scale"]
         if grading_type and grading_type not in valid_grading_types:
             return f"Invalid grading_type '{grading_type}'. Must be one of: {', '.join(valid_grading_types)}"
 
         # Validate submission_types if provided
         valid_submission_types = [
             "online_text_entry", "online_url", "online_upload",
-            "discussion_topic", "none", "on_paper", "external_tool"
+            "discussion_topic", "none", "on_paper", "external_tool",
+            "media_recording", "student_annotation"
         ]
         submission_types_list = []
         if submission_types:
@@ -739,6 +804,31 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             extensions_list = [ext.strip() for ext in allowed_extensions.split(",")]
             assignment_data["allowed_extensions"] = extensions_list
 
+        options = _assignment_authoring_options(
+            allowed_attempts, position, external_tool_url, external_tool_new_tab,
+            omit_from_final_grade, hide_in_gradebook, grading_standard_id,
+            annotatable_attachment_id,
+        )
+        if isinstance(options, str):
+            return options
+        effective_types = submission_types_list
+        if "external_tool_tag_attributes" in options:
+            if effective_types != ["external_tool"]:
+                return "Error: external tool options require submission_types='external_tool'."
+        if annotatable_attachment_id is not None:
+            if "student_annotation" not in (effective_types or []):
+                return "Error: annotatable_attachment_id requires student_annotation submission."
+            attachment = await make_canvas_request(
+                "get", canvas_path("courses", course_id, "files", annotatable_attachment_id)
+            )
+            if (
+                not isinstance(attachment, dict)
+                or "error" in attachment
+                or coerce_canvas_id(attachment.get("id", "")) != str(annotatable_attachment_id)
+            ):
+                return "Error: could not verify the annotation file belongs to this course."
+        assignment_data.update(options)
+
         # Make the API request
         response = await make_canvas_request(
             "post",
@@ -799,6 +889,14 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         peer_reviews: bool | None = None,
         automatic_peer_reviews: bool | None = None,
         allowed_extensions: str | None = None,
+        allowed_attempts: int | None = None,
+        position: int | None = None,
+        external_tool_url: str | None = None,
+        external_tool_new_tab: bool | None = None,
+        omit_from_final_grade: bool | None = None,
+        hide_in_gradebook: bool | None = None,
+        grading_standard_id: int | None = None,
+        annotatable_attachment_id: int | None = None,
         clear_due_at: bool = False,
         clear_unlock_at: bool = False,
         clear_lock_at: bool = False,
@@ -810,17 +908,25 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             assignment_id: Assignment ID to update
             name: New assignment name/title
             description: New HTML description
-            submission_types: Comma-separated types (online_text_entry, online_url, online_upload, discussion_topic, none, on_paper, external_tool)
+            submission_types: Comma-separated types (online_text_entry, online_url, online_upload, discussion_topic, none, on_paper, external_tool, media_recording, student_annotation)
             due_at: New due date in ISO 8601 format
             unlock_at: New available date in ISO 8601 format
             lock_at: New lock date in ISO 8601 format
             points_possible: New maximum points
-            grading_type: One of: points, letter_grade, pass_fail, percent, not_graded
+            grading_type: points, letter_grade, gpa_scale, pass_fail, percent, not_graded
             published: Whether to publish the assignment
             assignment_group_id: Assignment group ID to move to
             peer_reviews: Enable peer reviews
             automatic_peer_reviews: Auto-assign peer reviews
             allowed_extensions: Comma-separated file extensions (e.g., "pdf,docx,txt")
+            allowed_attempts: Positive attempt limit, or -1 for unlimited.
+            position: Positive position within the assignment group.
+            external_tool_url: HTTP(S) launch URL for external-tool submission.
+            external_tool_new_tab: Open the external tool in a new tab.
+            omit_from_final_grade: Exclude this assignment from final grades.
+            hide_in_gradebook: Hide this assignment in gradebooks.
+            grading_standard_id: Existing grading standard for letter/GPA grades.
+            annotatable_attachment_id: Course file for student annotation.
             clear_due_at: Remove the existing due date
             clear_unlock_at: Remove the existing availability date
             clear_lock_at: Remove the existing lock date
@@ -858,7 +964,8 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         if submission_types is not None:
             valid_submission_types = [
                 "online_text_entry", "online_url", "online_upload",
-                "discussion_topic", "none", "on_paper", "external_tool"
+                "discussion_topic", "none", "on_paper", "external_tool",
+                "media_recording", "student_annotation"
             ]
             submission_types_list = [s.strip() for s in submission_types.split(",")]
             for st in submission_types_list:
@@ -896,7 +1003,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
         # Validate grading_type if provided
         if grading_type is not None:
-            valid_grading_types = ["points", "letter_grade", "pass_fail", "percent", "not_graded"]
+            valid_grading_types = ["points", "letter_grade", "pass_fail", "percent", "not_graded", "gpa_scale"]
             if grading_type not in valid_grading_types:
                 return f"Invalid grading_type '{grading_type}'. Must be one of: {', '.join(valid_grading_types)}"
             assignment_data["grading_type"] = grading_type
@@ -920,6 +1027,45 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         if allowed_extensions is not None:
             extensions_list = [ext.strip() for ext in allowed_extensions.split(",")]
             assignment_data["allowed_extensions"] = extensions_list
+
+        options = _assignment_authoring_options(
+            allowed_attempts, position, external_tool_url, external_tool_new_tab,
+            omit_from_final_grade, hide_in_gradebook, grading_standard_id,
+            annotatable_attachment_id,
+        )
+        if isinstance(options, str):
+            return options
+        effective_types = assignment_data.get("submission_types")
+        if "external_tool_tag_attributes" in options:
+            if effective_types is None:
+                current = await make_canvas_request(
+                    "get", canvas_path("courses", course_id, "assignments", assignment_id)
+                )
+                if not isinstance(current, dict) or "error" in current:
+                    return "Error: could not verify the current assignment submission type."
+                effective_types = current.get("submission_types")
+            if effective_types != ["external_tool"]:
+                return "Error: external tool options require submission_types='external_tool'."
+        if annotatable_attachment_id is not None:
+            if effective_types is None:
+                current = await make_canvas_request(
+                    "get", canvas_path("courses", course_id, "assignments", assignment_id)
+                )
+                if not isinstance(current, dict) or "error" in current:
+                    return "Error: could not verify the current assignment submission type."
+                effective_types = current.get("submission_types")
+            if "student_annotation" not in (effective_types or []):
+                return "Error: annotatable_attachment_id requires student_annotation submission."
+            attachment = await make_canvas_request(
+                "get", canvas_path("courses", course_id, "files", annotatable_attachment_id)
+            )
+            if (
+                not isinstance(attachment, dict)
+                or "error" in attachment
+                or coerce_canvas_id(attachment.get("id", "")) != str(annotatable_attachment_id)
+            ):
+                return "Error: could not verify the annotation file belongs to this course."
+        assignment_data.update(options)
 
         # Check if there's anything to update
         if not assignment_data:

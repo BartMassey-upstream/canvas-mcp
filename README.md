@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![skills.sh](https://img.shields.io/badge/skills.sh-canvas--mcp-blue)](https://skills.sh)
 
-MCP server for Canvas LMS with **up to 144 tools** and **9 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
+MCP server for Canvas LMS with **up to 179 tools** and **9 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
 
 ## Quick Start
 
@@ -45,10 +45,11 @@ available so the changes can be reviewed upstream in smaller units:
 | `newquiz` | New Quiz definitions and question authoring | Based on integrated history; needs extraction for upstream |
 | `settings` | Course dates and general settings | Based on integrated history; needs extraction for upstream |
 
-Current Stage 1 work adds course folders, Classic Quiz question
-feedback and direct reads, and a resumable backup skill. These
-changes need a new reviewed revision before colleagues install
-them; the existing fork tag predates this work.
+Stage 1 adds broader assignment and quiz authoring, page history,
+course folders and outcomes, and local backup/import workflows.
+See the [API coverage and acceptance record](docs/api-coverage.md)
+for supported operations, deliberate limits, and deferred live
+checks. The existing fork release tag predates these additions.
 
 These changes are not all part of the published `canvas-mcp` package
 yet. To test the integrated fork rather than the latest release:
@@ -84,7 +85,7 @@ release tag.
   See CLAUDE.md "Documentation Maintenance" for full guidelines.
 -->
 
-Canvas MCP provides **up to 144 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 144. Tools are organized by user type:
+Canvas MCP provides **up to 179 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 179. Tools are organized by user type:
 
 <details>
 <summary><strong>Student Tools</strong> (click to expand)</summary>

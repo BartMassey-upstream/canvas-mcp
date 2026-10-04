@@ -1,13 +1,20 @@
 """Student-data-free authoring tools for Canvas New Quizzes."""
 
 import json
+import re
+from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
+import httpx
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import make_canvas_request
+from ..core.config import get_config
+from ..core.credentials import is_http_request_active
+from ..core.file_validation import validate_file_for_upload
 from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
@@ -45,6 +52,10 @@ _QUESTION_TYPES = {
     "true-false",
     "essay",
 }
+_MEDIA_MAX_BYTES = 20 * 1024 * 1024
+_S3_MEDIA_HOST = re.compile(
+    r"(?:[a-z0-9][a-z0-9.-]*\.)?s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:\.cn)?"
+)
 _QUIZ_SETTING_KEYS = {
     "calculator_type",
     "filter_ip_address",
@@ -88,6 +99,32 @@ _RESULT_VIEW_KEYS = {
 
 def _json_text(value: object) -> str:
     return json.dumps(value, indent=2, sort_keys=True, default=str)
+
+
+def _unsigned_media_url(value: object) -> str | None:
+    if not isinstance(value, str) or any(char.isspace() for char in value):
+        return None
+    try:
+        url = urlsplit(value)
+        canvas = urlsplit(get_config().canvas_api_url)
+        if (
+            url.scheme != "https" or url.port not in {None, 443}
+            or url.username is not None or url.password is not None
+            or url.fragment or not url.hostname or not url.path.strip("/")
+        ):
+            return None
+        same_canvas = (
+            canvas.scheme == "https" and canvas.port in {None, 443}
+            and url.hostname == canvas.hostname
+        )
+        if not same_canvas and not _S3_MEDIA_HOST.fullmatch(url.hostname):
+            return None
+        query = parse_qs(url.query)
+        if not (query.get("X-Amz-Signature") or query.get("Signature")):
+            return None
+        return urlunsplit((url.scheme, url.netloc, url.path, "", ""))
+    except ValueError:
+        return None
 
 
 def _format_new_quiz(quiz: dict[str, Any], *, include_instructions: bool) -> str:
@@ -307,6 +344,8 @@ def _question_item_payload(
         return "Invalid scoring_algorithm: a scoring algorithm is required."
     if creating and scoring_data is None:
         return "Invalid scoring_data: scoring data is required."
+    if creating and interaction_data is None:
+        interaction_data = {}
     if points_possible is not None and points_possible <= 0:
         return "Invalid points_possible: use a positive number."
     if position is not None and position <= 0:
@@ -367,6 +406,62 @@ def _student_work_error(what: str) -> str:
 
 def register_new_quiz_tools(mcp: FastMCP) -> None:
     """Register New Quiz definition and QuestionItem authoring tools."""
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @validate_params
+    async def upload_new_quiz_media(
+        course_identifier: str | int,
+        assignment_id: str | int,
+        file_path: str,
+    ) -> dict[str, Any]:
+        """Upload a local PNG/JPEG/GIF/WebP for a New Quiz hot-spot question.
+
+        Local stdio only; maximum size 20 MiB. Accepts HTTPS Canvas or S3
+        signed upload destinations. Returns an unsigned image_url for
+        interaction_data, never the upload credential. Does not create an item.
+        """
+        if is_http_request_active():
+            return {"error": "Local media uploads are only available over stdio."}
+        file_path = str(Path(file_path).expanduser())
+        validation = validate_file_for_upload(
+            file_path, max_size_bytes=_MEDIA_MAX_BYTES,
+            allowed_extensions={".png", ".jpg", ".jpeg", ".gif", ".webp"},
+        )
+        if not validation.valid:
+            return {"error": validation.error}
+        try:
+            with Path(file_path).expanduser().open("rb") as source:
+                content = source.read(_MEDIA_MAX_BYTES + 1)
+        except OSError:
+            return {"error": "Cannot read the local media file."}
+        if not content or len(content) > _MEDIA_MAX_BYTES:
+            return {"error": "Media must contain between 1 byte and 20 MiB."}
+        course_id = await get_course_id(course_identifier)
+        slot = await make_canvas_request(
+            "get", canvas_path("courses", course_id, "quizzes", assignment_id, "items", "media_upload_url"),
+            api_root="quiz",
+        )
+        if isinstance(slot, dict) and "error" in slot:
+            return {"error": "Canvas could not provide a media upload destination."}
+        upload_url = slot.get("url") if isinstance(slot, dict) else None
+        image_url = _unsigned_media_url(upload_url)
+        if image_url is None or not isinstance(upload_url, str):
+            return {"error": "Canvas returned an unsupported or invalid media upload destination. No file was sent."}
+        try:
+            async with httpx.AsyncClient(
+                timeout=get_config().api_timeout, follow_redirects=False, trust_env=False,
+            ) as storage:
+                response = await storage.put(
+                    upload_url, content=content,
+                    headers={"Content-Type": validation.mime_type},
+                )
+        except httpx.HTTPError:
+            return {"error": "Media upload outcome is unknown. Inspect the quiz before retrying; no automatic retry was made."}
+        if response.status_code not in {200, 201, 204}:
+            return {"error": f"Media upload was not confirmed (HTTP {response.status_code}); redirects are not followed. No automatic retry was made."}
+        return {"course_id": str(course_id), "assignment_id": str(assignment_id),
+                "image_url": image_url, "size_bytes": len(content),
+                "content_type": validation.mime_type}
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params
@@ -660,8 +755,9 @@ def register_new_quiz_tools(mcp: FastMCP) -> None:
         The interaction, properties, and scoring objects use Canvas's documented
         per-question schemas. Choice-like types require UUIDs that identify
         choices. Stimulus and item-bank entries are read-only in Canvas's API.
-        Hot-spot questions require media uploaded separately; this tool does
-        not expose Canvas's presigned media-upload workflow.
+        Hot-spot questions use image_url returned by upload_new_quiz_media.
+        Omitted interaction_data defaults to an empty object for types such
+        as numeric and formula; supply the documented data for other types.
         """
         payload = _question_item_payload(
             title=title,

@@ -300,7 +300,8 @@ async def test_tool_manifest_matches_registry_exactly():
     dupes = {n for n in manifest_names if manifest_names.count(n) > 1}
     assert not dupes, f"duplicate manifest entries: {sorted(dupes)}"
 
-    registered = {tool.name for tool in await _registry().list_tools()}
+    registry = {tool.name: tool for tool in await _registry().list_tools()}
+    registered = set(registry)
     manifest_set = set(manifest_names)
 
     missing = registered - manifest_set
@@ -315,6 +316,12 @@ async def test_tool_manifest_matches_registry_exactly():
     known_categories = {c["id"] for c in manifest["categories"]}
     bad = [t["name"] for t in manifest["tools"] if t["category"] not in known_categories]
     assert not bad, f"manifest entries with unknown category: {bad}"
+
+    for entry in manifest["tools"]:
+        schema = registry[entry["name"]].parameters
+        parameters = {param["name"]: param for param in entry["parameters"]}
+        assert set(parameters) == set(schema.get("properties", {})), entry["name"]
+        assert {key for key, param in parameters.items() if param["required"]} == set(schema.get("required", [])), entry["name"]
 
 
 @pytest.mark.asyncio

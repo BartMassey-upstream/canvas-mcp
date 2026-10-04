@@ -15,6 +15,7 @@ async def _get_tool_names(mcp: FastMCP) -> set[str]:
 
 
 STUDENT_ONLY_TOOLS = {
+    "get_my_submission",
     "get_my_upcoming_assignments",
     "get_my_submission_status",
     "get_my_course_grades",
@@ -23,6 +24,12 @@ STUDENT_ONLY_TOOLS = {
 }
 
 SHARED_TOOLS = {
+    "get_course_folder",
+    "list_course_folders",
+    "read_course_file",
+    "get_module",
+    "get_module_item",
+    "get_syllabus",
     # courses
     "list_courses",
     "get_course_details",
@@ -72,6 +79,41 @@ SELF_IDENTITY_TOOLS = {"get_my_enrollments", "get_my_profile"}
 # Exact, fail-closed profile for course construction without student records.
 # Any future change to this set must be reviewed as a data-access decision.
 CREATOR_TOOLS = {
+    "list_outcome_groups",
+    "get_outcome_group",
+    "list_course_outcomes",
+    "get_course_outcome",
+    "create_outcome_group",
+    "update_outcome_group",
+    "delete_outcome_group",
+    "create_course_outcome",
+    "update_course_outcome",
+    "link_course_outcome",
+    "unlink_course_outcome",
+    "import_course_content",
+    "get_assignment_group",
+    "get_module",
+    "get_module_item",
+    "list_content_migrations",
+    "list_content_migrators",
+    "list_content_migration_issues",
+    "get_content_migration_issue",
+    "list_quiz_question_groups",
+    "get_quiz_question_group",
+    "list_page_revisions",
+    "get_page_revision",
+    "update_course_home_page",
+    "create_quiz_question_group",
+    "update_quiz_question_group",
+    "delete_quiz_question_group",
+    "reorder_quiz_items",
+    "duplicate_page",
+    "revert_page_revision",
+    "schedule_page_publication",
+    "upload_new_quiz_media",
+    "delete_course_folder",
+    "copy_course_folder",
+    "copy_course_file",
     "list_course_folders",
     "get_course_folder",
     "create_course_folder",
@@ -323,17 +365,15 @@ class TestRoleFiltering:
         assert "check_enrollment" not in await _get_tool_names(mcp)
 
     @pytest.mark.asyncio
-    async def test_student_tool_count(self):
-        """Student role should have approximately 37 tools."""
+    async def test_student_default_profile_has_only_reviewed_tools(self):
         mcp = FastMCP(name="test-student")
         register_all_tools(mcp, role="student")
         tools = await _get_tool_names(mcp)
-        assert 25 <= len(tools) <= 40, f"Expected ~37 student tools, got {len(tools)}: {sorted(tools)}"
+        assert tools == SHARED_TOOLS | STUDENT_ONLY_TOOLS
 
     @pytest.mark.asyncio
-    async def test_educator_tool_count(self):
-        """Educator role should have approximately 128 tools."""
+    async def test_educator_includes_creator_capabilities(self):
         mcp = FastMCP(name="test-educator")
         register_all_tools(mcp, role="educator")
         tools = await _get_tool_names(mcp)
-        assert 115 <= len(tools) <= 135, f"Expected ~128 educator tools, got {len(tools)}: {sorted(tools)}"
+        assert CREATOR_TOOLS <= tools

@@ -2,6 +2,11 @@
 
 This document provides a comprehensive overview of all tools available in the Canvas MCP Server, organized by audience and functionality.
 
+The [API coverage record](../docs/api-coverage.md) describes
+the integrated fork and its deliberate boundaries. The
+[tool manifest](TOOL_MANIFEST.json) records current signatures
+and profile visibility, including optional tools.
+
 ## Table of Contents
 
 - [Student Tools](#student-tools)
@@ -2649,3 +2654,47 @@ Some Canvas API endpoints have bugs or design issues that prevent certain operat
 - **Main README**: [README.md](../README.md)
 - **Development Guide**: [CLAUDE.md](../CLAUDE.md)
 - **GitHub Issues**: [Report issues](https://github.com/vishalsachdev/canvas-mcp/issues)
+
+
+## Additional creator operations
+
+These tools are available to creator and educator profiles.
+`get_module` and `get_module_item` are also student-visible
+course-content reads. Parameter details and role visibility are
+kept current in [the manifest](TOOL_MANIFEST.json).
+
+| Tools | Purpose and limits |
+|---|---|
+| `get_assignment_group`, `update_assignment_group` | Inspect definitions and merge validated drop rules; never-drop IDs must belong to the group |
+| `update_course_home_page` | Select feed, wiki, modules, syllabus or assignments; verify readback |
+| `list_quiz_question_groups`, `get_quiz_question_group` | Inspect Classic random pools and bank links |
+| `create_quiz_question_group`, `update_quiz_question_group` | Create/edit pools; bank links are creation-only |
+| `delete_quiz_question_group` | Preview/confirm; refuse existing student work without explicit override |
+| `reorder_quiz_items` | Reorder questions/groups without silently changing group membership |
+| `duplicate_page`, `list_page_revisions`, `get_page_revision` | Native duplication and historical content reads |
+| `revert_page_revision` | Preview/confirm a replacement and verify stored content |
+| `schedule_page_publication` | Schedule publication where Canvas enables it |
+| `get_module`, `get_module_item` | Read content settings without student progression |
+| `copy_course_file`, `copy_course_folder` | Copy verified course content, renaming collisions |
+| `delete_course_folder` | Preview/confirm empty folders only; no root or recursive deletion |
+| `upload_new_quiz_media` | Local PNG/JPEG/GIF/WebP upload; return unsigned image URL |
+| `list_outcome_groups`, `get_outcome_group`, `list_course_outcomes`, `get_course_outcome` | Read course-owned outcome definitions, never student results |
+| `create_outcome_group`, `update_outcome_group`, `delete_outcome_group` | Organize outcomes; deletion limited to confirmed empty non-root groups |
+| `create_course_outcome`, `update_course_outcome` | Create definitions; update unassessed text without replacing ratings |
+| `link_course_outcome`, `unlink_course_outcome` | Organize existing course-owned definitions; unlink needs confirmation |
+| `import_course_content` | Confirm a local `.imscc` import, then inspect asynchronous migration status |
+| `list_content_migrations`, `list_content_migrators` | Recover migration IDs and inspect available import systems |
+| `list_content_migration_issues`, `get_content_migration_issue` | Inspect failures and warnings without changing their resolution state |
+
+Existing assignment tools now accept attempts, position, grade
+visibility, grading standards, external-tool launch options and
+annotation files. Classic questions accept calculated definitions
+with precomputed answers; this server does not evaluate formulas.
+Module item creation accepts ExternalTool iframe dimensions,
+and rubric associations accept title, bookmarked and
+hide_score_total (the last only when not used for grading).
+
+The local import limit is 256 MiB, 20,000 archive entries and
+2 GiB expanded. Imports refuse hosted HTTP local paths and
+unsupported storage destinations. A returned migration ID is
+not proof of import completion; poll status and review issues.
