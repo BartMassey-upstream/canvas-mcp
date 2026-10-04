@@ -36,7 +36,8 @@ def _format_group(
         f"ID: {group.get('id')}\n"
         f"Name: {name}\n"
         f"Position: {group.get('position', 'N/A')}\n"
-        f"Weight: {group.get('group_weight', 0)}%"
+        f"Weight: {group.get('group_weight', 0)}%\n"
+        f"Drop rules: {fence_untrusted_inline(str(group.get('rules') or {}), 'assignment group rules')}"
     )
     if not include_assignments:
         return result
@@ -97,6 +98,28 @@ def register_assignment_group_tools(mcp: FastMCP) -> None:
             )
         )
 
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def get_assignment_group(
+        course_identifier: str | int,
+        assignment_group_id: str | int,
+        include_assignments: bool = False,
+    ) -> str:
+        """Read one course assignment group and its drop rules without student data."""
+        course_id = await get_course_id(course_identifier)
+        params: dict[str, Any] = {"override_assignment_dates": False}
+        if include_assignments:
+            params["include[]"] = ["assignments"]
+        response = await make_canvas_request(
+            "get", canvas_path("courses", course_id, "assignment_groups", assignment_group_id),
+            params=params,
+        )
+        if not isinstance(response, dict):
+            return "Error: Canvas returned an invalid assignment group response."
+        if "error" in response:
+            return f"Error fetching assignment group: {response['error']}"
+        return _format_group(response, include_assignments=include_assignments)
+
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
     @validate_params
     async def create_assignment_group(
@@ -135,21 +158,76 @@ def register_assignment_group_tools(mcp: FastMCP) -> None:
         name: str | None = None,
         position: int | None = None,
         group_weight: float | None = None,
+        drop_lowest: int | None = None,
+        drop_highest: int | None = None,
+        never_drop: list[int] | None = None,
     ) -> str:
-        """Update an assignment group's name, position, or weight."""
+        """Update group authoring settings and drop rules.
+
+        Drop counts must be nonnegative. never_drop contains assignment IDs
+        in this group; an empty list clears the exclusions. Omitted rule
+        fields preserve their current values. Zero clears a drop count.
+        """
         if name is not None and contains_fence_markers(name):
             return FENCE_LEAK_ERROR
-        data: dict[str, str | int | float] = {}
+        data: dict[str, Any] = {}
         if name is not None:
             data["name"] = name
         if position is not None:
             data["position"] = position
         if group_weight is not None:
             data["group_weight"] = group_weight
+        rules: dict[str, Any] = {}
+        for key, value in (("drop_lowest", drop_lowest), ("drop_highest", drop_highest)):
+            if value is not None:
+                if value < 0:
+                    return f"Error: {key} must be nonnegative."
+                rules[key] = value
+        if never_drop is not None:
+            if any(type(value) is not int or value < 1 for value in never_drop):
+                return "Error: never_drop must contain positive assignment IDs."
+            if len(set(never_drop)) != len(never_drop):
+                return "Error: never_drop must not contain duplicate assignment IDs."
+            rules["never_drop"] = never_drop
+        if rules:
+            data["rules"] = rules
         if not data:
             return "No assignment-group fields were provided to update."
 
         course_id = await get_course_id(course_identifier)
+        if rules:
+            current = await make_canvas_request(
+                "get", canvas_path("courses", course_id, "assignment_groups", assignment_group_id),
+                params={"include[]": ["assignments"], "override_assignment_dates": False},
+            )
+            if not isinstance(current, dict) or "error" in current:
+                return "Error: could not verify the assignment group's current drop rules."
+            assignments = current.get("assignments")
+            if not isinstance(assignments, list):
+                return "Error: Canvas did not return the group's assignment definitions."
+            assignment_ids = {str(assignment.get("id")) for assignment in assignments}
+            if never_drop is not None and any(str(value) not in assignment_ids for value in never_drop):
+                return "Error: never_drop assignments must belong to this course assignment group."
+            current_rules = current.get("rules") or {}
+            if not isinstance(current_rules, dict):
+                return "Error: Canvas returned invalid assignment-group rules."
+            merged_rules = {
+                key: current_rules[key]
+                for key in ("drop_lowest", "drop_highest", "never_drop")
+                if key in current_rules
+            } | rules
+            for key in ("drop_lowest", "drop_highest"):
+                if key in merged_rules and (
+                    type(merged_rules[key]) is not int or merged_rules[key] < 0
+                ):
+                    return "Error: Canvas returned invalid assignment-group drop counts."
+            exclusions = merged_rules.get("never_drop", [])
+            if not isinstance(exclusions, list) or any(
+                type(value) not in (str, int) or not str(value).isdecimal()
+                or int(value) < 1 for value in exclusions
+            ):
+                return "Error: Canvas returned invalid never-drop assignment IDs."
+            data["rules"] = merged_rules
         response = await make_canvas_request(
             "put",
             canvas_path('courses', course_id, 'assignment_groups', assignment_group_id),

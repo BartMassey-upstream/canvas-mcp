@@ -7,7 +7,7 @@ from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.cache import get_course_code, get_course_id
-from ..core.client import make_canvas_request
+from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.path import canvas_path
 from ..core.untrusted_content import fence_untrusted_inline
 from ..core.validation import validate_params
@@ -35,9 +35,11 @@ def register_navigation_tools(mcp: FastMCP) -> None:
     async def list_course_navigation(course_identifier: str | int) -> str:
         """List the tabs in a course's left-hand navigation."""
         course_id = await get_course_id(course_identifier)
-        tabs = await make_canvas_request("get", canvas_path('courses', course_id, 'tabs'))
+        tabs = await fetch_all_paginated_results(canvas_path('courses', course_id, 'tabs'))
         if isinstance(tabs, dict) and "error" in tabs:
             return f"Error listing course navigation: {tabs['error']}"
+        if not isinstance(tabs, list) or any(not isinstance(tab, dict) for tab in tabs):
+            return "Error listing course navigation: invalid Canvas response."
         if not tabs:
             return f"No navigation tabs found for course {course_identifier}."
         course_display = await get_course_code(course_id) or course_identifier
@@ -56,6 +58,8 @@ def register_navigation_tools(mcp: FastMCP) -> None:
         """Change a course navigation tab's position or visibility."""
         if not _TAB_ID.fullmatch(tab_id):
             return "Invalid tab_id. Use the exact ID returned by list_course_navigation."
+        if tab_id in {"home", "settings"}:
+            return "Home and Settings navigation tabs cannot be moved or hidden."
         if position is None and hidden is None:
             return "No navigation fields were provided to update."
         if position is not None and position < 1:

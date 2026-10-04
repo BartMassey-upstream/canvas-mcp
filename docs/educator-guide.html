@@ -188,7 +188,7 @@ canvas-mcp-server --config</code></pre>
                         <p>The system creates local mapping files for you to correlate anonymous IDs with real students:</p>
                         <pre><code>local_maps/
 └── course_BADM_350_mapping.csv</code></pre>
-                        <p>This CSV maps anonymous IDs back to real names - <strong>keep it secure and never commit to version control</strong>.</p>
+                        <p>Use the returned CSV path: every call creates a new private bundle and leaves older maps untouched. The bundle also contains raw identity JSON and a completion manifest with origin, course, capture time, and file digests. Directories require mode <code>0700</code>; files use <code>0600</code>. This local-only map links anonymous IDs to real names: <strong>keep the entire bundle secure and out of version control</strong>. See the <code>tools/README.md</code> in your checkout for migration and validation details.</p>
 
                         <h3>Privacy Best Practices</h3>
                         <ul>

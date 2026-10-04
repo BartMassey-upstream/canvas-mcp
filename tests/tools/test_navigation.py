@@ -21,12 +21,12 @@ async def test_list_course_navigation_uses_tabs_endpoint_and_fences_labels():
     ), patch(
         "canvas_mcp.tools.navigation.get_course_code", new=AsyncMock(return_value="ENG101")
     ), patch(
-        "canvas_mcp.tools.navigation.make_canvas_request",
+        "canvas_mcp.tools.navigation.fetch_all_paginated_results",
         new=AsyncMock(return_value=[{"id": "modules", "label": "Modules"}]),
     ) as request:
         result = await (await _tools())["list_course_navigation"]("ENG101")
 
-    assert request.await_args.args == ("get", "/courses/42/tabs")
+    assert request.await_args.args == ("/courses/42/tabs",)
     assert "UNTRUSTED CANVAS CONTENT" in result
 
 
@@ -58,6 +58,25 @@ async def test_update_course_navigation_requires_a_change():
         )
     assert "No navigation fields" in result
     course_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tab_id", ["home", "settings"])
+async def test_immutable_tabs_rejected_before_network(tab_id):
+    with patch("canvas_mcp.tools.navigation.make_canvas_request", new_callable=AsyncMock) as request:
+        result = await (await _tools())["update_course_navigation"]("42", tab_id, hidden=True)
+    assert "cannot be moved or hidden" in result
+    request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("response", [None, {}, [None]])
+async def test_navigation_rejects_malformed_lists(response):
+    with patch("canvas_mcp.tools.navigation.get_course_id", new=AsyncMock(return_value="42")), patch(
+        "canvas_mcp.tools.navigation.fetch_all_paginated_results", new=AsyncMock(return_value=response)
+    ):
+        result = await (await _tools())["list_course_navigation"]("42")
+    assert "invalid Canvas response" in result
 
 
 @pytest.mark.asyncio

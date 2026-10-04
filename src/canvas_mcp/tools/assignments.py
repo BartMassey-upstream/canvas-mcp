@@ -2,8 +2,12 @@
 
 import asyncio
 import datetime
+import json
+import math
+import re
 from statistics import StatisticsError, mean, median, stdev
-from typing import Any
+from typing import Any, TypeGuard
+from urllib.parse import urlsplit
 
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -19,19 +23,312 @@ from ..core.untrusted_content import (
     fence_untrusted,
     fence_untrusted_inline,
 )
-from ..core.validation import validate_params
+from ..core.validation import coerce_canvas_id, validate_params
 from ..core.write_confirmation import (
     ConfirmationGuard,
     preview_with_token,
     redeem_confirmation,
 )
+from ..core.write_outcome import RequestFailure, WriteOutcome
 from .rubrics import (
-    RUBRIC_GRADE_UNCONFIRMED,
     build_rubric_assessment_form_data,
     rubric_grade_is_confirmed,
 )
 
 _DELETE_ASSIGNMENT_GUARD = ConfirmationGuard(nothing_done="Nothing was deleted.")
+
+
+def _finite_grade_number(value: object) -> TypeGuard[int | float]:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
+def _bulk_grading_preflight(
+    grades: dict[str, Any], max_concurrent: int, rate_limit_delay: float
+) -> str | None:
+    if (
+        not isinstance(max_concurrent, int)
+        or isinstance(max_concurrent, bool)
+        or not 1 <= max_concurrent <= 20
+    ):
+        return "Error: max_concurrent must be an integer between 1 and 20. No grades were submitted."
+    if not _finite_grade_number(rate_limit_delay) or rate_limit_delay < 0:
+        return "Error: rate_limit_delay must be a finite nonnegative number. No grades were submitted."
+    if not isinstance(grades, dict) or not grades:
+        return "Error: No grades provided. The grades dictionary is empty."
+    seen_targets = set()
+    for user_id, info in grades.items():
+        if coerce_canvas_id(user_id) != str(user_id) or int(str(user_id)) <= 0:
+            return "Error: Every grading target must be a positive Canvas user ID. No grades were submitted."
+        canonical_target = str(int(user_id))
+        if canonical_target in seen_targets:
+            return "Error: Duplicate Canvas user IDs are not allowed in one grading batch. No grades were submitted."
+        seen_targets.add(canonical_target)
+        if not isinstance(info, dict) or set(info) - {
+            "grade",
+            "rubric_assessment",
+            "comment",
+            "expected_attempt",
+        }:
+            return "Error: Each grade must be an object containing only grade, rubric_assessment, comment, and expected_attempt. No grades were submitted."
+        if "expected_attempt" in info:
+            expected = info["expected_attempt"]
+            if expected is not None and (
+                isinstance(expected, bool)
+                or not isinstance(expected, int)
+                or expected < 0
+                or not _finite_grade_number(expected)
+            ):
+                return "Error: expected_attempt must be a finite nonnegative integer or null. No grades were submitted."
+        comment = info.get("comment")
+        if comment is not None and not isinstance(comment, str):
+            return "Error: Submission comments must be strings or null. No grades were submitted."
+        if contains_fence_markers(comment or ""):
+            return FENCE_LEAK_ERROR + " No grades were submitted."
+        if "grade" in info:
+            grade = info["grade"]
+            if (
+                isinstance(grade, bool)
+                or not isinstance(grade, str | int | float)
+                or isinstance(grade, str)
+                and not grade.strip()
+            ):
+                return "Error: Grades must be nonempty strings or finite numbers. No grades were submitted."
+            if contains_fence_markers(str(grade)):
+                return FENCE_LEAK_ERROR + " No grades were submitted."
+            try:
+                number = float(str(grade).strip().removesuffix("%"))
+            except ValueError:
+                number = None
+            except OverflowError:
+                return "Error: Numeric grades must be finite. No grades were submitted."
+            if number is not None and not math.isfinite(number):
+                return "Error: Numeric grades must be finite. No grades were submitted."
+        rubric = info.get("rubric_assessment")
+        if "rubric_assessment" in info:
+            if not isinstance(rubric, dict) or not rubric:
+                return "Error: rubric_assessment must be a nonempty criterion object. No grades were submitted."
+            total = 0.0
+            for criterion_id, assessment in rubric.items():
+                if (
+                    not isinstance(criterion_id, str)
+                    or re.fullmatch(r"[A-Za-z0-9_-]+", criterion_id) is None
+                ):
+                    return "Error: Rubric criterion IDs must be nonempty safe identifiers. No grades were submitted."
+                if not isinstance(assessment, dict) or set(assessment) - {
+                    "points",
+                    "rating_id",
+                    "comments",
+                }:
+                    return "Error: Each rubric criterion must contain only points, rating_id, and comments. No grades were submitted."
+                points = assessment.get("points")
+                if not _finite_grade_number(points) or points < 0:
+                    return "Error: Rubric points must be finite nonnegative numbers. No grades were submitted."
+                total += points
+                rating_id = assessment.get("rating_id")
+                if "rating_id" in assessment and (
+                    isinstance(rating_id, bool)
+                    or not isinstance(rating_id, str | int)
+                    or re.fullmatch(r"[A-Za-z0-9_-]+", str(rating_id)) is None
+                ):
+                    return "Error: Rubric rating IDs must be nonempty safe identifiers. No grades were submitted."
+                criterion_comment = assessment.get("comments", "")
+                if not isinstance(criterion_comment, str):
+                    return "Error: Rubric comments must be strings. No grades were submitted."
+                if contains_fence_markers(criterion_comment):
+                    return FENCE_LEAK_ERROR + " No grades were submitted."
+            if not math.isfinite(total):
+                return "Error: Total rubric points must be finite. No grades were submitted."
+        elif "grade" not in info:
+            return "Error: Each target requires rubric_assessment or grade. No grades were submitted."
+    return None
+
+
+def _grading_id(value: object) -> str | None:
+    if isinstance(value, bool) or not isinstance(value, str | int):
+        return None
+    result = coerce_canvas_id(value)
+    return result if result is not None and int(result) > 0 else None
+
+
+def _analytics_timestamp(value: object) -> datetime.datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=datetime.UTC) if parsed.tzinfo is None else parsed
+    except ValueError:
+        return None
+
+
+def _grading_submission_identity(
+    value: object, assignment_id: str, user_id: str
+) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or "error" in value:
+        return None
+    if (
+        _grading_id(value.get("assignment_id")) != assignment_id
+        or _grading_id(value.get("user_id")) != user_id
+    ):
+        return None
+    return value
+
+
+def _grading_attempt_available(
+    submission: dict[str, Any], *, readback: bool = False
+) -> bool:
+    if "attempt" not in submission:
+        return False
+    attempt = submission["attempt"]
+    if attempt is None:
+        states = {"unsubmitted", "graded"} if readback else {"unsubmitted"}
+        return (
+            submission.get("workflow_state") in states
+            and "submitted_at" in submission
+            and submission["submitted_at"] is None
+        )
+    return (
+        isinstance(attempt, int)
+        and not isinstance(attempt, bool)
+        and attempt >= 0
+        and _finite_grade_number(attempt)
+    )
+
+
+def _grading_policy_failure(response: object) -> bool:
+    return isinstance(response, RequestFailure) and response.status_code in {401, 403}
+
+
+def _persisted_grade_matches(
+    assignment: dict[str, Any], info: dict[str, Any], submission: dict[str, Any]
+) -> bool:
+    if submission.get("grade_matches_current_submission") is not True:
+        return False
+    rubric = info.get("rubric_assessment")
+    if rubric:
+        persisted = submission.get("rubric_assessment")
+        if not isinstance(persisted, dict):
+            return False
+        for criterion_id, criterion in rubric.items():
+            actual = persisted.get(criterion_id)
+            if not isinstance(actual, dict):
+                return False
+            for field, value in criterion.items():
+                observed = actual.get(field)
+                if field == "points":
+                    if not _finite_grade_number(observed) or not math.isclose(
+                        observed, value, rel_tol=1e-9, abs_tol=1e-6
+                    ):
+                        return False
+                elif field == "rating_id":
+                    if str(observed) != str(value):
+                        return False
+                elif observed != value:
+                    return False
+        return rubric_grade_is_confirmed(assignment, rubric, submission)
+    grade = str(info["grade"]).strip()
+    expected: float | None = None
+    try:
+        expected = float(grade)
+    except ValueError:
+        points = assignment.get("points_possible")
+        if grade.endswith("%") and _finite_grade_number(points):
+            try:
+                expected = float(grade[:-1]) * points / 100
+            except ValueError:
+                return False
+        elif grade.lower() in {
+            "pass",
+            "complete",
+            "fail",
+            "incomplete",
+        } and _finite_grade_number(points):
+            expected = points if grade.lower() in {"pass", "complete"} else 0
+        else:
+            return (
+                isinstance(submission.get("grade"), str)
+                and submission["grade"].strip() == grade
+            )
+    score = submission.get("score")
+    return (
+        expected is not None
+        and math.isfinite(expected)
+        and _finite_grade_number(score)
+        and math.isclose(score, expected, rel_tol=1e-9, abs_tol=1e-6)
+        and submission.get("grade") is not None
+    )
+
+
+def _grading_comment_ids(value: object) -> set[str] | None:
+    if not isinstance(value, list):
+        return None
+    ids = set()
+    for item in value:
+        if not isinstance(item, dict) or _grading_id(item.get("id")) is None:
+            return None
+        item_id = str(item["id"])
+        if item_id in ids:
+            return None
+        ids.add(item_id)
+    return ids
+
+
+def _assignment_authoring_options(
+    allowed_attempts: int | None,
+    position: int | None,
+    external_tool_url: str | None,
+    external_tool_new_tab: bool | None,
+    omit_from_final_grade: bool | None,
+    hide_in_gradebook: bool | None,
+    grading_standard_id: int | None,
+    annotatable_attachment_id: int | None,
+) -> dict[str, Any] | str:
+    if allowed_attempts is not None and allowed_attempts != -1 and allowed_attempts < 1:
+        return "Error: allowed_attempts must be positive or -1 for unlimited."
+    for key, value in (
+        ("position", position),
+        ("grading_standard_id", grading_standard_id),
+        ("annotatable_attachment_id", annotatable_attachment_id),
+    ):
+        if value is not None and value < 1:
+            return f"Error: {key} must be positive."
+    data: dict[str, Any] = {
+        key: value
+        for key, value in (
+            ("allowed_attempts", allowed_attempts),
+            ("position", position),
+            ("omit_from_final_grade", omit_from_final_grade),
+            ("hide_in_gradebook", hide_in_gradebook),
+            ("grading_standard_id", grading_standard_id),
+            ("annotatable_attachment_id", annotatable_attachment_id),
+        )
+        if value is not None
+    }
+    external: dict[str, Any] = {}
+    if external_tool_url is not None:
+        if contains_fence_markers(external_tool_url):
+            return FENCE_LEAK_ERROR
+        try:
+            url = urlsplit(external_tool_url)
+            if (
+                url.scheme not in {"http", "https"}
+                or not url.hostname
+                or url.username
+                or url.password
+            ):
+                return "Error: external_tool_url must be an HTTP(S) URL without credentials."
+        except ValueError:
+            return "Error: external_tool_url is invalid."
+        external["url"] = external_tool_url
+    if external_tool_new_tab is not None:
+        external["new_tab"] = external_tool_new_tab
+    if external:
+        data["external_tool_tag_attributes"] = external
+    return data
 
 
 def register_shared_assignment_tools(mcp: FastMCP) -> None:
@@ -51,7 +348,9 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
         if get_config().canvas_role != "creator":
             params["include[]"] = ["all_dates", "submission"]
 
-        all_assignments = await fetch_all_paginated_results(canvas_path('courses', course_id, 'assignments'), params)
+        all_assignments = await fetch_all_paginated_results(
+            canvas_path("courses", course_id, "assignments"), params
+        )
 
         if isinstance(all_assignments, dict) and "error" in all_assignments:
             return f"Error fetching assignments: {all_assignments['error']}"
@@ -77,11 +376,15 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
 
         # Try to get the course code for display
         course_display = await get_course_code(course_id) or course_identifier
-        return f"Assignments for Course {course_display}:\n\n" + "\n".join(assignments_info)
+        return f"Assignments for Course {course_display}:\n\n" + "\n".join(
+            assignments_info
+        )
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params
-    async def get_assignment_details(course_identifier: str | int, assignment_id: str | int) -> str:
+    async def get_assignment_details(
+        course_identifier: str | int, assignment_id: str | int
+    ) -> str:
         """Get detailed information about a specific assignment.
 
         Args:
@@ -94,7 +397,7 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
         assignment_id_str = str(assignment_id)
 
         response = await make_canvas_request(
-            "get", canvas_path('courses', course_id, 'assignments', assignment_id_str)
+            "get", canvas_path("courses", course_id, "assignments", assignment_id_str)
         )
 
         if "error" in response:
@@ -105,26 +408,35 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
         details = [
             f"Name: {fence_untrusted_inline(response.get('name', 'N/A'), 'assignment name')}",
             "Description:\n"
-            + fence_untrusted(response.get('description') or 'N/A', 'assignment description'),
+            + fence_untrusted(
+                response.get("description") or "N/A", "assignment description"
+            ),
             f"Due Date: {format_date(response.get('due_at'))}",
             f"Points Possible: {response.get('points_possible', 'N/A')}",
             f"Assignment Group ID: {response.get('assignment_group_id', 'N/A')}",
             f"Submission Types: {', '.join(response.get('submission_types', ['N/A']))}",
             f"Published: {response.get('published', False)}",
-            f"Locked: {response.get('locked_for_user', False)}"
+            f"Locked: {response.get('locked_for_user', False)}",
         ]
 
         # Try to get the course code for display
         course_display = await get_course_code(course_id) or course_identifier
-        return f"Assignment Details for ID {assignment_id} in course {course_display}:\n\n" + "\n".join(details)
+        return (
+            f"Assignment Details for ID {assignment_id} in course {course_display}:\n\n"
+            + "\n".join(details)
+        )
 
 
 def register_educator_assignment_tools(mcp: FastMCP) -> None:
     """Register educator-only assignment tools (grading, analytics, management)."""
 
-    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @mcp.tool(
+        annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False)
+    )
     @validate_params
-    async def assign_peer_review(course_identifier: str, assignment_id: str, reviewer_id: str, reviewee_id: str) -> str:
+    async def assign_peer_review(
+        course_identifier: str, assignment_id: str, reviewer_id: str, reviewee_id: str
+    ) -> str:
         """Manually assign a peer review to a student for a specific assignment.
 
         Args:
@@ -138,8 +450,10 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         # First, we need to get the submission ID for the reviewee
         submissions = await make_canvas_request(
             "get",
-            canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions'),
-            params={"per_page": 100}
+            canvas_path(
+                "courses", course_id, "assignments", assignment_id, "submissions"
+            ),
+            params={"per_page": 100},
         )
 
         if "error" in submissions:
@@ -159,14 +473,16 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
                 "submission": {
                     "user_id": reviewee_id,
                     "submission_type": "online_text_entry",
-                    "body": "Placeholder submission for peer review"
+                    "body": "Placeholder submission for peer review",
                 }
             }
 
             reviewee_submission = await make_canvas_request(
                 "post",
-                canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions'),
-                data=placeholder_data
+                canvas_path(
+                    "courses", course_id, "assignments", assignment_id, "submissions"
+                ),
+                data=placeholder_data,
             )
 
             if "error" in reviewee_submission:
@@ -183,8 +499,16 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         # Make the API request to create the peer review
         response = await make_canvas_request(
             "post",
-            canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions', submission_id, 'peer_reviews'),
-            data=data
+            canvas_path(
+                "courses",
+                course_id,
+                "assignments",
+                assignment_id,
+                "submissions",
+                submission_id,
+                "peer_reviews",
+            ),
+            data=data,
         )
 
         if "error" in response:
@@ -193,11 +517,13 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         # Try to get the course code for display
         course_display = await get_course_code(course_id) or course_identifier
 
-        return f"Successfully assigned peer review in course {course_display}:\n" + \
-               f"Assignment ID: {assignment_id}\n" + \
-               f"Reviewer ID: {reviewer_id}\n" + \
-               f"Reviewee ID: {reviewee_id}\n" + \
-               f"Submission ID: {submission_id}"
+        return (
+            f"Successfully assigned peer review in course {course_display}:\n"
+            + f"Assignment ID: {assignment_id}\n"
+            + f"Reviewer ID: {reviewer_id}\n"
+            + f"Reviewee ID: {reviewee_id}\n"
+            + f"Submission ID: {submission_id}"
+        )
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params
@@ -212,8 +538,10 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
         # Get all submissions for this assignment
         submissions = await fetch_all_paginated_results(
-            canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions'),
-            {"include[]": "submission_comments", "per_page": 100}
+            canvas_path(
+                "courses", course_id, "assignments", assignment_id, "submissions"
+            ),
+            {"include[]": "submission_comments", "per_page": 100},
         )
 
         if isinstance(submissions, dict) and "error" in submissions:
@@ -227,8 +555,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
         # Get all users in the course for name lookups
         users = await fetch_all_paginated_results(
-            canvas_path('courses', course_id, 'users'),
-            {"per_page": 100}
+            canvas_path("courses", course_id, "users"), {"per_page": 100}
         )
 
         if isinstance(users, dict) and "error" in users:
@@ -252,7 +579,15 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             # Get peer reviews for this submission
             peer_reviews = await make_canvas_request(
                 "get",
-                canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions', submission_id, 'peer_reviews')
+                canvas_path(
+                    "courses",
+                    course_id,
+                    "assignments",
+                    assignment_id,
+                    "submissions",
+                    submission_id,
+                    "peer_reviews",
+                ),
             )
 
             if "error" in peer_reviews:
@@ -262,7 +597,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
                 peer_reviews_by_submission[submission_id] = {
                     "user_id": user_id,
                     "user_name": user_name,
-                    "peer_reviews": peer_reviews
+                    "peer_reviews": peer_reviews,
                 }
 
         # Format the output
@@ -309,7 +644,9 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params
-    async def list_submissions(course_identifier: str | int, assignment_id: str | int) -> str:
+    async def list_submissions(
+        course_identifier: str | int, assignment_id: str | int
+    ) -> str:
         """List every submission record for one assignment.
 
         Returns one record per student (user ID, submitted-at time, score,
@@ -326,12 +663,13 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         # Ensure assignment_id is a string
         assignment_id_str = str(assignment_id)
 
-        params = {
-            "per_page": 100
-        }
+        params = {"per_page": 100}
 
         submissions = await fetch_all_paginated_results(
-            canvas_path('courses', course_id, 'assignments', assignment_id_str, 'submissions'), params
+            canvas_path(
+                "courses", course_id, "assignments", assignment_id_str, "submissions"
+            ),
+            params,
         )
 
         if isinstance(submissions, dict) and "error" in submissions:
@@ -356,74 +694,157 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
         # Try to get the course code for display
         course_display = await get_course_code(course_id) or course_identifier
-        return f"Submissions for Assignment {assignment_id} in course {course_display}:\n\n" + "\n".join(submissions_info)
+        return (
+            f"Submissions for Assignment {assignment_id} in course {course_display}:\n\n"
+            + "\n".join(submissions_info)
+        )
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params
-    async def get_assignment_analytics(course_identifier: str | int, assignment_id: str | int) -> str:
+    async def get_assignment_analytics(
+        course_identifier: str | int, assignment_id: str | int
+    ) -> str:
         """Get detailed analytics about student performance on a specific assignment.
 
         Args:
             course_identifier: Course code or Canvas ID
             assignment_id: Canvas assignment ID
         """
+        observed_start = datetime.datetime.now(datetime.UTC).isoformat()
         course_id = await get_course_id(course_identifier)
+        canvas_origin = urlsplit(get_config().canvas_api_url)
+        hostname = canvas_origin.hostname or ""
+        host = f"[{hostname}]" if ":" in hostname else hostname
+        port = f":{canvas_origin.port}" if canvas_origin.port is not None else ""
+        origin = f"{canvas_origin.scheme}://{host}{port}"
+        assignment_url = origin + canvas_path(
+            "courses", course_id, "assignments", assignment_id
+        )
+        api_base = origin + canvas_origin.path.rstrip("/")
+        source_urls = [
+            assignment_url,
+            api_base + canvas_path("courses", course_id, "assignments", assignment_id),
+            api_base + canvas_path("courses", course_id, "users"),
+            api_base
+            + canvas_path(
+                "courses", course_id, "assignments", assignment_id, "submissions"
+            ),
+        ]
+
+        def observation_context() -> str:
+            return (
+                f"Observation started: {observed_start}\n"
+                f"Observation completed: {datetime.datetime.now(datetime.UTC).isoformat()}\n"
+                "Sources:\n"
+                + "\n".join(f"  {url}" for url in source_urls)
+                + "\nScope: visible student roster and returned assignment submissions; reads are not atomic.\n"
+            )
 
         # Ensure assignment_id is a string
         assignment_id_str = str(assignment_id)
 
         # Get assignment details
         assignment = await make_canvas_request(
-            "get", canvas_path('courses', course_id, 'assignments', assignment_id_str)
+            "get", canvas_path("courses", course_id, "assignments", assignment_id_str)
         )
 
-        if isinstance(assignment, dict) and "error" in assignment:
-            return f"Error fetching assignment: {assignment['error']}"
+        if not isinstance(assignment, dict) or "error" in assignment:
+            return (
+                "Error: fetching assignment. Unavailable: assignment details.\n"
+                + observation_context()
+            )
 
         # Get all students in the course
-        params = {
-            "enrollment_type[]": "student",
-            "per_page": 100
-        }
+        params = {"enrollment_type[]": "student", "per_page": 100}
 
         students = await fetch_all_paginated_results(
-            canvas_path('courses', course_id, 'users'), params
+            canvas_path("courses", course_id, "users"), params
         )
 
-        if isinstance(students, dict) and "error" in students:
-            return f"Error fetching students: {students['error']}"
-
-        if not students:
-            return f"No students found for course {course_identifier}."
+        if not isinstance(students, list) or any(
+            not isinstance(student, dict) for student in students
+        ):
+            return (
+                "Error: fetching students. Unavailable: roster denominator.\n"
+                + observation_context()
+            )
 
         # Anonymization happens at the client layer (core/client.py) per
         # ENABLE_DATA_ANONYMIZATION (#179)
 
         # Get submissions for this assignment
         submissions = await fetch_all_paginated_results(
-            canvas_path('courses', course_id, 'assignments', assignment_id, 'submissions'),
-            {"per_page": 100, "include[]": ["user"]}
+            canvas_path(
+                "courses", course_id, "assignments", assignment_id, "submissions"
+            ),
+            {"per_page": 100, "include[]": ["user"]},
         )
 
-        if isinstance(submissions, dict) and "error" in submissions:
-            return f"Error fetching submissions: {submissions['error']}"
+        if not isinstance(submissions, list) or any(
+            not isinstance(submission, dict) for submission in submissions
+        ):
+            return (
+                "Error: fetching submissions. Unavailable: all submission fields.\n"
+                + observation_context()
+            )
+        observed_fields = (
+            "submitted_at",
+            "score",
+            "late",
+            "missing",
+            "excused",
+            "workflow_state",
+        )
+        unavailable = dict.fromkeys(observed_fields, 0)
+        roster_ids = {_grading_id(student.get("id")) for student in students}
+        if None in roster_ids or len(roster_ids) != len(students):
+            return (
+                "Error: fetching students. Unavailable: valid unique roster identities.\n"
+                + observation_context()
+            )
+        excluded_submission_count = sum(
+            _grading_id(submission.get("user_id")) not in roster_ids
+            for submission in submissions
+        )
+        submissions = [
+            submission
+            for submission in submissions
+            if _grading_id(submission.get("user_id")) in roster_ids
+        ]
+        if len(
+            {_grading_id(submission.get("user_id")) for submission in submissions}
+        ) != len(submissions):
+            return (
+                "Error: fetching submissions. Unavailable: unique submission identities.\n"
+                + observation_context()
+            )
 
         # Extract assignment details
         assignment_name = assignment.get("name", "Unknown Assignment")
-        due_date = assignment.get("due_at")
-        points_possible = assignment.get("points_possible", 0)
+        raw_due_date = assignment.get("due_at")
+        due_date = raw_due_date if isinstance(raw_due_date, str) else None
+        raw_points_possible = assignment.get("points_possible")
+        points_possible = (
+            raw_points_possible
+            if _finite_grade_number(raw_points_possible) and raw_points_possible >= 0
+            else 0
+        )
         is_published = assignment.get("published", False)
 
         # Format the due date
-        due_date_str = "No due date"
+        due_date_str = (
+            "No due date"
+            if "due_at" in assignment and raw_due_date is None
+            else "Unavailable"
+        )
         if due_date:
-            due_date_obj = parse_date(due_date)
+            due_date_obj = _analytics_timestamp(due_date)
             if due_date_obj:
                 due_date_str = format_date(due_date)
                 now = datetime.datetime.now(datetime.UTC)
                 is_past_due = due_date_obj < now
             else:
-                due_date_str = due_date
+                due_date_str = "Unavailable (invalid due date)"
                 is_past_due = False
         else:
             is_past_due = False
@@ -441,44 +862,75 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
                 "submitted": 0,
                 "unsubmitted": 0,
                 "graded": 0,
-                "pending_review": 0
-            }
+                "pending_review": 0,
+            },
         }
 
         # Student status tracking
         student_status = []
         missing_students = []
-        low_scoring_students = []
-        high_scoring_students = []
+        low_scoring_students: list[tuple[str, int | float, float]] = []
+        high_scoring_students: list[tuple[str, int | float, float]] = []
 
         # Track which students have submissions
         student_ids_with_submissions = set()
 
         for submission in submissions:
-            student_id = submission.get("user_id")
+            student_id = _grading_id(submission.get("user_id"))
             student_ids_with_submissions.add(student_id)
 
             # Find student name
             student_name = "Unknown"
             for student in students:
-                if student.get("id") == student_id:
+                if _grading_id(student.get("id")) == student_id:
                     student_name = student.get("name", "Unknown")
                     break
 
             # Process submission data
-            score = submission.get("score")
-            is_submitted = submission.get("submitted_at") is not None
-            is_late = submission.get("late", False)
-            is_missing = submission.get("missing", False)
-            is_excused = submission.get("excused", False)
-            is_graded = score is not None
+            for field in observed_fields:
+                if field not in submission:
+                    unavailable[field] += 1
+                elif field in {"late", "missing", "excused"} and not isinstance(
+                    submission[field], bool
+                ):
+                    unavailable[field] += 1
+                elif (
+                    field == "score"
+                    and submission[field] is not None
+                    and not _finite_grade_number(submission[field])
+                ):
+                    unavailable[field] += 1
+                elif (
+                    field == "submitted_at"
+                    and submission[field] is not None
+                    and (
+                        not isinstance(submission[field], str)
+                        or _analytics_timestamp(submission[field]) is None
+                    )
+                ):
+                    unavailable[field] += 1
+                elif field == "workflow_state" and (
+                    not isinstance(submission[field], str)
+                    or submission[field]
+                    not in {"submitted", "unsubmitted", "graded", "pending_review"}
+                ):
+                    unavailable[field] += 1
+            raw_score = submission.get("score")
+            score = raw_score if _finite_grade_number(raw_score) else None
+            is_submitted = (
+                isinstance(submission.get("submitted_at"), str)
+                and _analytics_timestamp(submission["submitted_at"]) is not None
+            )
+            is_late = submission.get("late") is True
+            is_missing = submission.get("missing") is True
+            is_excused = submission.get("excused") is True
             status = submission.get("workflow_state", "unsubmitted")
             submitted_at = submission.get("submitted_at")
 
             if submitted_at:
                 try:
                     submitted_at = datetime.datetime.fromisoformat(
-                        submitted_at.replace('Z', '+00:00')
+                        submitted_at.replace("Z", "+00:00")
                     ).strftime("%Y-%m-%d %H:%M")
                 except (ValueError, AttributeError):
                     pass
@@ -493,7 +945,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
                 missing_students.append(student_name)
             if is_excused:
                 submission_stats["excused_count"] += 1
-            if is_graded:
+            if score is not None:
                 submission_stats["graded_count"] += 1
                 submission_stats["scores"].append(score)
 
@@ -506,38 +958,43 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
                         high_scoring_students.append((student_name, score, percentage))
 
             # Update status counts
-            if status in submission_stats["status_counts"]:
+            if isinstance(status, str) and status in submission_stats["status_counts"]:
                 submission_stats["status_counts"][status] += 1
 
             # Add to student status
-            student_status.append({
-                "name": student_name,
-                "submitted": is_submitted,
-                "submitted_at": submitted_at,
-                "late": is_late,
-                "missing": is_missing,
-                "excused": is_excused,
-                "score": score,
-                "status": status
-            })
+            student_status.append(
+                {
+                    "name": student_name,
+                    "submitted": is_submitted,
+                    "submitted_at": submitted_at,
+                    "late": is_late,
+                    "missing": is_missing,
+                    "excused": is_excused,
+                    "score": score,
+                    "status": status,
+                }
+            )
 
         # Find students with no submissions
         for student in students:
-            if student.get("id") not in student_ids_with_submissions:
+            if _grading_id(student.get("id")) not in student_ids_with_submissions:
                 student_name = student.get("name", "Unknown")
-                missing_students.append(student_name)
+                for field in observed_fields:
+                    unavailable[field] += 1
 
                 # Add to student status
-                student_status.append({
-                    "name": student_name,
-                    "submitted": False,
-                    "submitted_at": None,
-                    "late": False,
-                    "missing": True,
-                    "excused": False,
-                    "score": None,
-                    "status": "unsubmitted"
-                })
+                student_status.append(
+                    {
+                        "name": student_name,
+                        "submitted": False,
+                        "submitted_at": None,
+                        "late": False,
+                        "missing": None,
+                        "excused": False,
+                        "score": None,
+                        "status": "unsubmitted",
+                    }
+                )
 
         # Compute grade statistics
         scores = submission_stats["scores"]
@@ -569,15 +1026,25 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             output += " (Past Due)"
         output += "\n"
 
-        output += f"  Points Possible: {points_possible}\n"
-        output += f"  Published: {'Yes' if is_published else 'No'}\n\n"
+        shown_points = (
+            points_possible
+            if _finite_grade_number(raw_points_possible) and raw_points_possible >= 0
+            else "Unavailable"
+        )
+        shown_published = (
+            ("Yes" if is_published else "No")
+            if isinstance(assignment.get("published"), bool)
+            else "Unavailable"
+        )
+        output += f"  Points Possible: {shown_points}\n"
+        output += f"  Published: {shown_published}\n\n"
 
         # Submission statistics
         output += "Submission Statistics:\n"
         total_students = submission_stats["total_students"]
         submitted = submission_stats["submitted_count"]
         graded = submission_stats["graded_count"]
-        missing = submission_stats["missing_count"] + (total_students - len(submissions))
+        missing = submission_stats["missing_count"]
         late = submission_stats["late_count"]
 
         # Calculate percentages
@@ -586,30 +1053,46 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         missing_pct = (missing / total_students * 100) if total_students > 0 else 0
         late_pct = (late / submitted * 100) if submitted > 0 else 0
 
-        output += f"  Submitted: {submitted}/{total_students} ({round(submitted_pct, 1)}%)\n"
+        output += (
+            f"  Submitted: {submitted}/{total_students} ({round(submitted_pct, 1)}%)\n"
+        )
         output += f"  Graded: {graded}/{total_students} ({round(graded_pct, 1)}%)\n"
         output += f"  Missing: {missing}/{total_students} ({round(missing_pct, 1)}%)\n"
         if submitted > 0:
-            output += f"  Late: {late}/{submitted} ({round(late_pct, 1)}% of submissions)\n"
+            output += (
+                f"  Late: {late}/{submitted} ({round(late_pct, 1)}% of submissions)\n"
+            )
         output += f"  Excused: {submission_stats['excused_count']}\n\n"
 
         # Grade statistics
         if scores:
             output += "Grade Statistics:\n"
-            output += f"  Average Score: {round(avg_score, 2)}/{points_possible} ({round(avg_percentage, 1)}%)\n"
-            output += f"  Median Score: {round(median_score, 2)}/{points_possible} ({round((median_score/points_possible)*100, 1)}%)\n"
+            shown_avg_percentage = (
+                round(avg_percentage, 1) if points_possible > 0 else "unavailable"
+            )
+            output += f"  Average Score: {round(avg_score, 2)}/{shown_points} ({shown_avg_percentage}%)\n"
+            median_percentage = (
+                round((median_score / points_possible) * 100, 1)
+                if points_possible > 0
+                else "unavailable"
+            )
+            output += f"  Median Score: {round(median_score, 2)}/{points_possible} ({median_percentage}%)\n"
             output += f"  Standard Deviation: {round(std_dev, 2)}\n"
 
             # High/Low scores
             # Student display names are author-controlled (issue 239).
             if low_scoring_students:
                 output += "\nStudents Scoring Below 70%:\n"
-                for name, score, percentage in sorted(low_scoring_students, key=lambda x: x[2]):
+                for name, score, percentage in sorted(
+                    low_scoring_students, key=lambda x: x[2]
+                ):
                     output += f"  {fence_untrusted_inline(name, 'student name')}: {round(score, 1)}/{points_possible} ({round(percentage, 1)}%)\n"
 
             if high_scoring_students:
                 output += "\nStudents Scoring Above 90%:\n"
-                for name, score, percentage in sorted(high_scoring_students, key=lambda x: x[2], reverse=True):
+                for name, score, percentage in sorted(
+                    high_scoring_students, key=lambda x: x[2], reverse=True
+                ):
                     output += f"  {fence_untrusted_inline(name, 'student name')}: {round(score, 1)}/{points_possible} ({round(percentage, 1)}%)\n"
 
         # Missing students
@@ -621,9 +1104,28 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             if len(missing_students) > 10:
                 output += f"  ...and {len(missing_students) - 10} more\n"
 
+        output += "\nUnavailable field counts (missing or malformed; null score means ungraded):\n"
+        for field, count in unavailable.items():
+            output += f"  {field}: {count}/{total_students}\n"
+        assignment_unavailable = {
+            "due_at": "due_at" not in assignment
+            or raw_due_date is not None
+            and _analytics_timestamp(raw_due_date) is None,
+            "points_possible": not _finite_grade_number(raw_points_possible)
+            or raw_points_possible < 0,
+            "published": not isinstance(assignment.get("published"), bool),
+        }
+        output += f"  Assignment fields absent: {sum(field not in assignment for field in assignment_unavailable)}/3\n"
+        output += f"  Assignment fields unavailable: {sum(assignment_unavailable.values())}/3\n"
+        output += f"  No returned submission record: {total_students - len(submissions)}/{total_students} (unknown, not inferred missing)\n"
+        output += f"  Submission records outside visible roster: {excluded_submission_count} (excluded)\n"
+        output += "Counts describe observed records; unavailable fields are not counted as false or missing.\n"
+        output += observation_context()
         return output
 
-    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @mcp.tool(
+        annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False)
+    )
     @validate_params
     async def create_assignment(
         course_identifier: str | int,
@@ -639,7 +1141,15 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         assignment_group_id: str | int | None = None,
         peer_reviews: bool = False,
         automatic_peer_reviews: bool = False,
-        allowed_extensions: str | None = None
+        allowed_extensions: str | None = None,
+        allowed_attempts: int | None = None,
+        position: int | None = None,
+        external_tool_url: str | None = None,
+        external_tool_new_tab: bool | None = None,
+        omit_from_final_grade: bool | None = None,
+        hide_in_gradebook: bool | None = None,
+        grading_standard_id: int | None = None,
+        annotatable_attachment_id: int | None = None,
     ) -> str:
         """Create a new assignment in a course.
 
@@ -647,17 +1157,25 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             course_identifier: Course code or Canvas ID
             name: Assignment name/title
             description: HTML description
-            submission_types: Comma-separated types (online_text_entry, online_url, online_upload, discussion_topic, none, on_paper, external_tool)
+            submission_types: Comma-separated types (online_text_entry, online_url, online_upload, discussion_topic, none, on_paper, external_tool, media_recording, student_annotation)
             due_at: Due date in ISO 8601 format
             unlock_at: Available date in ISO 8601 format
             lock_at: Lock date in ISO 8601 format
             points_possible: Maximum points
-            grading_type: One of: points, letter_grade, pass_fail, percent, not_graded
+            grading_type: points, letter_grade, gpa_scale, pass_fail, percent, not_graded
             published: Whether to publish immediately (default: False)
             assignment_group_id: Assignment group ID
             peer_reviews: Enable peer reviews
             automatic_peer_reviews: Auto-assign peer reviews
             allowed_extensions: Comma-separated file extensions (e.g., "pdf,docx,txt")
+            allowed_attempts: Positive attempt limit, or -1 for unlimited.
+            position: Positive position within the assignment group.
+            external_tool_url: HTTP(S) launch URL for external-tool submission.
+            external_tool_new_tab: Open the external tool in a new tab.
+            omit_from_final_grade: Exclude this assignment from final grades.
+            hide_in_gradebook: Hide this assignment in gradebooks.
+            grading_standard_id: Existing grading standard for letter/GPA grades.
+            annotatable_attachment_id: Course file for student annotation.
         """
         # Backstop for issue 239: a fenced read result (read→clone) must not
         # publish our provenance markers into live Canvas.
@@ -669,14 +1187,28 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
 
         # Validate grading_type if provided
-        valid_grading_types = ["points", "letter_grade", "pass_fail", "percent", "not_graded"]
+        valid_grading_types = [
+            "points",
+            "letter_grade",
+            "pass_fail",
+            "percent",
+            "not_graded",
+            "gpa_scale",
+        ]
         if grading_type and grading_type not in valid_grading_types:
             return f"Invalid grading_type '{grading_type}'. Must be one of: {', '.join(valid_grading_types)}"
 
         # Validate submission_types if provided
         valid_submission_types = [
-            "online_text_entry", "online_url", "online_upload",
-            "discussion_topic", "none", "on_paper", "external_tool"
+            "online_text_entry",
+            "online_url",
+            "online_upload",
+            "discussion_topic",
+            "none",
+            "on_paper",
+            "external_tool",
+            "media_recording",
+            "student_annotation",
         ]
         submission_types_list = []
         if submission_types:
@@ -686,10 +1218,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
                     return f"Invalid submission_type '{st}'. Must be one of: {', '.join(valid_submission_types)}"
 
         # Build assignment data
-        assignment_data = {
-            "name": name,
-            "published": published
-        }
+        assignment_data = {"name": name, "published": published}
 
         if description:
             assignment_data["description"] = description
@@ -739,11 +1268,43 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             extensions_list = [ext.strip() for ext in allowed_extensions.split(",")]
             assignment_data["allowed_extensions"] = extensions_list
 
+        options = _assignment_authoring_options(
+            allowed_attempts,
+            position,
+            external_tool_url,
+            external_tool_new_tab,
+            omit_from_final_grade,
+            hide_in_gradebook,
+            grading_standard_id,
+            annotatable_attachment_id,
+        )
+        if isinstance(options, str):
+            return options
+        effective_types = submission_types_list
+        if "external_tool_tag_attributes" in options:
+            if effective_types != ["external_tool"]:
+                return "Error: external tool options require submission_types='external_tool'."
+        if annotatable_attachment_id is not None:
+            if "student_annotation" not in (effective_types or []):
+                return "Error: annotatable_attachment_id requires student_annotation submission."
+            attachment = await make_canvas_request(
+                "get",
+                canvas_path("courses", course_id, "files", annotatable_attachment_id),
+            )
+            if (
+                not isinstance(attachment, dict)
+                or "error" in attachment
+                or coerce_canvas_id(attachment.get("id", ""))
+                != str(annotatable_attachment_id)
+            ):
+                return "Error: could not verify the annotation file belongs to this course."
+        assignment_data.update(options)
+
         # Make the API request
         response = await make_canvas_request(
             "post",
-            canvas_path('courses', course_id, 'assignments'),
-            data={"assignment": assignment_data}
+            canvas_path("courses", course_id, "assignments"),
+            data={"assignment": assignment_data},
         )
 
         if "error" in response:
@@ -799,6 +1360,14 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         peer_reviews: bool | None = None,
         automatic_peer_reviews: bool | None = None,
         allowed_extensions: str | None = None,
+        allowed_attempts: int | None = None,
+        position: int | None = None,
+        external_tool_url: str | None = None,
+        external_tool_new_tab: bool | None = None,
+        omit_from_final_grade: bool | None = None,
+        hide_in_gradebook: bool | None = None,
+        grading_standard_id: int | None = None,
+        annotatable_attachment_id: int | None = None,
         clear_due_at: bool = False,
         clear_unlock_at: bool = False,
         clear_lock_at: bool = False,
@@ -810,17 +1379,25 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             assignment_id: Assignment ID to update
             name: New assignment name/title
             description: New HTML description
-            submission_types: Comma-separated types (online_text_entry, online_url, online_upload, discussion_topic, none, on_paper, external_tool)
+            submission_types: Comma-separated types (online_text_entry, online_url, online_upload, discussion_topic, none, on_paper, external_tool, media_recording, student_annotation)
             due_at: New due date in ISO 8601 format
             unlock_at: New available date in ISO 8601 format
             lock_at: New lock date in ISO 8601 format
             points_possible: New maximum points
-            grading_type: One of: points, letter_grade, pass_fail, percent, not_graded
+            grading_type: points, letter_grade, gpa_scale, pass_fail, percent, not_graded
             published: Whether to publish the assignment
             assignment_group_id: Assignment group ID to move to
             peer_reviews: Enable peer reviews
             automatic_peer_reviews: Auto-assign peer reviews
             allowed_extensions: Comma-separated file extensions (e.g., "pdf,docx,txt")
+            allowed_attempts: Positive attempt limit, or -1 for unlimited.
+            position: Positive position within the assignment group.
+            external_tool_url: HTTP(S) launch URL for external-tool submission.
+            external_tool_new_tab: Open the external tool in a new tab.
+            omit_from_final_grade: Exclude this assignment from final grades.
+            hide_in_gradebook: Hide this assignment in gradebooks.
+            grading_standard_id: Existing grading standard for letter/GPA grades.
+            annotatable_attachment_id: Course file for student annotation.
             clear_due_at: Remove the existing due date
             clear_unlock_at: Remove the existing availability date
             clear_lock_at: Remove the existing lock date
@@ -857,8 +1434,15 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         # Validate and process submission_types if provided
         if submission_types is not None:
             valid_submission_types = [
-                "online_text_entry", "online_url", "online_upload",
-                "discussion_topic", "none", "on_paper", "external_tool"
+                "online_text_entry",
+                "online_url",
+                "online_upload",
+                "discussion_topic",
+                "none",
+                "on_paper",
+                "external_tool",
+                "media_recording",
+                "student_annotation",
             ]
             submission_types_list = [s.strip() for s in submission_types.split(",")]
             for st in submission_types_list:
@@ -896,7 +1480,14 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
 
         # Validate grading_type if provided
         if grading_type is not None:
-            valid_grading_types = ["points", "letter_grade", "pass_fail", "percent", "not_graded"]
+            valid_grading_types = [
+                "points",
+                "letter_grade",
+                "pass_fail",
+                "percent",
+                "not_graded",
+                "gpa_scale",
+            ]
             if grading_type not in valid_grading_types:
                 return f"Invalid grading_type '{grading_type}'. Must be one of: {', '.join(valid_grading_types)}"
             assignment_data["grading_type"] = grading_type
@@ -921,6 +1512,54 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             extensions_list = [ext.strip() for ext in allowed_extensions.split(",")]
             assignment_data["allowed_extensions"] = extensions_list
 
+        options = _assignment_authoring_options(
+            allowed_attempts,
+            position,
+            external_tool_url,
+            external_tool_new_tab,
+            omit_from_final_grade,
+            hide_in_gradebook,
+            grading_standard_id,
+            annotatable_attachment_id,
+        )
+        if isinstance(options, str):
+            return options
+        effective_types = assignment_data.get("submission_types")
+        if "external_tool_tag_attributes" in options:
+            if effective_types is None:
+                current = await make_canvas_request(
+                    "get",
+                    canvas_path("courses", course_id, "assignments", assignment_id),
+                )
+                if not isinstance(current, dict) or "error" in current:
+                    return "Error: could not verify the current assignment submission type."
+                effective_types = current.get("submission_types")
+            if effective_types != ["external_tool"]:
+                return "Error: external tool options require submission_types='external_tool'."
+        if annotatable_attachment_id is not None:
+            if effective_types is None:
+                current = await make_canvas_request(
+                    "get",
+                    canvas_path("courses", course_id, "assignments", assignment_id),
+                )
+                if not isinstance(current, dict) or "error" in current:
+                    return "Error: could not verify the current assignment submission type."
+                effective_types = current.get("submission_types")
+            if "student_annotation" not in (effective_types or []):
+                return "Error: annotatable_attachment_id requires student_annotation submission."
+            attachment = await make_canvas_request(
+                "get",
+                canvas_path("courses", course_id, "files", annotatable_attachment_id),
+            )
+            if (
+                not isinstance(attachment, dict)
+                or "error" in attachment
+                or coerce_canvas_id(attachment.get("id", ""))
+                != str(annotatable_attachment_id)
+            ):
+                return "Error: could not verify the annotation file belongs to this course."
+        assignment_data.update(options)
+
         # Check if there's anything to update
         if not assignment_data:
             return "No fields provided to update. Specify at least one field to modify (e.g., name, description, due_at, points_possible)."
@@ -928,8 +1567,8 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         # Make the API request
         response = await make_canvas_request(
             "put",
-            canvas_path('courses', course_id, 'assignments', assignment_id),
-            data={"assignment": assignment_data}
+            canvas_path("courses", course_id, "assignments", assignment_id),
+            data={"assignment": assignment_data},
         )
 
         if "error" in response:
@@ -977,7 +1616,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         assignment_id: str | int,
         require_name_match: str | None = None,
         allow_deleting_student_work: bool = False,
-        confirmation_token: str | None = None
+        confirmation_token: str | None = None,
     ) -> str:
         """Delete an assignment. Two-step: preview first, then confirm with the token.
 
@@ -994,7 +1633,7 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         course_id = await get_course_id(course_identifier)
 
         assignment = await make_canvas_request(
-            "get", canvas_path('courses', course_id, 'assignments', assignment_id)
+            "get", canvas_path("courses", course_id, "assignments", assignment_id)
         )
         if "error" in assignment:
             return f"Error fetching assignment details: {assignment['error']}"
@@ -1023,9 +1662,14 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         # Everything the preview shows to identify the target is bound, so a
         # due-date or points edit between preview and confirm stops matching.
         fingerprint = _DELETE_ASSIGNMENT_GUARD.fingerprint(
-            "delete_assignment_with_confirmation", str(course_id), str(assignment_id),
-            name, str(assignment.get("due_at")), str(assignment.get("points_possible")),
-            str(has_submissions), str(needs_grading),
+            "delete_assignment_with_confirmation",
+            str(course_id),
+            str(assignment_id),
+            name,
+            str(assignment.get("due_at")),
+            str(assignment.get("points_possible")),
+            str(has_submissions),
+            str(needs_grading),
             str(allow_deleting_student_work),
         )
         if not confirmation_token:
@@ -1041,15 +1685,19 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
                 "  ⚠️  Deleting an assignment also deletes all of its submissions and grades."
             )
             return preview_with_token(
-                _DELETE_ASSIGNMENT_GUARD, fingerprint,
-                "delete_assignment_with_confirmation", preview,
+                _DELETE_ASSIGNMENT_GUARD,
+                fingerprint,
+                "delete_assignment_with_confirmation",
+                preview,
             )
-        error = redeem_confirmation(_DELETE_ASSIGNMENT_GUARD, confirmation_token, fingerprint)
+        error = redeem_confirmation(
+            _DELETE_ASSIGNMENT_GUARD, confirmation_token, fingerprint
+        )
         if error:
             return error
 
         response = await make_canvas_request(
-            "delete", canvas_path('courses', course_id, 'assignments', assignment_id)
+            "delete", canvas_path("courses", course_id, "assignments", assignment_id)
         )
         if "error" in response:
             return f"Error deleting assignment {shown_name}: {response['error']}"
@@ -1070,16 +1718,23 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         grades: dict[str, Any],
         dry_run: bool = False,
         max_concurrent: int = 5,
-        rate_limit_delay: float = 1.0
+        rate_limit_delay: float = 1.0,
     ) -> str:
         """Grade multiple submissions efficiently with concurrent processing.
 
         Supports both rubric-based and simple point-based grading in batches.
+        Each target is read before a single write and inspected afterward.
+        Results retain prose and append versioned recovery JSON identifying
+        verified, rejected, unknown, and unattempted targets. Authorization
+        failures stop later batches; already dispatched writes cannot be undone.
+        Comments append, so unknown comment outcomes must be inspected before retry.
 
         Args:
             course_identifier: Course code or Canvas ID
             assignment_id: Canvas assignment ID
-            grades: Dict mapping user_id to {rubric_assessment?, grade?, comment?}.
+            grades: Dict mapping user_id to {rubric_assessment?, grade?, comment?, expected_attempt?}.
+                expected_attempt binds the write to the reviewed attempt; null
+                requires an explicitly never-submitted baseline.
                 OMIT `comment` unless the instructor explicitly asked for written
                 feedback. "Assign grade 8" means the grade ONLY. A comment is
                 visible to the student in SpeedGrader, APPENDS a new comment on
@@ -1090,232 +1745,318 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             max_concurrent: Max concurrent grading operations (default: 5)
             rate_limit_delay: Delay between batches in seconds (default: 1.0)
         """
+        preflight_error = _bulk_grading_preflight(
+            grades, max_concurrent, rate_limit_delay
+        )
+        if preflight_error:
+            return preflight_error
         course_id = await get_course_id(course_identifier)
         assignment_id_str = str(assignment_id)
-
-        # Validate that we have grades to process
-        if not grades:
-            return "Error: No grades provided. The grades dictionary is empty."
-
-        # Check if rubric is configured for grading (if using rubric assessments)
+        user_ids = list(grades)
+        outcomes: list[dict[str, Any]] = []
+        assignment_check: dict[str, Any] = {}
         has_rubric_grades = any(
-            "rubric_assessment" in grade_info
-            for grade_info in grades.values()
+            info.get("rubric_assessment") for info in grades.values()
         )
-
-        if has_rubric_grades:
-            assignment_check = await make_canvas_request(
+        needs_assignment = has_rubric_grades or any(
+            str(info.get("grade", "")).strip().endswith("%")
+            or str(info.get("grade", "")).lower()
+            in {"pass", "complete", "fail", "incomplete"}
+            for info in grades.values()
+        )
+        setup_error = None
+        if needs_assignment:
+            response = await make_canvas_request(
                 "get",
-                canvas_path('courses', course_id, 'assignments', assignment_id_str),
-                params={"include[]": ["rubric", "rubric_settings"]}
+                canvas_path("courses", course_id, "assignments", assignment_id_str),
+                params={"include[]": ["rubric", "rubric_settings"]},
             )
-
-            if "error" in assignment_check:
-                return "Error: Could not verify rubric grading settings; no assessments were submitted."
-
-            use_rubric_for_grading = assignment_check.get("use_rubric_for_grading") is True
-            if not use_rubric_for_grading:
-                return (
-                    "⚠️  ERROR: Rubric is not configured for grading!\n\n"
-                    "The rubric exists but 'use_for_grading' is set to FALSE.\n"
-                    "Grades will NOT be saved to the gradebook.\n\n"
-                    "To fix this:\n"
-                    "1. Use get_rubric to verify rubric settings\n"
-                    "2. Use associate_rubric with use_for_grading=True\n"
-                    "3. Re-run dry_run=True after correcting the configuration\n"
-                )
-
-        # Statistics tracking
-        stats = {
-            "total": len(grades),
-            "graded": 0,
-            "failed": 0
-        }
-        failed_results = []
+            if not isinstance(response, dict) or "error" in response:
+                setup_error = "Could not verify assignment grading settings; no assessments were submitted."
+            else:
+                assignment_check = response
+                if (
+                    has_rubric_grades
+                    and response.get("use_rubric_for_grading") is not True
+                ):
+                    setup_error = "Rubric is not configured for grading; use_for_grading must be true."
+        actor_id = None
+        if (
+            not dry_run
+            and not setup_error
+            and any(info.get("comment") for info in grades.values())
+        ):
+            profile = await make_canvas_request(
+                "get", canvas_path("users", "self", "profile")
+            )
+            if not isinstance(profile, dict) or "error" in profile:
+                setup_error = "Could not verify the comment author's identity; no grades were submitted."
+            else:
+                actor_id = _grading_id(profile.get("id"))
+                if actor_id is None:
+                    setup_error = "Could not verify the comment author's identity; no grades were submitted."
 
         async def grade_single_submission(
-            user_id: str, grade_info: dict[str, Any]
+            user_id: str, info: dict[str, Any]
         ) -> dict[str, Any]:
-            """Grade a single submission."""
-            try:
-                # Backstop for issue 239: a comment lifted from fenced read
-                # output would publish our provenance markers into the
-                # student-visible gradebook. Refuse before any write (and
-                # before the dry-run echoes it). Covers the overall comment AND
-                # every per-criterion comment in the rubric assessment.
-                _texts = [grade_info.get("comment") or ""]
-                for _crit in (grade_info.get("rubric_assessment") or {}).values():
-                    if isinstance(_crit, dict):
-                        _texts.append(str(_crit.get("comments") or ""))
-                if any(contains_fence_markers(t) for t in _texts):
-                    return {
-                        "status": "failed",
-                        "user_id": user_id,
-                        "error": FENCE_LEAK_ERROR,
-                    }
-
-                if dry_run:
-                    # In dry run mode, just validate the data.
-                    # The preview MUST name any comment: it is student-visible,
-                    # permanent and appended, and an instructor who dry-runs
-                    # first (as the bulk-grading skill instructs) would
-                    # otherwise get no warning that one is about to post (#235).
-                    comment_note = (
-                        f" AND post this student-visible comment: {grade_info['comment']!r}"
-                        if grade_info.get("comment") else ""
-                    )
-                    if "rubric_assessment" in grade_info:
-                        total_points = sum(
-                            criterion.get("points", 0)
-                            for criterion in grade_info["rubric_assessment"].values()
-                        )
-                        return {
-                            "status": "success",
-                            "user_id": user_id,
-                            "message": f"DRY RUN: Would grade with {total_points} rubric points{comment_note}"
-                        }
-                    elif "grade" in grade_info:
-                        return {
-                            "status": "success",
-                            "user_id": user_id,
-                            "message": f"DRY RUN: Would grade with {grade_info['grade']} points{comment_note}"
-                        }
-                    else:
-                        return {
-                            "status": "failed",
-                            "user_id": user_id,
-                            "error": "No rubric_assessment or grade provided"
-                        }
-
-                # Build form data based on grading type
-                form_data = {}
-
-                if "rubric_assessment" in grade_info and grade_info["rubric_assessment"]:
-                    # Rubric-based grading
-                    form_data = build_rubric_assessment_form_data(
-                        grade_info["rubric_assessment"],
-                        grade_info.get("comment")
-                    )
-                elif "grade" in grade_info:
-                    # Simple grading
-                    form_data["submission[posted_grade]"] = str(grade_info["grade"])
-                    # Truthiness, not membership: an explicit comment=None or
-                    # comment="" meant "no comment", but the membership test
-                    # posted it anyway. The rubric path (build_rubric_assessment_
-                    # form_data) has always used truthiness; these now agree.
-                    if grade_info.get("comment"):
-                        form_data["comment[text_comment]"] = grade_info["comment"]
-                else:
-                    return {
-                        "status": "failed",
-                        "user_id": user_id,
-                        "error": "Must provide either rubric_assessment or grade"
-                    }
-
-                # Submit the grade
-                response = await make_canvas_request(
-                    "put",
-                    canvas_path('courses', course_id, 'assignments', assignment_id_str, 'submissions', user_id),
-                    data=form_data,
-                    use_form_data=True
+            """Dispatch once, then observe the persisted grade and optional comment."""
+            result: dict[str, Any] = {
+                "user_id": user_id,
+                "outcome": "unattempted",
+                "write_dispatched": False,
+                "grade_verified": False,
+                "comment_verified": not bool(info.get("comment")),
+                "stop_batches": False,
+            }
+            if dry_run:
+                comment_note = (
+                    f" AND post this student-visible comment: {info['comment']!r}"
+                    if info.get("comment")
+                    else ""
                 )
-
-                if "error" in response:
-                    return {
-                        "status": "failed",
-                        "user_id": user_id,
-                        "error": response["error"]
-                    }
-
-                if grade_info.get("rubric_assessment") and not rubric_grade_is_confirmed(
-                    assignment_check, grade_info["rubric_assessment"], response
+                value = (
+                    f"{sum(criterion['points'] for criterion in info['rubric_assessment'].values())} rubric points"
+                    if info.get("rubric_assessment")
+                    else f"{info['grade']} points"
+                )
+                result.update(
+                    reason="dry_run",
+                    message=f"DRY RUN: Would grade with {value}{comment_note}",
+                )
+                return result
+            path = canvas_path(
+                "courses",
+                course_id,
+                "assignments",
+                assignment_id_str,
+                "submissions",
+                user_id,
+            )
+            read_params = {"include[]": ["rubric_assessment", "submission_comments"]}
+            try:
+                before_response = await make_canvas_request(
+                    "get", path, params=read_params
+                )
+                before = _grading_submission_identity(
+                    before_response, assignment_id_str, user_id
+                )
+                result["stop_batches"] = _grading_policy_failure(before_response)
+                if before is None:
+                    result["reason"] = "prewrite_identity_unavailable"
+                    return result
+                attempt = before.get("attempt")
+                if not _grading_attempt_available(before):
+                    result["reason"] = "prewrite_attempt_unavailable"
+                    return result
+                result["observed_attempt"] = attempt
+                if "expected_attempt" in info and attempt != info["expected_attempt"]:
+                    result["reason"] = "reviewed_attempt_changed"
+                    return result
+                previous_comments = (
+                    _grading_comment_ids(before.get("submission_comments"))
+                    if info.get("comment")
+                    else set()
+                )
+                if previous_comments is None:
+                    result["reason"] = "prewrite_comment_ids_unavailable"
+                    return result
+                form_data = (
+                    build_rubric_assessment_form_data(
+                        info["rubric_assessment"], info.get("comment")
+                    )
+                    if info.get("rubric_assessment")
+                    else {"submission[posted_grade]": str(info["grade"])}
+                )
+                if info.get("comment"):
+                    form_data["comment[text_comment]"] = info["comment"]
+                result["write_dispatched"] = True
+                try:
+                    write_response = await make_canvas_request(
+                        "put", path, data=form_data, use_form_data=True
+                    )
+                except Exception:
+                    write_response = RequestFailure(
+                        "Write dispatch raised an exception.",
+                        WriteOutcome.MAY_HAVE_WRITTEN,
+                    )
+                result["stop_batches"] = _grading_policy_failure(write_response)
+                if isinstance(
+                    write_response, RequestFailure
+                ) and write_response.outcome in {
+                    WriteOutcome.REJECTED,
+                    WriteOutcome.NOT_DISPATCHED,
+                }:
+                    result.update(
+                        outcome="rejected"
+                        if write_response.outcome == WriteOutcome.REJECTED
+                        else "unattempted",
+                        reason="write_rejected"
+                        if write_response.outcome == WriteOutcome.REJECTED
+                        else "request_not_dispatched",
+                        write_dispatched=write_response.outcome
+                        != WriteOutcome.NOT_DISPATCHED,
+                    )
+                    return result
+                result["outcome"] = "unknown"
+                result["write_evidence"] = (
+                    "uncertain"
+                    if isinstance(write_response, dict) and "error" in write_response
+                    else "response_received"
+                )
+                persisted_response = await make_canvas_request(
+                    "get", path, params=read_params
+                )
+                result["readback_observed_at"] = datetime.datetime.now(
+                    datetime.UTC
+                ).isoformat()
+                result["stop_batches"] = result[
+                    "stop_batches"
+                ] or _grading_policy_failure(persisted_response)
+                persisted = _grading_submission_identity(
+                    persisted_response, assignment_id_str, user_id
+                )
+                if persisted is None:
+                    result["reason"] = "readback_identity_unavailable"
+                    return result
+                persisted_attempt = persisted.get("attempt")
+                if (
+                    not _grading_attempt_available(persisted, readback=True)
+                    or persisted_attempt != attempt
                 ):
-                    return {
-                        "status": "failed",
-                        "user_id": user_id,
-                        "error": RUBRIC_GRADE_UNCONFIRMED,
-                    }
-
-                return {
-                    "status": "success",
-                    "user_id": user_id,
-                    "grade": response.get("grade", "N/A")
-                }
-
-            except Exception as e:
-                return {
-                    "status": "failed",
-                    "user_id": user_id,
-                    "error": str(e)
-                }
-
-        # Process in batches
-        user_ids = list(grades.keys())
-        total_batches = (len(user_ids) + max_concurrent - 1) // max_concurrent
-
-        result_lines = []
-        result_lines.append(f"{'=' * 60}")
-        result_lines.append(f"Bulk Grading {'(DRY RUN) ' if dry_run else ''}for Assignment {assignment_id}")
-        result_lines.append(f"{'=' * 60}")
-        result_lines.append(f"Course: {await get_course_code(course_id) or course_identifier}")
-        result_lines.append(f"Total submissions to grade: {stats['total']}")
-        result_lines.append(f"Concurrent processing: {max_concurrent} per batch")
-        result_lines.append(f"Total batches: {total_batches}\n")
-
-        for i in range(0, len(user_ids), max_concurrent):
-            batch = user_ids[i:i + max_concurrent]
-            batch_num = (i // max_concurrent) + 1
-
-            result_lines.append(f"Processing batch {batch_num}/{total_batches} ({len(batch)} submissions)...")
-
-            # Process batch concurrently
-            tasks = [
-                grade_single_submission(user_id, grades[user_id])
-                for user_id in batch
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Update statistics
-            for result in results:
-                if isinstance(result, BaseException):
-                    stats["failed"] += 1
-                    failed_results.append({
-                        "user_id": "unknown",
-                        "error": str(result)
-                    })
-                elif result["status"] == "success":
-                    stats["graded"] += 1
-                    result_lines.append(f"  ✓ User {result['user_id']}: {result.get('message', 'Graded')}")
+                    result["reason"] = "submission_attempt_changed"
+                    return result
+                result["grade_verified"] = _persisted_grade_matches(
+                    assignment_check, info, persisted
+                )
+                if info.get("comment"):
+                    comments = persisted.get("submission_comments")
+                    persisted_ids = _grading_comment_ids(comments)
+                    result["comment_verified"] = (
+                        persisted_ids is not None
+                        and isinstance(comments, list)
+                        and any(
+                            str(comment["id"]) not in previous_comments
+                            and _grading_id(comment.get("author_id")) == actor_id
+                            and comment.get("comment") == info["comment"]
+                            for comment in comments
+                        )
+                    )
+                if result["grade_verified"] and result["comment_verified"]:
+                    result.update(outcome="verified", reason="persisted_state_verified")
+                elif not result["grade_verified"]:
+                    result["reason"] = (
+                        "rubric_grade_unconfirmed"
+                        if info.get("rubric_assessment")
+                        else "grade_unconfirmed"
+                    )
                 else:
-                    stats["failed"] += 1
-                    failed_results.append({
-                        "user_id": result["user_id"],
-                        "error": result["error"]
-                    })
-                    result_lines.append(f"  ✗ User {result['user_id']}: {result['error']}")
+                    result["reason"] = "comment_unconfirmed"
+                return result
+            except Exception:
+                result.update(
+                    outcome="unknown" if result["write_dispatched"] else "unattempted",
+                    reason="write_or_readback_exception"
+                    if result["write_dispatched"]
+                    else "prewrite_exception",
+                )
+                return result
 
-            # Rate limit between batches (except after last batch)
-            if i + max_concurrent < len(user_ids):
-                result_lines.append(f"  Waiting {rate_limit_delay}s before next batch...\n")
-                await asyncio.sleep(rate_limit_delay)
-
-        # Summary
-        result_lines.append(f"\n{'=' * 60}")
-        result_lines.append(f"Bulk Grading {'(DRY RUN) ' if dry_run else ''}Complete!")
-        result_lines.append(f"{'=' * 60}")
-        result_lines.append(f"Total:   {stats['total']}")
-        result_lines.append(f"Graded:  {stats['graded']}")
-        result_lines.append(f"Failed:  {stats['failed']}")
-
-        if failed_results:
-            result_lines.append("\nFailed Submissions:")
-            for failure in failed_results[:10]:  # Show first 10 failures
-                result_lines.append(f"  User {failure['user_id']}: {failure['error']}")
-            if len(failed_results) > 10:
-                result_lines.append(f"  ... and {len(failed_results) - 10} more failures")
-
+        total_batches = (len(user_ids) + max_concurrent - 1) // max_concurrent
+        lines = [
+            f"Bulk Grading {'(DRY RUN) ' if dry_run else ''}for Assignment {assignment_id}",
+            f"Course: {await get_course_code(course_id) or course_identifier}",
+            f"Total submissions to grade: {len(grades)}",
+            f"Concurrent processing: {max_concurrent} per batch",
+            f"Total batches: {total_batches}",
+        ]
+        if setup_error:
+            outcomes = [
+                {
+                    "user_id": uid,
+                    "outcome": "unattempted",
+                    "reason": "grading_setup_unavailable",
+                    "write_dispatched": False,
+                }
+                for uid in user_ids
+            ]
+            lines.append("Error: " + setup_error)
+        else:
+            for offset in range(0, len(user_ids), max_concurrent):
+                batch = user_ids[offset : offset + max_concurrent]
+                results = await asyncio.gather(
+                    *(grade_single_submission(uid, grades[uid]) for uid in batch)
+                )
+                outcomes.extend(results)
+                for result in results:
+                    lines.append(
+                        f"  User {result['user_id']}: {result.get('message') or result['outcome'] + ' (' + result['reason'] + ')'}"
+                    )
+                if any(result["stop_batches"] for result in results):
+                    outcomes.extend(
+                        {
+                            "user_id": uid,
+                            "outcome": "unattempted",
+                            "reason": "stopped_after_authorization_failure",
+                            "write_dispatched": False,
+                        }
+                        for uid in user_ids[offset + max_concurrent :]
+                    )
+                    lines.append(
+                        "Stopped subsequent batches after an authorization or policy failure. Already dispatched items were inspected."
+                    )
+                    break
+                if offset + max_concurrent < len(user_ids):
+                    await asyncio.sleep(rate_limit_delay)
+        for result in outcomes:
+            proposal = grades[result["user_id"]]
+            if "expected_attempt" in proposal:
+                result["expected_attempt"] = proposal["expected_attempt"]
+            result["recovery_action"] = {
+                "verified": "do_not_repeat",
+                "rejected": "correct_request_and_review",
+                "unknown": "inspect_in_canvas_before_retry",
+                "unattempted": "review_scope_and_authorization_before_dispatch",
+            }[result["outcome"]]
+        counts = {
+            state: sum(result["outcome"] == state for result in outcomes)
+            for state in ("verified", "rejected", "unknown", "unattempted")
+        }
+        planned = sum(result.get("reason") == "dry_run" for result in outcomes)
+        lines.extend(
+            [
+                f"Total:   {len(grades)}",
+                f"Graded:  {counts['verified']}",
+                f"Failed:  {len(grades) - counts['verified'] - planned}",
+                f"Verified: {counts['verified']}; Rejected: {counts['rejected']}; Unknown: {counts['unknown']}; Unattempted: {counts['unattempted']}",
+            ]
+        )
+        if setup_error:
+            lines.insert(0, "Error: Bulk grading was not attempted.")
         if dry_run:
-            result_lines.append("\n⚠️  DRY RUN MODE: No grades were actually submitted")
-            result_lines.append("Set dry_run=false to apply grades")
-
-        return "\n".join(result_lines)
+            lines.extend(
+                [
+                    "DRY RUN MODE: No grades were actually submitted",
+                    "Set dry_run=false to apply grades",
+                ]
+            )
+        elif counts["unknown"] or counts["rejected"] or counts["unattempted"]:
+            lines.insert(0, "Error: Bulk grading has unresolved outcomes.")
+            lines.append(
+                "Inspect unknown outcomes in Canvas before retrying. Comments append; never blindly retry a comment. No automatic write retry or rollback was made."
+            )
+        else:
+            lines.append(
+                "Bulk Grading Complete: all requested outcomes verified by readback."
+            )
+        recovery = {
+            "schema_version": 1,
+            "course_id": str(course_id),
+            "assignment_id": assignment_id_str,
+            "dry_run": dry_run,
+            "counts": counts,
+            "items": outcomes,
+            "atomic": False,
+            "automatic_write_retry": False,
+        }
+        lines.append("Recovery data (JSON):\n" + json.dumps(recovery, sort_keys=True))
+        return "\n".join(lines)

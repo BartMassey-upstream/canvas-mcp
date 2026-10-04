@@ -28,6 +28,7 @@ UPSTREAM_ONLY_JOBS = {
     "deploy-prod.yml": ["build-and-deploy"],
     "deploy-staging.yml": ["build-and-deploy"],
     "publish-mcp.yml": ["publish-pypi", "publish-registry"],
+    "weekly-maintenance.yml": ["maintenance"],
 }
 JOBS_REQUIRING_CONTENTS_READ = {
     "security-testing.yml": [
@@ -167,3 +168,35 @@ class TestWorkflowPermissions:
             assert "github.repository == 'vishalsachdev/canvas-mcp'" in condition, (
                 f"{workflow_name}:{job_name} must not publish from a fork"
             )
+
+
+class TestDependencyMaintenance:
+    def test_dependabot_updates_locked_transitive_dependencies(self):
+        config = _load(WORKFLOWS.parent / "dependabot.yml")
+        python_updates = [
+            update for update in config["updates"]
+            if update["directory"] == "/"
+            and update["package-ecosystem"] in {"pip", "uv"}
+        ]
+        assert len(python_updates) == 1
+        update = python_updates[0]
+        assert update["package-ecosystem"] == "uv"
+        assert {"dependency-type": "all"} in update.get("allow", [])
+        assert update["schedule"]["interval"] == "daily"
+
+    def test_weekly_dependency_audit_remains_enforced_on_forks(self):
+        workflow = _load(WORKFLOWS / "security-testing.yml")
+        triggers = workflow.get("on", workflow.get(True, {}))
+        assert triggers.get("schedule")
+        job = workflow["jobs"]["dependency-scan"]
+        assert "if" not in job
+        assert not job.get("continue-on-error", False)
+        audit_steps = [
+            step for step in job["steps"]
+            if "pip-audit -r" in step.get("run", "")
+        ]
+        assert len(audit_steps) == 1
+        audit = audit_steps[0]
+        assert "if" not in audit
+        assert not audit.get("continue-on-error", False)
+        assert "||" not in audit["run"]

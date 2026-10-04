@@ -2,6 +2,11 @@
 
 This document provides a comprehensive overview of all tools available in the Canvas MCP Server, organized by audience and functionality.
 
+The [API coverage record](../docs/api-coverage.md) describes
+the integrated fork and its deliberate boundaries. The
+[tool manifest](TOOL_MANIFEST.json) records current signatures
+and profile visibility, including optional tools.
+
 ## Table of Contents
 
 - [Student Tools](#student-tools)
@@ -59,11 +64,42 @@ Use this — not [`check_enrollment`](#check_enrollment) — for any question ab
 Set `CANVAS_ROLE=creator` to expose course-construction tools without tools
 that read student records. The profile supports assignments, assignment groups,
 Classic and New Quizzes, course navigation, syllabus, pages,
-modules, course files, rubrics, announcements, content migrations, and
+modules, course files and folders, rubrics, announcements, content migrations, and
 local course-content backups. It also includes accessibility review and
 excludes rosters, submissions, grading, analytics,
 peer reviews, conversations, discussions, messaging,
 anonymization maps, and code execution.
+
+
+### Course folders
+
+All folder tools take `course_identifier`. They verify course
+ownership and reject submission folders. Folder names and paths
+are fenced on reads. User/group folders are outside this scope.
+
+- `list_course_folders`: paginate all course folders as a flat
+  list, including nested folders and parent IDs.
+- `get_course_folder(folder_id="root")`: inspect one folder,
+  including lock/hidden settings and scheduled dates.
+- `create_course_folder(name, parent_folder_id=None,
+  parent_folder_path=None, lock_at=None, unlock_at=None,
+  locked=None, hidden=None, position=None)`: create a folder.
+  Choose an existing same-course parent ID or a course-relative
+  parent path; Canvas can create missing path components.
+  Omitting both places it at the course root.
+- `update_course_folder(folder_id, name=None,
+  parent_folder_id=None, lock_at=None, unlock_at=None,
+  locked=None, hidden=None, position=None,
+  clear_lock_at=False, clear_unlock_at=False)`: rename, move,
+  or set availability. Clear flags remove scheduled dates;
+  providing a date and its clear flag together is rejected.
+
+Writes require creator or educator access and the operator's
+write policy. Names must contain 1 to 255 characters; positions
+are nonnegative; dates use ISO 8601. Moving verifies both folder
+and parent ownership before writing. Folder deletion is not
+exposed. Read back settings when validating against live Canvas.
+
 
 ---
 
@@ -380,8 +416,17 @@ assignment-group ID.
   the time limit, result policy, access restrictions, and scheduled dates
 - `delete_quiz`: refuse when student work exists unless
   `allow_deleting_student_work=true`, then preview and confirm deletion
-- `list_quiz_questions`, `create_quiz_question`, and
-  `update_quiz_question`: author question definitions and answer choices
+- `list_quiz_questions` and `get_quiz_question`: read definitions,
+  answer choices, position, group ID, and fenced feedback.
+  `get_quiz_question(course_identifier, quiz_id, question_id)`
+  reads one definition without submission-version parameters.
+- `create_quiz_question` and `update_quiz_question`: author names,
+  text, types, points, positions, answer dictionaries, and the
+  optional `quiz_group_id`, `correct_comments`,
+  `incorrect_comments`, `neutral_comments`, and
+  `text_after_answers` fields. Omitted fields stay unchanged on
+  update; empty feedback strings are forwarded. Group IDs must
+  be positive; no undocumented group-removal sentinel is exposed.
 - `delete_quiz_question`: apply the same student-work opt-in before previewing
   and confirming question deletion
 
@@ -1722,19 +1767,51 @@ Get the server's current data anonymization configuration and statistics.
 ---
 
 #### `create_student_anonymization_map`
-Create a local CSV file mapping real student data to anonymous IDs for a course.
+Create a private local bundle mapping student identities to
+existing anonymous IDs. This tool makes Canvas reads only.
 
 > **Local (stdio) servers only.** This tool refuses all HTTP calls without fetching identities or writing a file; run it on a local stdio server to create the map.
 
 **Parameters:**
 - `course_identifier`: Course code or ID
+- `save_directory`: Local destination (default `local_maps`);
+  existing directories must belong to the current user with
+  mode `0700`. Symlink paths and parent traversal are refused.
 
 **Example:**
 ```
 "Create an anonymization map for BADM 350"
 ```
 
-**Returns:** Path to the CSV mapping file plus a summary of mapped students. Keep mapping files in `local_maps/` secure and never commit them to version control.
+**Returns:** Private CSV and manifest paths plus the record count.
+Each call creates a new bundle; existing maps are never replaced.
+Directories use mode `0700`, and files use `0600`.
+
+The bundle contains `identities.json` (raw identity values),
+`anonymization_map.csv` (the same four columns as before, with
+spreadsheet formula protection), and `manifest.json` (completion,
+origin, canonical course ID, schema/algorithm version, capture
+time, counts, and SHA-256 file digests). A bundle without a valid
+manifest is incomplete. Verify its metadata and digests before
+using it; the timestamp records capture time, not freshness.
+
+**Migration:** Older flat `anonymization_map_<course>.csv` files
+remain untouched. Update callers to use the returned CSV path
+inside the new bundle instead of predicting a course-name path.
+If an existing `local_maps` directory is too permissive, inspect
+its ownership and contents before setting mode `0700`, or choose
+a new private destination. Do not use an older map for another
+origin/course or assume it reflects a current roster.
+
+Pseudonyms retain the existing first eight SHA-256 hex digits of
+the numeric user ID; they remain linkable across courses and
+origins. The writer rejects duplicate IDs and pseudonym collisions
+within a map. Neither pseudonyms nor private file permissions
+provide encryption or remove identifiers from free text.
+Keep all bundle files out of version control. Failed writes are
+cleaned up when possible; process termination or cleanup failure
+can leave an incomplete private directory. There is no automatic
+map reader, freshness check, or recovery/restore operation yet.
 
 ---
 
@@ -2609,3 +2686,175 @@ Some Canvas API endpoints have bugs or design issues that prevent certain operat
 - **Main README**: [README.md](../README.md)
 - **Development Guide**: [CLAUDE.md](../CLAUDE.md)
 - **GitHub Issues**: [Report issues](https://github.com/vishalsachdev/canvas-mcp/issues)
+
+
+## Additional creator operations
+
+These tools are available to creator and educator profiles.
+`get_module` and `get_module_item` are also student-visible
+course-content reads. Parameter details and role visibility are
+kept current in [the manifest](TOOL_MANIFEST.json).
+
+| Tools | Purpose and limits |
+|---|---|
+| `get_assignment_group`, `update_assignment_group` | Inspect definitions and merge validated drop rules; never-drop IDs must belong to the group |
+| `update_course_home_page` | Select feed, wiki, modules, syllabus or assignments; verify readback |
+| `list_quiz_question_groups`, `get_quiz_question_group` | Inspect Classic random pools and bank links |
+| `create_quiz_question_group`, `update_quiz_question_group` | Create/edit pools; bank links are creation-only |
+| `delete_quiz_question_group` | Preview/confirm; refuse existing student work without explicit override |
+| `reorder_quiz_items` | Reorder questions/groups without silently changing group membership |
+| `duplicate_page`, `list_page_revisions`, `get_page_revision` | Native duplication and historical content reads |
+| `revert_page_revision` | Preview/confirm a replacement and verify stored content |
+| `schedule_page_publication` | Schedule publication where Canvas enables it |
+| `get_module`, `get_module_item` | Read content settings without student progression |
+| `copy_course_file`, `copy_course_folder` | Copy verified course content, renaming collisions |
+| `delete_course_folder` | Preview/confirm empty folders only; no root or recursive deletion |
+| `upload_new_quiz_media` | Local PNG/JPEG/GIF/WebP upload; return unsigned image URL |
+| `list_outcome_groups`, `get_outcome_group`, `list_course_outcomes`, `get_course_outcome` | Read course-owned outcome definitions, never student results |
+| `create_outcome_group`, `update_outcome_group`, `delete_outcome_group` | Organize outcomes; deletion limited to confirmed empty non-root groups |
+| `create_course_outcome`, `update_course_outcome` | Create definitions; update unassessed text without replacing ratings |
+| `link_course_outcome`, `unlink_course_outcome` | Organize existing course-owned definitions; unlink needs confirmation |
+| `import_course_content` | Confirm a local `.imscc` import, then inspect asynchronous migration status |
+| `list_content_migrations`, `list_content_migrators` | Recover migration IDs and inspect available import systems |
+| `list_content_migration_issues`, `get_content_migration_issue` | Inspect failures and warnings without changing their resolution state |
+
+Existing assignment tools now accept attempts, position, grade
+visibility, grading standards, external-tool launch options and
+annotation files. Classic questions accept calculated definitions
+with precomputed answers; this server does not evaluate formulas.
+Module item creation accepts ExternalTool iframe dimensions,
+and rubric associations accept title, bookmarked and
+hide_score_total (the last only when not used for grading).
+
+The local import limit is 256 MiB, 20,000 archive entries and
+2 GiB expanded. Imports refuse hosted HTTP local paths and
+unsupported storage destinations. A returned migration ID is
+not proof of import completion; poll status and review issues.
+
+## Educator and student completion tools
+
+These additions are excluded from the creator profile. Full
+signatures and profile visibility are in
+[the tool manifest](TOOL_MANIFEST.json); implementation boundaries
+and deferred live checks are in
+[API coverage](../docs/api-coverage.md).
+
+| Educator/all tools | Purpose |
+|---|---|
+| `list_assignment_overrides`, `get_assignment_override` | Read differentiated due/availability dates |
+| `create_assignment_override`, `update_assignment_override`, `delete_assignment_override` | Confirm student/section/group overrides; preserve omitted dates |
+| `list_course_sections`, `get_course_section` | Read course sections |
+| `create_course_section`, `update_course_section`, `delete_course_section` | Confirm section changes; deletion requires an empty ordinary section |
+| `get_submission_details` | Read one student's status, optional content/history/comments with privacy controls |
+| `get_course_late_policy`, `create_course_late_policy`, `update_course_late_policy` | Inspect or confirm course-wide late/missing penalties |
+| `unassign_peer_review` | Confirm removal of an assigned reviewer |
+| `get_course_outcome_results`, `get_course_outcome_rollups` | Page through scores and mastery summaries without linked student profiles |
+| `list_group_categories`, `create_group_category`, `update_group_category`, `delete_group_category` | Manage collaborative course group sets; no cascading deletion |
+| `get_course_group`, `create_course_group`, `update_course_group`, `delete_course_group` | Manage course groups, with empty-only deletion |
+| `list_course_group_memberships`, `add_course_group_member`, `remove_course_group_member` | Explicit membership changes before submitted group work; no implicit moves |
+| `delete_discussion_topic` | Confirm topic deletion; student content requires explicit opt-in |
+| `reply_to_conversation`, `update_conversation_settings`, `delete_conversation` | Confirm changes to course-bound inbox threads |
+| `list_course_calendar_events`, `get_course_calendar_event`, `create_course_calendar_event`, `update_course_calendar_event`, `delete_course_calendar_event` | Course calendar events, excluding appointments and series-wide effects |
+
+`get_discussion_user_state` is available in student, educator and
+all profiles. It returns only your subscription/read status.
+Educators can use `update_discussion_entry`,
+`delete_discussion_entry`, `set_discussion_subscription` and
+`set_discussion_read_state`. A student additionally needs each
+name enabled in `STUDENT_WRITE_TOOLS`, course-policy approval,
+and ownership when editing or deleting an entry. Actual course
+permissions are checked even in the `all` profile.
+
+| Student/all reads | Purpose |
+|---|---|
+| `list_my_planner_items` | Your planner items and completion/dismissal state |
+| `list_my_planner_notes`, `get_my_planner_note` | Your personal or course-linked notes |
+| `list_my_planner_overrides`, `get_my_planner_override` | Your completion/dismissal overrides |
+| `list_my_calendar_events` | Personal or explicitly enrolled-course calendar |
+| `list_my_favorite_courses` | Dashboard course selection |
+| `list_my_bookmarks`, `get_my_bookmark` | Your saved navigation links |
+| `get_my_module_progress`, `get_my_module_item_sequence` | Your progression and previous/current/next content |
+| `get_my_submission_history`, `get_my_submission_file` | Your attempts and verified attachment metadata |
+
+Additional student actions are individually disabled by default:
+
+- `create_my_planner_note`, `update_my_planner_note`,
+  `delete_my_planner_note`;
+- `create_my_planner_override`, `update_my_planner_override`,
+  `delete_my_planner_override`;
+- `create_my_calendar_event`, `update_my_calendar_event`,
+  `delete_my_calendar_event`;
+- `add_my_favorite_course`, `remove_my_favorite_course`;
+- `create_my_bookmark`, `update_my_bookmark`, `delete_my_bookmark`.
+
+Enable only the exact actions you want, for example:
+
+```bash
+STUDENT_WRITE_TOOLS=create_my_planner_note,update_my_planner_note
+```
+
+Changing planner completion can also change a module requirement.
+Course-bound actions therefore check the course's agent-write
+policy. Course-linked override creates and updates additionally require
+`mark_module_item_done` to be enabled and allowed by the course,
+because Canvas synchronizes the forwarded completion state. Editing or deleting existing notes, overrides, bookmarks
+and calendar events uses a preview and confirmation. Override
+creation is confirmed too. Personal calendar writes cannot modify
+course events, appointments, or recurring series.
+
+Override actions resolve their target in your own planner feed.
+For older or distant-future items, provide `target_start_date`
+and `target_end_date` around the item's date; Canvas's default
+feed covers only the nearby weeks. A missing feed item is an
+explicit error, never permission to guess its course.
+
+## Local educator evidence and recovery
+
+The educator/all profiles include five local-stdio tools:
+
+| Tool | Behavior |
+|---|---|
+| `capture_record_snapshot` | Preview and confirm scoped record retention; checkpoint and resume reads |
+| `verify_record_snapshot` | Verify a record archive or separate attachment bundle locally |
+| `compare_record_snapshots` | Compare matching record scopes; incomplete coverage yields unknown additions/removals |
+| `lookup_student_identities` | Validate a private map and save only selected identities locally; return no names |
+| `download_snapshot_attachments` | Preview and confirm 1–20 selected attachment downloads with byte limits |
+
+Capture, lookup and attachment download are local writes and
+respect `ALLOWED_WRITE_TOOLS`. None mutates Canvas. Creator and
+student profiles exclude these tools. See the
+[record format and recovery contract](../docs/record-snapshots.md)
+for scope flags, confirmation, limits, private storage, freshness,
+comparison, retention and interrupted-capture handling.
+
+`extract_peer_review_dataset` and `generate_peer_review_report`
+now use private,
+unique artifact bundles with integrity manifests. The returned
+paths are authoritative; repeated calls do not overwrite prior
+files. Update scripts that assumed a flat destination filename.
+Legacy files remain untouched. JSON retains raw values; CSV
+neutralizes spreadsheet formulas. Explicit report text remains
+subject to each tool's existing output/anonymization policy.
+
+### Batch grading recovery
+
+`bulk_grade_submissions` retains its text result and also returns
+MCP `structuredContent` with `schema_version=1`, `dry_run`,
+`counts` and per-student `items`. Items distinguish `verified`,
+`rejected`, `unknown` and `unattempted`, with grade/comment
+verification flags and recovery actions. A dry run verifies no
+persisted grade. Ordinary calls still default to `dry_run=false`.
+
+Each `grades[user_id]` may include `expected_attempt`: a reviewed
+nonnegative integer, or explicit `null` for confirmed unsubmitted
+work. Mismatches skip that row before its PUT. The tool independently
+reads back each dispatched grade and requested rubric/comment
+fields. These observations are not an atomic lock against Canvas
+changes. Revoked authorization stops later batches; already
+submitted requests are inspected. Uncertain writes are never
+blindly retried. Inspect individual outcomes before requesting
+another reviewed batch, especially when feedback may have appended.
+
+Assignment analytics now reports source URLs, observation times
+and unavailable-field counts. Missing or inaccessible evidence
+is not converted into a zero grade or a known missing submission.

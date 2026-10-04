@@ -19,6 +19,9 @@ class RequestFailure(dict[str, str]):
     evidence and must be treated as uncertain by confirmation callers.
     """
 
-    def __init__(self, message: str, outcome: WriteOutcome) -> None:
+    def __init__(
+        self, message: str, outcome: WriteOutcome, status_code: int | None = None
+    ) -> None:
         super().__init__(error=message)
         self.outcome = outcome
+        self.status_code = status_code

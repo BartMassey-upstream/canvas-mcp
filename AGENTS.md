@@ -34,16 +34,17 @@ Reduce tool overhead by setting a role-based profile. Only tools relevant to the
 
 ```
 # In the platform config directory's env file:
-CANVAS_ROLE=student    # ~37 tools (student + shared)
-CANVAS_ROLE=creator    # 87 course-building tools; no student records
-CANVAS_ROLE=educator   # 128 tools (130 with all feature gates)
-CANVAS_ROLE=all        # Default profile; 134 tools by default, 139 with all feature-gated tools enabled
+CANVAS_ROLE=student    # 55 tools (76 with student-write gates)
+CANVAS_ROLE=creator    # 127 course-building tools; no student records
+CANVAS_ROLE=educator   # 215 tools (217 with all feature gates)
+CANVAS_ROLE=all        # Default profile; 234 tools by default, 253 with all feature-gated tools enabled
 ```
 
 Or via CLI flag: `canvas-mcp-server --role student` (CLI flag takes precedence over env var).
 
 Use `creator` while building course content without exposing student records.
-It includes assignments, assignment groups, Classic Quizzes, course navigation, syllabus, pages, modules, course files, rubrics,
+It includes assignments, assignment groups, Classic and New Quizzes, course navigation, syllabus, pages/revisions, modules, course files and folders, rubrics,
+course-owned learning outcomes,
 announcements, local content backups, migrations, and accessibility tools. It excludes rosters,
 submissions, grading, analytics, peer reviews, conversations, discussions,
 messaging, anonymization maps, and code execution.
@@ -72,6 +73,13 @@ instructor can still block them in their own course.
 | `submit_assignment` | Submit your own assignment (text, URL, or any file type) |
 | `comment_on_my_submission` | Comment on your own submission |
 | `mark_module_item_done` | Mark a module item done for yourself |
+
+Personal planning, bookmarks, favorites, calendar events and
+selected discussion actions also have individual student-write
+flags. See [the extended tool list](tools/README.md#educator-and-student-completion-tools).
+These tools use self-only identities; course-bound actions check
+course policy. Planner completion may also change module progress.
+Editing/deleting existing personal objects requires confirmation.
 
 Three things to know before using them:
 
@@ -127,6 +135,11 @@ Course management, grading, and analytics. Requires instructor/TA role.
 | `send_bulk_messages_from_list` | Templated bulk messaging. **Two calls:** the first returns a preview + confirmation token and sends nothing; show the preview to the educator, then call again with the token and identical arguments. The token is single-use and dies if any argument changed |
 | `send_peer_review_inbox_messages` | Send direct Canvas Inbox messages about incomplete peer reviews; this is not Canvas's native reminder action. Requires `manage_grades` permission and uses **two calls** (preview + confirm) |
 | `create_announcement` | Post course announcements. Pre-checks Canvas's announcement permission; if Canvas silently creates a discussion instead, the tool deletes that unintended topic and reports failure (or warns if cleanup cannot be confirmed) |
+| `list_course_folders` | List course-content folders and their IDs |
+| `get_course_folder` | Read folder settings, including the course root |
+| `create_course_folder` | Create a folder inside a course |
+| `update_course_folder` | Rename, move, hide, lock, or clear scheduled folder dates |
+| `get_quiz_question` | Read one Classic Quiz question definition and feedback |
 | `update_course_file` | Rename or move a course file and change its lock or visibility settings |
 | `delete_course_file` | Permanently delete a course file after preview; linked module items require an additional explicit opt-in |
 | `update_discussion_topic` | Edit discussion or announcement title/body and settings |

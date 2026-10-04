@@ -5,18 +5,20 @@ editing roles) separate from content editing.
 """
 
 import datetime
+import json
 from typing import Any
 
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.cache import get_course_code, get_course_id
-from ..core.client import make_canvas_request
+from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.dates import format_date, parse_date
 from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
+    fence_untrusted,
     fence_untrusted_inline,
 )
 from ..core.validation import validate_params
@@ -26,6 +28,8 @@ from ..core.write_confirmation import (
     redeem_confirmation,
     unconfirmed_write_warning,
 )
+
+_REVERT_PAGE_GUARD = ConfirmationGuard(nothing_done="The page was not reverted.")
 
 _DELETE_PAGE_GUARD = ConfirmationGuard(nothing_done="Nothing was deleted.")
 
@@ -280,6 +284,18 @@ def register_page_tools(mcp: FastMCP) -> None:
         return result
 
 
+
+def _format_page_revision(revision: dict[str, Any]) -> str:
+    lines = [f"Revision ID: {revision.get('revision_id')}",
+             f"Updated: {revision.get('updated_at')}",
+             f"Latest: {revision.get('latest', False)}"]
+    if "title" in revision:
+        lines.append("Title: " + fence_untrusted_inline(revision["title"], "page revision title"))
+    if "body" in revision:
+        lines.append("Body:\n" + fence_untrusted(revision["body"] or "", "page revision body"))
+    return "\n".join(lines)
+
+
 def register_educator_page_crud_tools(mcp: FastMCP) -> None:
     """Register educator-only page CRUD tools."""
 
@@ -469,3 +485,162 @@ def register_educator_page_crud_tools(mcp: FastMCP) -> None:
             f"  URL slug: {page_url}\n"
             f"  Status: deleted"
         )
+
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @validate_params
+    async def duplicate_page(
+        course_identifier: str | int, page_url_or_id: str,
+    ) -> str:
+        """Duplicate a course page using Canvas's native duplication endpoint.
+
+        Canvas controls the duplicate title and publication state. Review the
+        returned state before adding it to modules or publishing it.
+        """
+        course_id = await get_course_id(course_identifier)
+        response = await make_canvas_request(
+            "post", canvas_path("courses", course_id, "pages", page_url_or_id, "duplicate")
+        )
+        if not isinstance(response, dict):
+            return "Error: Canvas returned an invalid page response."
+        if "error" in response:
+            return f"Error duplicating page: {response['error']}"
+        return ("Page duplicated.\nTitle: "
+                + fence_untrusted_inline(response.get("title") or "Untitled", "page title")
+                + f"\nPage ID: {response.get('page_id')}"
+                + "\nURL: " + fence_untrusted_inline(response.get("url") or "", "page URL")
+                + f"\nPublished: {response.get('published', False)}")
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def list_page_revisions(
+        course_identifier: str | int, page_url_or_id: str,
+    ) -> str:
+        """List page revision metadata. Canvas requires page edit permission.
+
+        Returns revision IDs/timestamps; omits historical editor identities.
+        Use get_page_revision to read the content of one revision.
+        """
+        course_id = await get_course_id(course_identifier)
+        revisions = await fetch_all_paginated_results(
+            canvas_path("courses", course_id, "pages", page_url_or_id, "revisions")
+        )
+        if isinstance(revisions, dict) and "error" in revisions:
+            return f"Error listing page revisions: {revisions['error']}"
+        if not isinstance(revisions, list) or any(not isinstance(r, dict) for r in revisions):
+            return "Error: Canvas returned an invalid revision list."
+        return "\n\n".join(_format_page_revision(r) for r in revisions) or "No revisions found."
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def get_page_revision(
+        course_identifier: str | int, page_url_or_id: str,
+        revision_id: str | int = "latest",
+    ) -> str:
+        """Read a page revision's title/body; requires Canvas edit permission.
+
+        revision_id accepts a positive revision ID or latest.
+        Historical editor identities are omitted.
+        """
+        if str(revision_id) != "latest" and (not str(revision_id).isdigit() or int(revision_id) <= 0):
+            return "Error: revision_id must be a positive integer or latest."
+        course_id = await get_course_id(course_identifier)
+        response = await make_canvas_request(
+            "get", canvas_path("courses", course_id, "pages", page_url_or_id, "revisions", revision_id)
+        )
+        if not isinstance(response, dict):
+            return "Error: Canvas returned an invalid page response."
+        if "error" in response:
+            return f"Error fetching page revision: {response['error']}"
+        return _format_page_revision(response)
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=False))
+    @validate_params
+    async def revert_page_revision(
+        course_identifier: str | int, page_url_or_id: str, revision_id: int,
+        confirmation_token: str | None = None,
+    ) -> str:
+        """Preview then confirm replacing a page with one historical revision.
+
+        Show the preview to the user before confirming. The single-use token
+        stops matching if the current page or target revision changes.
+        """
+        if revision_id <= 0:
+            return "Error: revision_id must be positive."
+        course_id = await get_course_id(course_identifier)
+        path = canvas_path("courses", course_id, "pages", page_url_or_id)
+        page = await make_canvas_request("get", path)
+        if not isinstance(page, dict):
+            return "Error: Canvas returned an invalid current page response."
+        if "error" in page:
+            return f"Error fetching current page: {page['error']}"
+        revision_path = canvas_path("courses", course_id, "pages", page_url_or_id, "revisions", revision_id)
+        revision = await make_canvas_request("get", revision_path)
+        if not isinstance(revision, dict):
+            return "Error: Canvas returned an invalid revision response."
+        if "error" in revision:
+            return f"Error fetching target revision: {revision['error']}"
+        if any(not isinstance(revision.get(k), str) for k in ("body", "title")) or any(not isinstance(page.get(k), str) for k in ("body", "title")):
+            return "Error: Canvas did not return the target revision content. Nothing was reverted."
+        fingerprint = _REVERT_PAGE_GUARD.fingerprint(
+            "revert_page_revision", str(course_id), str(page_url_or_id), str(revision_id),
+            json.dumps({k: page.get(k) for k in ("page_id", "url", "title", "body", "updated_at", "published")}, sort_keys=True),
+            json.dumps({k: revision.get(k) for k in ("revision_id", "title", "body", "updated_at")}, sort_keys=True),
+        )
+        if not confirmation_token:
+            preview = ("Would replace current page "
+                       + fence_untrusted_inline(page.get("title") or "Untitled", "page title")
+                       + " with revision:\n" + _format_page_revision(revision))
+            return preview_with_token(_REVERT_PAGE_GUARD, fingerprint, "revert_page_revision", preview, action="revert")
+        error = redeem_confirmation(_REVERT_PAGE_GUARD, confirmation_token, fingerprint)
+        if error:
+            return error
+        response = await make_canvas_request("post", revision_path)
+        if not isinstance(response, dict):
+            return "Error: Canvas returned an invalid page response."
+        if "error" in response:
+            return f"Error reverting page: {response['error']}"
+        stable_id = page.get("page_id")
+        verify_path = canvas_path("courses", course_id, "pages", f"page_id:{stable_id}") if stable_id else path
+        verified = await make_canvas_request("get", verify_path)
+        if not isinstance(verified, dict) or "error" in verified or any(verified.get(k) != revision[k] for k in ("body", "title")):
+            return unconfirmed_write_warning("the page revision replacement", {"Revision": revision_id}, "Canvas did not verify the requested title and body. Read the page before retrying.")
+        return f"Page reverted to revision {revision_id}."
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
+    @validate_params
+    async def schedule_page_publication(
+        course_identifier: str | int, page_url_or_id: str, publish_at: str,
+    ) -> str:
+        """Schedule future publication, unpublishing an already published page.
+
+        Requires the account's Scheduled Page Publication feature. Canvas
+        ignores publish_at when disabled. This tool verifies the stored date
+        and unpublished state, but cannot promise future notification/delivery.
+        Use an ISO 8601 timestamp with an explicit timezone.
+        """
+        try:
+            requested = datetime.datetime.fromisoformat(publish_at.replace("Z", "+00:00"))
+        except ValueError:
+            return "Error: publish_at must be an ISO 8601 timestamp with a timezone."
+        if requested.tzinfo is None or requested <= datetime.datetime.now(datetime.UTC):
+            return "Error: publish_at must be a future timestamp with a timezone."
+        course_id = await get_course_id(course_identifier)
+        path = canvas_path("courses", course_id, "pages", page_url_or_id)
+        page = await make_canvas_request("get", path)
+        if not isinstance(page, dict):
+            return "Error: Canvas returned an invalid current page response."
+        if "error" in page:
+            return f"Error fetching page: {page['error']}"
+        if page.get("front_page"):
+            return "Error: the course front page cannot be unpublished. Select another front page before scheduling."
+        response = await make_canvas_request("put", path, data={"wiki_page": {"publish_at": requested.isoformat()}})
+        if not isinstance(response, dict):
+            return "Error: Canvas returned an invalid page response."
+        if "error" in response:
+            return f"Error scheduling page: {response['error']}"
+        verified = await make_canvas_request("get", path)
+        actual = parse_date(verified.get("publish_at")) if isinstance(verified, dict) and isinstance(verified.get("publish_at"), str) and "error" not in verified else None
+        if actual != requested or not isinstance(verified, dict) or verified.get("published") is not False:
+            return unconfirmed_write_warning("scheduled page publication", {"Requested": requested.isoformat()}, 'The account must enable "Scheduled Page Publication". Canvas did not confirm the date and unpublished state; read the page settings before retrying.')
+        return f"Page publication scheduled for {requested.isoformat()}. Scheduled Page Publication must remain enabled."

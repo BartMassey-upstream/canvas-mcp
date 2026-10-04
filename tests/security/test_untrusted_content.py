@@ -1339,7 +1339,9 @@ class TestMultiRecipientSendGating:
         ) as mock_request:
             mock_analytics.return_value = analytics
             mock_course_id.return_value = "12345"
-            mock_request.return_value = assignment  # GETs (compose); POSTs same dict
+            mock_request.side_effect = lambda method, *_args, **_kwargs: (
+                [{"id": 901}] if method == "post" else assignment
+            )
             tool = self._tool("send_peer_review_followup_campaign")
 
             preview = await tool("CS101", 42)

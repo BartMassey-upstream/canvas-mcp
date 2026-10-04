@@ -48,10 +48,15 @@ from .tools import (
     register_assignment_group_tools,
     register_code_execution_tools,
     register_content_export_tools,
+    register_content_import_tools,
     register_content_migration_tools,
+    register_course_calendar_tools,
+    register_course_group_tools,
     register_course_tools,
     register_discovery_tools,
+    register_educator_assessment_tools,
     register_educator_assignment_tools,
+    register_educator_communication_tools,
     register_educator_course_tools,
     register_educator_discussion_tools,
     register_educator_file_tools,
@@ -61,18 +66,26 @@ from .tools import (
     register_enrollment_tools,
     register_navigation_tools,
     register_new_quiz_tools,
+    register_outcome_tools,
     register_page_tools,
     register_peer_review_comment_tools,
     register_peer_review_tools,
     register_quiz_tools,
+    register_record_snapshot_tools,
     register_rubric_tools,
     register_self_identity_tools,
     register_shared_assignment_tools,
+    register_shared_communication_tools,
     register_shared_content_tools,
     register_shared_discussion_tools,
     register_shared_file_tools,
     register_shared_messaging_tools,
     register_shared_module_tools,
+    register_snapshot_attachment_tools,
+    register_snapshot_review_tools,
+    register_student_communication_tools,
+    register_student_planning_tools,
+    register_student_planning_write_tools,
     register_student_tools,
     register_student_write_tools,
 )
@@ -488,9 +501,16 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
     # Caller-scoped identity: needs no roster permission, so every profile gets it.
     register_self_identity_tools(mcp)
 
+    if role != "creator":
+        register_shared_communication_tools(mcp)
+
     # Student-specific tools
     if role in ("student", "all"):
         register_student_tools(mcp)
+        register_student_planning_tools(mcp)
+        register_student_planning_write_tools(mcp)
+        if role == "student":
+            register_student_communication_tools(mcp)
         # Tier 1 writes register only for tools the operator named in
         # STUDENT_WRITE_TOOLS (default: none). See tools/student_write.py.
         register_student_write_tools(mcp)
@@ -503,12 +523,14 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
         register_educator_assignment_tools(mcp)
         register_educator_course_tools(mcp)
         register_content_export_tools(mcp)
+        register_content_import_tools(mcp)
         register_content_migration_tools(mcp)
         register_educator_discussion_tools(mcp)
         register_educator_module_tools(mcp)
         register_educator_file_tools(mcp)
         register_navigation_tools(mcp)
         register_new_quiz_tools(mcp)
+        register_outcome_tools(mcp)
         register_page_tools(mcp)
         register_educator_page_crud_tools(mcp)
         register_quiz_tools(mcp)
@@ -518,6 +540,10 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
             for tool_name in _CREATOR_EXCLUDED_TOOLS:
                 mcp.local_provider.remove_tool(tool_name)
         else:
+            register_course_calendar_tools(mcp)
+            register_course_group_tools(mcp)
+            register_educator_assessment_tools(mcp)
+            register_educator_communication_tools(mcp)
             register_peer_review_tools(mcp)
             register_peer_review_comment_tools(mcp)
             register_educator_messaging_tools(mcp)
@@ -525,6 +551,9 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
             if get_config().execute_typescript_enabled:
                 register_code_execution_tools(mcp)
             register_admin_tools(mcp)
+            register_record_snapshot_tools(mcp)
+            register_snapshot_review_tools(mcp)
+            register_snapshot_attachment_tools(mcp)
 
     # Resources and prompts — always registered
     register_resources_and_prompts(mcp)

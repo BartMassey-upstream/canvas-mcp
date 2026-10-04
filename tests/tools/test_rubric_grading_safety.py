@@ -15,7 +15,13 @@ async def call_grade(bulk, assignment, response, dry_run=False):
     with patch(f'canvas_mcp.tools.{module}.make_canvas_request', new_callable=AsyncMock) as req, \
          patch(f'canvas_mcp.tools.{module}.get_course_id', new_callable=AsyncMock, return_value='1'), \
          patch(f'canvas_mcp.tools.{module}.get_course_code', new_callable=AsyncMock, return_value='TEST'):
-        req.side_effect = lambda method, *a, **kw: assignment if method == 'get' else response
+        def mocked_response(method, path, **kwargs):
+            if not bulk or "/submissions/" not in path:
+                return assignment if method == "get" else response
+            if method == "put":
+                return response
+            return {"assignment_id": 2, "user_id": 3, "attempt": 1, "grade_matches_current_submission": True, "rubric_assessment": {"a": {"points": 5}, "b": {"points": 9}}, **response}
+        req.side_effect = mocked_response
         args = {'course_identifier': '1', 'assignment_id': '2'}
         assessment = {'a': {'points': 5}, 'b': {'points': 9}}
         if bulk:

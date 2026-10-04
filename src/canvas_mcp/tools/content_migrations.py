@@ -235,22 +235,101 @@ def _fence_migration_issues(issues: list[Any]) -> list[Any]:
     fenced: list[Any] = []
     for issue in issues:
         if not isinstance(issue, dict):
-            fenced.append(issue)
+            fenced.append(fence_untrusted(str(issue), "content migration issue"))
             continue
-        item = dict(issue)
+        item = {key: issue[key] for key in (
+            "id", "content_migration_id", "issue_type", "workflow_state", "error_report_id",
+        ) if key in issue}
         for field, source in (
             ("description", "content migration issue description"),
             ("site_admin_error", "content migration issue administrator detail"),
+            ("error_message", "content migration issue error message"),
         ):
-            value = item.get(field)
+            value = issue.get(field)
             if isinstance(value, str) and value:
                 item[field] = fence_untrusted(value, source)
         fenced.append(item)
     return fenced
 
 
+def _migration_history_snapshot(migration: dict[str, Any]) -> dict[str, Any]:
+    result = {
+        field: migration[field]
+        for field in ("id", "migration_type", "workflow_state", "created_at", "started_at",
+                      "finished_at", "migration_issues_count")
+        if field in migration
+    }
+    for field in ("migration_type_title",):
+        if isinstance(migration.get(field), str):
+            result[field] = fence_untrusted(migration[field], f"migration {field}")
+    return result
+
+
 def register_content_migration_tools(mcp: FastMCP) -> None:
     """Register educator-only content migration tools."""
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def list_content_migrations(course_identifier: str | int) -> dict[str, Any]:
+        """Recover course migration IDs and states without upload/download URLs."""
+        course_id = await get_course_id(course_identifier)
+        response = await fetch_all_paginated_results(
+            canvas_path('courses', course_id, 'content_migrations'), {"per_page": 100}
+        )
+        if not isinstance(response, list) or any(not isinstance(entry, dict) for entry in response):
+            return {"error": "Could not list content migrations."}
+        return {"course_id": str(course_id), "migrations": [
+            _migration_history_snapshot(entry) for entry in response
+        ]}
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def list_content_migrators(course_identifier: str | int) -> dict[str, Any]:
+        """Inspect the import systems available to this course."""
+        course_id = await get_course_id(course_identifier)
+        response = await make_canvas_request(
+            "get", canvas_path('courses', course_id, 'content_migrations', 'migrators')
+        )
+        if not isinstance(response, list) or any(not isinstance(entry, dict) for entry in response):
+            return {"error": "Could not list content migrators."}
+        migrators = []
+        for entry in response:
+            item = {field: entry[field] for field in ("type", "requires_file_upload", "required_settings") if field in entry}
+            if isinstance(entry.get("name"), str):
+                item["name"] = fence_untrusted(entry["name"], "content migrator name")
+            migrators.append(item)
+        return {"course_id": str(course_id), "migrators": migrators}
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def list_content_migration_issues(
+        course_identifier: str | int, migration_id: str | int,
+    ) -> dict[str, Any]:
+        """Inspect all issues of a course migration, including before completion."""
+        course_id = await get_course_id(course_identifier)
+        response = await fetch_all_paginated_results(
+            canvas_path('courses', course_id, 'content_migrations', migration_id, 'migration_issues'),
+            {"per_page": 100},
+        )
+        if not isinstance(response, list):
+            return {"error": "Could not list content migration issues."}
+        return {"course_id": str(course_id), "migration_id": str(migration_id),
+                "issues": _fence_migration_issues(response)}
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def get_content_migration_issue(
+        course_identifier: str | int, migration_id: str | int, issue_id: str | int,
+    ) -> dict[str, Any]:
+        """Inspect one migration issue without changing its resolution state."""
+        course_id = await get_course_id(course_identifier)
+        response = await make_canvas_request(
+            "get", canvas_path('courses', course_id, 'content_migrations', migration_id, 'migration_issues', issue_id)
+        )
+        if not isinstance(response, dict) or "error" in response:
+            return {"error": "Could not read content migration issue."}
+        return {"course_id": str(course_id), "migration_id": str(migration_id),
+                "issue": _fence_migration_issues([response])[0]}
 
     @mcp.tool(
         annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=False)

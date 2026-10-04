@@ -306,8 +306,98 @@ class TestCreateStudentAnonymizationMap:
         result = await fn("badm_350_120251")
 
         assert "Error" not in result
-        written = (tmp_path / "local_maps").glob("anonymization_map_*.csv")
+        written = (tmp_path / "local_maps").glob("*/anonymization_map.csv")
         content = next(written).read_text()
         assert "Alice Example" in content
         assert "alice@illinois.edu" in content
         assert generate_anonymous_id(301) in content
+
+    @pytest.mark.asyncio
+    async def test_bundle_preserves_raw_identity_but_escapes_csv(self, mock_canvas_api, tmp_path, monkeypatch, caplog):
+        import json
+
+        monkeypatch.chdir(tmp_path)
+        mock_canvas_api['fetch_all_paginated_results'].return_value = [
+            {"id": 301, "name": "=SYNTHETIC()", "email": "+synthetic@example.invalid"},
+        ]
+        fn = get_tool_function('create_student_anonymization_map')
+        result = await fn("60366")
+        bundle = next((tmp_path / "local_maps").iterdir())
+        raw = json.loads((bundle / "identities.json").read_text())
+        assert raw[0]['real_name'] == '=SYNTHETIC()'
+        csv = (bundle / 'anonymization_map.csv').read_text()
+        assert "'=SYNTHETIC()" in csv
+        assert "'+synthetic@example.invalid" in csv
+        manifest = json.loads((bundle / 'manifest.json').read_text())
+        assert manifest['course_id'] == '60366'
+        assert manifest['schema_version'] == 1
+        assert manifest['pseudonym_algorithm'] == 'sha256-id8-student-v1'
+        assert manifest['canvas_origin'].startswith('https://')
+        assert 'SYNTHETIC' not in result + caplog.text
+        assert 'synthetic@example' not in result + caplog.text
+
+    @pytest.mark.asyncio
+    async def test_map_namespaced_by_origin_course_and_version(self, mock_canvas_api, tmp_path, monkeypatch):
+        import json
+        from types import SimpleNamespace
+
+        monkeypatch.chdir(tmp_path)
+        mock_canvas_api['fetch_all_paginated_results'].return_value = [{"id": 301}]
+        fn = get_tool_function('create_student_anonymization_map')
+        for origin, course in [('https://a.invalid/api/v1', '60366'), ('https://b.invalid/api/v1', '60366'), ('https://a.invalid/api/v1', '60367')]:
+            mock_canvas_api['get_course_id'].return_value = course
+            with patch('canvas_mcp.core.config.get_config', return_value=SimpleNamespace(canvas_api_url=origin)):
+                result = await fn(course)
+            assert 'Error' not in result
+        bundles = list((tmp_path / 'local_maps').iterdir())
+        namespaces = {p.name.rsplit('-', 1)[0] for p in bundles}
+        assert len(namespaces) == 3
+        assert all('map-v1' in n for n in namespaces)
+        pseudonyms = {json.loads((p / 'identities.json').read_text())[0]['anonymous_id'] for p in bundles}
+        assert len(pseudonyms) == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize('roster', [
+        [{'id': True, 'name': 'SECRET'}], [{'id': 301}, {'id': 301}],
+        [{'id': 301, 'email': {'invalid': 'SECRET'}}],
+        {'error': 'SECRET token and signed URL'},
+    ])
+    async def test_invalid_roster_leaks_no_identity(self, mock_canvas_api, tmp_path, monkeypatch, roster):
+        monkeypatch.chdir(tmp_path)
+        mock_canvas_api['fetch_all_paginated_results'].return_value = roster
+        result = await get_tool_function('create_student_anonymization_map')('60366')
+        assert result.startswith('Error:')
+        assert 'SECRET' not in result
+        assert not (tmp_path / 'local_maps').exists()
+
+    @pytest.mark.asyncio
+    async def test_storage_error_is_redacted(self, mock_canvas_api, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        mock_canvas_api['fetch_all_paginated_results'].return_value = [{'id': 301}]
+        with patch('canvas_mcp.core.local_artifacts.write_private_bundle', side_effect=OSError('SECRET')):
+            result = await get_tool_function('create_student_anonymization_map')('60366')
+        assert result.startswith('Error:')
+        assert 'SECRET' not in result
+
+    @pytest.mark.asyncio
+    async def test_mismatched_cached_pseudonyms_are_not_silently_changed(self, mock_canvas_api, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        mock_canvas_api['fetch_all_paginated_results'].return_value = [{'id': 301}]
+        with patch('canvas_mcp.core.anonymization.generate_anonymous_id', return_value='Reviewer_cached'):
+            result = await get_tool_function('create_student_anonymization_map')('60366')
+        assert result.startswith('Error: Cached pseudonyms')
+        assert not (tmp_path / 'local_maps').exists()
+
+    @pytest.mark.asyncio
+    async def test_sis_identifier_uses_canonical_course_namespace(self, mock_canvas_api, tmp_path, monkeypatch):
+        import json
+
+        monkeypatch.chdir(tmp_path)
+        mock_canvas_api['get_course_id'].return_value = 'sis_course_id:SYNTHETIC'
+        mock_canvas_api['make_canvas_request'].return_value = {'id': 60366}
+        mock_canvas_api['fetch_all_paginated_results'].return_value = [{'id': 301}]
+        result = await get_tool_function('create_student_anonymization_map')('sis_course_id:SYNTHETIC')
+        assert not result.startswith('Error:')
+        assert mock_canvas_api['fetch_all_paginated_results'].call_args.args[0] == '/courses/60366/users'
+        bundle = next((tmp_path / 'local_maps').iterdir())
+        assert json.loads((bundle / 'manifest.json').read_text())['course_id'] == '60366'

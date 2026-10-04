@@ -49,6 +49,21 @@ class CanvasToolResultMiddleware(Middleware):
         call_next: CallNext[mt.CallToolRequestParams, ToolResult],
     ) -> ToolResult:
         result = await call_next(context)
+        if context.message.name == "bulk_grade_submissions" and result.structured_content is None:
+            for block in result.content:
+                if isinstance(block, mt.TextContent) and "\nRecovery data (JSON):\n" in block.text:
+                    try:
+                        recovery = json.loads(block.text.rsplit("\nRecovery data (JSON):\n", 1)[1])
+                    except (ValueError, TypeError):
+                        continue
+                    if (
+                        isinstance(recovery, dict)
+                        and recovery.get("schema_version") == 1
+                        and isinstance(recovery.get("items"), list)
+                        and isinstance(recovery.get("counts"), dict)
+                        and type(recovery.get("dry_run")) is bool
+                    ):
+                        result.structured_content = recovery
         if not result.is_error and _result_is_error(result):
             result.is_error = True
         return result

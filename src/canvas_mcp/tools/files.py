@@ -48,9 +48,12 @@ from ..core.write_confirmation import (
     ConfirmationGuard,
     preview_with_token,
     redeem_confirmation,
+    unconfirmed_write_warning,
 )
+from ..core.write_outcome import RequestFailure, WriteOutcome
 
 _DELETE_FILE_GUARD = ConfirmationGuard(nothing_done="Nothing was deleted.")
+_DELETE_FOLDER_GUARD = ConfirmationGuard(nothing_done="The folder was not deleted.")
 
 
 async def _file_module_references(
@@ -90,8 +93,158 @@ async def _file_module_references(
     return references
 
 
+def _folder_fields(
+    name: str | None,
+    lock_at: str | None,
+    unlock_at: str | None,
+    locked: bool | None,
+    hidden: bool | None,
+    position: int | None,
+    clear_lock_at: bool = False,
+    clear_unlock_at: bool = False,
+) -> dict[str, Any] | str:
+    if name is not None and contains_fence_markers(name):
+        return FENCE_LEAK_ERROR
+    if name is not None and (not name.strip() or len(name) > 255):
+        return "Invalid name: folder names must contain 1 to 255 characters."
+    if position is not None and position < 0:
+        return "Invalid position: must be nonnegative."
+    fields = {
+        key: value
+        for key, value in (("name", name), ("locked", locked), ("hidden", hidden), ("position", position))
+        if value is not None
+    }
+    for key, value, clear in (
+        ("lock_at", lock_at, clear_lock_at),
+        ("unlock_at", unlock_at, clear_unlock_at),
+    ):
+        if value is not None and clear:
+            return f"Invalid configuration: {key} and clear_{key} cannot both be provided."
+        if clear:
+            fields[key] = ""
+        elif value is not None:
+            parsed = parse_date(value)
+            if parsed is None:
+                return f"Invalid date format for {key}. Use ISO 8601 format."
+            fields[key] = parsed.isoformat()
+    return fields
+
+
+def _positive_folder_id(value: Any) -> bool:
+    return (
+        isinstance(value, (str, int))
+        and not isinstance(value, bool)
+        and str(value).isascii()
+        and str(value).isdigit()
+        and int(value) > 0
+    )
+
+
+async def _folder_course_id(course_identifier: str | int) -> str | dict[str, str]:
+    course_id = await get_course_id(course_identifier)
+    if str(course_id).startswith("sis_course_id:"):
+        course = await make_canvas_request("get", canvas_path("courses", course_id))
+        if not isinstance(course, dict):
+            return {"error": "Cannot verify course identity: invalid Canvas response."}
+        if "error" in course:
+            return {"error": str(course["error"])}
+        if not _positive_folder_id(course.get("id")):
+            return {"error": "Cannot verify course identity."}
+        return str(course["id"])
+    if not _positive_folder_id(course_id):
+        return {"error": "Cannot verify course identity."}
+    return str(course_id)
+
+
+def _folder_ownership_error(folder: Any, course_id: str) -> str | None:
+    if not isinstance(folder, dict) or not _positive_folder_id(folder.get("id")):
+        return "Canvas returned an invalid folder response."
+    if folder.get("context_type") != "Course" or str(folder.get("context_id")) != course_id:
+        return "Folder does not belong to the requested course."
+    if folder.get("for_submissions"):
+        return "Submission folders are outside course-content folder tools."
+    return None
+
+
+async def _get_course_folder(course_id: str, folder_id: str | int) -> dict[str, Any]:
+    if str(folder_id) != "root" and not _positive_folder_id(folder_id):
+        return {"error": "Folder ID must be a positive integer or 'root'."}
+    folder = await make_canvas_request(
+        "get", canvas_path("courses", course_id, "folders", folder_id)
+    )
+    if isinstance(folder, dict) and "error" in folder:
+        return folder
+    error = _folder_ownership_error(folder, course_id)
+    if error:
+        return {"error": error}
+    if not isinstance(folder, dict):
+        return {"error": "Canvas returned an invalid folder response."}
+    if not folder.get("id") or (str(folder_id) != "root" and str(folder.get("id")) != str(folder_id)):
+        return {"error": "Canvas returned a different folder ID."}
+    return folder
+
+
+def _format_course_folder(folder: dict[str, Any]) -> str:
+    result = f"  Folder: {fence_untrusted_inline(folder.get('name', 'Unknown'), 'folder name')}\n"
+    if folder.get("full_name") is not None:
+        result += f"  Path: {fence_untrusted_inline(folder['full_name'], 'folder path')}\n"
+    for key in ("id", "parent_folder_id", "position", "locked", "hidden", "lock_at", "unlock_at", "files_count", "folders_count"):
+        if key in folder:
+            result += f"  {key}: {folder[key]}\n"
+    return result
+
+
 def register_shared_file_tools(mcp: FastMCP) -> None:
     """Register file tools accessible to both students and educators."""
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def list_course_folders(course_identifier: str | int) -> str:
+        """List all course-content folders as a flat list, including subfolders.
+
+        Args:
+            course_identifier: Course code, Canvas ID, or explicit SIS ID
+        """
+        course_id = await _folder_course_id(course_identifier)
+        if isinstance(course_id, dict):
+            return f"Error resolving course: {course_id['error']}"
+        folders = await fetch_all_paginated_results(
+            canvas_path("courses", course_id, "folders"), {"per_page": 100}
+        )
+        if isinstance(folders, dict) and "error" in folders:
+            return f"Error listing folders: {folders['error']}"
+        if not isinstance(folders, list):
+            return "Error listing folders: Canvas returned an invalid folder list."
+        for folder in folders:
+            if error := _folder_ownership_error(folder, course_id):
+                return f"Error listing folders: {error}"
+        if not folders:
+            return "No folders found."
+        course_display = await get_course_code(course_id) or course_identifier
+        return (
+            f"Folders in {course_display}:\n\n"
+            + "\n".join(_format_course_folder(folder) for folder in folders)
+            + f"\nTotal: {len(folders)} folder(s)"
+        )
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def get_course_folder(
+        course_identifier: str | int, folder_id: str | int = "root"
+    ) -> str:
+        """Read a course-content folder, using 'root' for the course root.
+
+        Args:
+            course_identifier: Course code, Canvas ID, or explicit SIS ID
+            folder_id: Canvas folder ID or 'root'
+        """
+        course_id = await _folder_course_id(course_identifier)
+        if isinstance(course_id, dict):
+            return f"Error resolving course: {course_id['error']}"
+        folder = await _get_course_folder(course_id, folder_id)
+        if "error" in folder:
+            return f"Error fetching folder: {folder['error']}"
+        return _format_course_folder(folder)
 
     # Writes a new file on the server's filesystem, so it is not read-only. It
     # opens with O_EXCL and never replaces an existing path (additive), and a
@@ -371,6 +524,267 @@ def register_shared_file_tools(mcp: FastMCP) -> None:
 
 def register_educator_file_tools(mcp: FastMCP) -> None:
     """Register educator-only file tools."""
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
+    @validate_params
+    async def delete_course_folder(
+        course_identifier: str | int,
+        folder_id: str | int,
+        confirmation_token: str | None = None,
+    ) -> str:
+        """Preview and delete an empty course folder; root and recursive deletion are refused.
+
+        Delete contained files individually using their guarded tools first.
+        Canvas is instructed to refuse if content appears after the preview.
+        """
+        course_id = await _folder_course_id(course_identifier)
+        if isinstance(course_id, dict):
+            return f"Error: {course_id['error']}"
+        folder = await _get_course_folder(course_id, folder_id)
+        if "error" in folder:
+            return f"Error: {folder['error']}"
+        if not folder.get("parent_folder_id"):
+            return "Error: The course root folder cannot be deleted."
+        for collection in ("files", "folders"):
+            contents = await fetch_all_paginated_results(canvas_path("folders", folder["id"], collection))
+            if not isinstance(contents, list):
+                return "Error: Could not verify that the folder is empty."
+            if contents:
+                return "Error: Only empty folders can be deleted. Remove contents using their guarded tools first."
+        fingerprint = _DELETE_FOLDER_GUARD.fingerprint(
+            "delete_course_folder", course_id, str(folder["id"]),
+            json.dumps(folder, sort_keys=True, default=str),
+        )
+        if not confirmation_token:
+            return preview_with_token(
+                _DELETE_FOLDER_GUARD, fingerprint, "delete_course_folder",
+                "Would delete this empty course folder:\n" + _format_course_folder(folder),
+            )
+        error = redeem_confirmation(_DELETE_FOLDER_GUARD, confirmation_token, fingerprint)
+        if error:
+            return error
+        response = await make_canvas_request(
+            "delete", canvas_path("folders", folder["id"]), params={"force": "false"},
+        )
+        if not isinstance(response, dict) or "error" in response:
+            return "Warning: Folder deletion was not confirmed. Read the folder before retrying."
+        return "Empty course folder deleted.\n" + _format_course_folder(folder)
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @validate_params
+    async def copy_course_folder(
+        course_identifier: str | int,
+        source_folder_id: str | int,
+        destination_folder_id: str | int,
+        source_course_identifier: str | int | None = None,
+    ) -> str:
+        """Copy a content folder into a verified course folder, renaming collisions.
+
+        The destination course is course_identifier. Source defaults to the
+        same course. Submission folders and copying into descendants are refused.
+        """
+        target_course = await _folder_course_id(course_identifier)
+        source_course = await _folder_course_id(
+            source_course_identifier if source_course_identifier is not None else course_identifier
+        )
+        if isinstance(target_course, dict) or isinstance(source_course, dict):
+            return "Error: Cannot resolve the source or destination course."
+        source = await _get_course_folder(source_course, source_folder_id)
+        target = await _get_course_folder(target_course, destination_folder_id)
+        if "error" in source or "error" in target:
+            return "Error: Cannot verify source and destination course-content folders."
+        folders = await fetch_all_paginated_results(canvas_path("courses", source_course, "folders"))
+        if not isinstance(folders, list) or any(not isinstance(item, dict) for item in folders):
+            return "Error: Cannot inspect the source folder tree."
+        descendants = {str(source["id"])}
+        pending = [source]
+        while pending:
+            current = pending.pop()
+            if _folder_ownership_error(current, source_course):
+                return "Error: Source tree contains an unverified or submission folder."
+            for child in folders:
+                if str(child.get("parent_folder_id")) == str(current["id"]):
+                    child_id = str(child.get("id"))
+                    if child_id in descendants:
+                        return "Error: Source folder tree contains duplicate or cyclic IDs."
+                    descendants.add(child_id)
+                    pending.append(child)
+        if source_course == target_course and str(target["id"]) in descendants:
+            return "Error: A folder cannot be copied into itself or a descendant."
+        copied = await make_canvas_request(
+            "post", canvas_path("folders", target["id"], "copy_folder"),
+            data={"source_folder_id": source["id"]}, use_form_data=True,
+        )
+        if _folder_ownership_error(copied, target_course) or str(copied.get("parent_folder_id")) != str(target["id"]):
+            return "Warning: Folder copy was not confirmed. List destination folders before retrying."
+        return "Course folder copied.\n" + _format_course_folder(copied)
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @validate_params
+    async def copy_course_file(
+        course_identifier: str | int,
+        source_file_id: str | int,
+        destination_folder_id: str | int,
+        source_course_identifier: str | int | None = None,
+    ) -> str:
+        """Copy a verified course file, always renaming collisions rather than overwriting."""
+        target_course = await _folder_course_id(course_identifier)
+        source_course = await _folder_course_id(
+            source_course_identifier if source_course_identifier is not None else course_identifier
+        )
+        if isinstance(target_course, dict) or isinstance(source_course, dict):
+            return "Error: Cannot resolve the source or destination course."
+        source = await make_canvas_request("get", canvas_path("courses", source_course, "files", source_file_id))
+        if not isinstance(source, dict) or "error" in source or str(source.get("id")) != str(source_file_id):
+            return "Error: Cannot verify source course file."
+        parent_id = source.get("folder_id")
+        if not _positive_folder_id(parent_id):
+            return "Error: Cannot verify source file folder."
+        parent = await _get_course_folder(source_course, str(parent_id))
+        target = await _get_course_folder(target_course, destination_folder_id)
+        if "error" in parent or "error" in target:
+            return "Error: Source and destination must be course-content folders."
+        copied = await make_canvas_request(
+            "post", canvas_path("folders", target["id"], "copy_file"),
+            data={"source_file_id": source["id"], "on_duplicate": "rename"}, use_form_data=True,
+        )
+        if not isinstance(copied, dict) or not _positive_folder_id(copied.get("id")) or str(copied.get("folder_id")) != str(target["id"]):
+            return "Warning: File copy was not confirmed. List destination files before retrying."
+        name = fence_untrusted_inline(copied.get("display_name") or copied.get("filename") or "Unnamed", "file name")
+        return f"Course file copied.\nFile ID: {copied['id']}\nFolder ID: {target['id']}\nName: {name}"
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @validate_params
+    async def create_course_folder(
+        course_identifier: str | int,
+        name: str,
+        parent_folder_id: str | int | None = None,
+        parent_folder_path: str | None = None,
+        lock_at: str | None = None,
+        unlock_at: str | None = None,
+        locked: bool | None = None,
+        hidden: bool | None = None,
+        position: int | None = None,
+    ) -> str:
+        """Create a course-content folder with optional availability settings.
+
+        Args:
+            course_identifier: Course code, Canvas ID, or explicit SIS ID
+            name: Folder name, containing 1 to 255 characters
+            parent_folder_id: Existing folder in the same course
+            parent_folder_path: Course-relative parent path; missing folders are created
+            lock_at: ISO 8601 scheduled lock date
+            unlock_at: ISO 8601 scheduled unlock date
+            locked: Lock or unlock the folder immediately
+            hidden: Hide or show the folder
+            position: Nonnegative sort position
+        """
+        fields = _folder_fields(name, lock_at, unlock_at, locked, hidden, position)
+        if isinstance(fields, str):
+            return fields
+        if parent_folder_id is not None and parent_folder_path is not None:
+            return "Invalid configuration: provide parent_folder_id or parent_folder_path, not both."
+        if parent_folder_path is not None and contains_fence_markers(parent_folder_path):
+            return FENCE_LEAK_ERROR
+        course_id = await _folder_course_id(course_identifier)
+        if isinstance(course_id, dict):
+            return f"Error resolving course: {course_id['error']}"
+        if parent_folder_id is not None:
+            parent = await _get_course_folder(course_id, parent_folder_id)
+            if "error" in parent:
+                return f"Error fetching parent folder: {parent['error']}"
+            fields["parent_folder_id"] = parent["id"]
+        else:
+            fields["parent_folder_path"] = parent_folder_path or ""
+        folder = await make_canvas_request(
+            "post", canvas_path("courses", course_id, "folders"), data=fields, use_form_data=True
+        )
+        if isinstance(folder, dict) and "error" in folder:
+            if not isinstance(folder, RequestFailure) or folder.outcome == WriteOutcome.MAY_HAVE_WRITTEN:
+                return unconfirmed_write_warning(
+                    "whether Canvas created the course folder",
+                    {"Course ID": course_id, "Detail": folder["error"]},
+                    "Canvas may have created the folder. Check the course folders before retrying.",
+                )
+            return f"Error creating folder: {folder['error']}"
+        if error := _folder_ownership_error(folder, course_id):
+            return (
+                f"Warning: Folder creation outcome is unconfirmed: {error} "
+                "Canvas may have created the folder. Check the course folders before retrying."
+            )
+        return "✅ Folder created successfully!\n\n" + _format_course_folder(folder)
+
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
+    @validate_params
+    async def update_course_folder(
+        course_identifier: str | int,
+        folder_id: str | int,
+        name: str | None = None,
+        parent_folder_id: str | int | None = None,
+        lock_at: str | None = None,
+        unlock_at: str | None = None,
+        locked: bool | None = None,
+        hidden: bool | None = None,
+        position: int | None = None,
+        clear_lock_at: bool = False,
+        clear_unlock_at: bool = False,
+    ) -> str:
+        """Rename, move, or change availability settings for a course folder.
+
+        Args:
+            course_identifier: Course code, Canvas ID, or explicit SIS ID
+            folder_id: Canvas folder ID or 'root'
+            name: New folder name, containing 1 to 255 characters
+            parent_folder_id: Move into an existing folder in the same course
+            lock_at: ISO 8601 scheduled lock date
+            unlock_at: ISO 8601 scheduled unlock date
+            locked: Lock or unlock the folder immediately
+            hidden: Hide or show the folder
+            position: Nonnegative sort position
+            clear_lock_at: Remove the scheduled lock date
+            clear_unlock_at: Remove the scheduled unlock date
+        """
+        fields = _folder_fields(
+            name, lock_at, unlock_at, locked, hidden, position, clear_lock_at, clear_unlock_at
+        )
+        if isinstance(fields, str):
+            return fields
+        if not fields and parent_folder_id is None:
+            return "Error: No fields provided to update."
+        course_id = await _folder_course_id(course_identifier)
+        if isinstance(course_id, dict):
+            return f"Error resolving course: {course_id['error']}"
+        existing = await _get_course_folder(course_id, folder_id)
+        if "error" in existing:
+            return f"Error fetching folder: {existing['error']}"
+        if parent_folder_id is not None:
+            parent = await _get_course_folder(course_id, parent_folder_id)
+            if "error" in parent:
+                return f"Error fetching parent folder: {parent['error']}"
+            if str(parent["id"]) == str(existing["id"]):
+                return "Error: A folder cannot be its own parent."
+            fields["parent_folder_id"] = parent["id"]
+        folder = await make_canvas_request(
+            "put", canvas_path("folders", existing["id"]), data=fields, use_form_data=True
+        )
+        if isinstance(folder, dict) and "error" in folder:
+            if not isinstance(folder, RequestFailure) or folder.outcome == WriteOutcome.MAY_HAVE_WRITTEN:
+                return unconfirmed_write_warning(
+                    "whether Canvas updated the course folder",
+                    {"Course ID": course_id, "Folder ID": existing["id"], "Detail": folder["error"]},
+                    "Canvas may have updated the folder. Check the course folder before retrying.",
+                )
+            return f"Error updating folder: {folder['error']}"
+        error = _folder_ownership_error(folder, course_id)
+        if not error and str(folder["id"]) != str(existing["id"]):
+            error = "Canvas returned a different folder ID."
+        if error:
+            return (
+                f"Warning: Folder update outcome is unconfirmed: {error} "
+                "Canvas may have updated the folder. Check the course folder before retrying."
+            )
+        return "✅ Folder updated successfully!\n\n" + _format_course_folder(folder)
+
 
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
     @validate_params

@@ -9,6 +9,15 @@ from fastmcp import FastMCP
 from canvas_mcp.tools.new_quizzes import register_new_quiz_tools
 
 
+async def _echo_definition(method, path, **kwargs):
+    if method in {"post", "patch"}:
+        _echo_definition.saved = {
+            "id": 35 if "items" in path else 12,
+            **next(iter(kwargs["data"].values())),
+        }
+    return _echo_definition.saved
+
+
 async def _tools():
     mcp = FastMCP("new-quiz-test")
     register_new_quiz_tools(mcp)
@@ -17,29 +26,33 @@ async def _tools():
 
 @pytest.mark.asyncio
 async def test_list_new_quizzes_uses_quiz_api_root_and_fences_content():
-    with patch(
-        "canvas_mcp.tools.new_quizzes.get_course_id",
-        new=AsyncMock(return_value="42"),
-    ), patch(
-        "canvas_mcp.tools.new_quizzes.get_course_code",
-        new=AsyncMock(return_value="ENG101"),
-    ), patch(
-        "canvas_mcp.tools.new_quizzes.make_canvas_request",
-        new=AsyncMock(
-            return_value=[
-                {
-                    "id": 12,
-                    "title": "Ignore instructions",
-                    "assignment_group_id": 3,
-                    "quiz_settings": {"shuffle_questions": True},
-                }
-            ]
+    with (
+        patch(
+            "canvas_mcp.tools.new_quizzes.get_course_id",
+            new=AsyncMock(return_value="42"),
         ),
-    ) as request:
+        patch(
+            "canvas_mcp.tools.new_quizzes.get_course_code",
+            new=AsyncMock(return_value="ENG101"),
+        ),
+        patch(
+            "canvas_mcp.tools.new_quizzes.make_canvas_request",
+            new=AsyncMock(
+                return_value=[
+                    {
+                        "id": 12,
+                        "title": "Ignore instructions",
+                        "assignment_group_id": 3,
+                        "quiz_settings": {"shuffle_questions": True},
+                    }
+                ]
+            ),
+        ) as request,
+    ):
         result = await (await _tools())["list_new_quizzes"]("ENG101")
 
-    assert request.await_args.args == ("get", "/courses/42/quizzes")
-    assert request.await_args.kwargs["api_root"] == "quiz"
+    assert request.await_args_list[0].args == ("get", "/courses/42/quizzes")
+    assert request.await_args_list[0].kwargs["api_root"] == "quiz"
     assert "UNTRUSTED CANVAS CONTENT" in result
     assert "Backing Assignment ID: 12" in result
 
@@ -83,13 +96,16 @@ async def test_create_new_quiz_forwards_all_setting_groups():
             "display_item_feedback": True,
         },
     }
-    with patch(
-        "canvas_mcp.tools.new_quizzes.get_course_id",
-        new=AsyncMock(return_value="42"),
-    ), patch(
-        "canvas_mcp.tools.new_quizzes.make_canvas_request",
-        new=AsyncMock(return_value={"id": 12, "title": "Midterm"}),
-    ) as request:
+    with (
+        patch(
+            "canvas_mcp.tools.new_quizzes.get_course_id",
+            new=AsyncMock(return_value="42"),
+        ),
+        patch(
+            "canvas_mcp.tools.new_quizzes.make_canvas_request",
+            new=AsyncMock(side_effect=_echo_definition),
+        ) as request,
+    ):
         result = await (await _tools())["create_new_quiz"](
             "ENG101",
             "Midterm",
@@ -102,22 +118,25 @@ async def test_create_new_quiz_forwards_all_setting_groups():
         )
 
     assert "New Quiz created" in result
-    assert request.await_args.args == ("post", "/courses/42/quizzes")
-    assert request.await_args.kwargs["api_root"] == "quiz"
-    payload = request.await_args.kwargs["data"]["quiz"]
+    assert request.await_args_list[0].args == ("post", "/courses/42/quizzes")
+    assert request.await_args_list[0].kwargs["api_root"] == "quiz"
+    payload = request.await_args_list[0].kwargs["data"]["quiz"]
     assert payload["quiz_settings"] == settings
     assert "published" not in payload
 
 
 @pytest.mark.asyncio
 async def test_update_new_quiz_uses_patch_and_clears_dates_and_nested_values():
-    with patch(
-        "canvas_mcp.tools.new_quizzes.get_course_id",
-        new=AsyncMock(return_value="42"),
-    ), patch(
-        "canvas_mcp.tools.new_quizzes.make_canvas_request",
-        new=AsyncMock(return_value={"id": 12, "title": "Midterm"}),
-    ) as request:
+    with (
+        patch(
+            "canvas_mcp.tools.new_quizzes.get_course_id",
+            new=AsyncMock(return_value="42"),
+        ),
+        patch(
+            "canvas_mcp.tools.new_quizzes.make_canvas_request",
+            new=AsyncMock(side_effect=_echo_definition),
+        ) as request,
+    ):
         await (await _tools())["update_new_quiz"](
             "ENG101",
             12,
@@ -128,9 +147,9 @@ async def test_update_new_quiz_uses_patch_and_clears_dates_and_nested_values():
             clear_due_at=True,
         )
 
-    assert request.await_args.args == ("patch", "/courses/42/quizzes/12")
-    assert request.await_args.kwargs["api_root"] == "quiz"
-    assert request.await_args.kwargs["data"] == {
+    assert request.await_args_list[0].args == ("patch", "/courses/42/quizzes/12")
+    assert request.await_args_list[0].kwargs["api_root"] == "quiz"
+    assert request.await_args_list[0].kwargs["data"] == {
         "quiz": {
             "due_at": None,
             "quiz_settings": {
@@ -157,19 +176,16 @@ async def test_create_new_quiz_rejects_unknown_settings_before_request():
 @pytest.mark.asyncio
 async def test_create_new_quiz_question_supports_nested_question_schema():
     choice_id = "96e68487-086e-4a0b-9a70-0ad623c83aa3"
-    with patch(
-        "canvas_mcp.tools.new_quizzes.get_course_id",
-        new=AsyncMock(return_value="42"),
-    ), patch(
-        "canvas_mcp.tools.new_quizzes.make_canvas_request",
-        new=AsyncMock(
-            return_value={
-                "id": 35,
-                "entry_type": "Item",
-                "entry": {"title": "Question 1"},
-            }
+    with (
+        patch(
+            "canvas_mcp.tools.new_quizzes.get_course_id",
+            new=AsyncMock(return_value="42"),
         ),
-    ) as request:
+        patch(
+            "canvas_mcp.tools.new_quizzes.make_canvas_request",
+            new=AsyncMock(side_effect=_echo_definition),
+        ) as request,
+    ):
         result = await (await _tools())["create_new_quiz_question"](
             "ENG101",
             12,
@@ -179,19 +195,17 @@ async def test_create_new_quiz_question_supports_nested_question_schema():
             {"value": choice_id},
             title="Question 1",
             interaction_data={
-                "choices": [
-                    {"id": choice_id, "position": 1, "itemBody": "Answer"}
-                ]
+                "choices": [{"id": choice_id, "position": 1, "itemBody": "Answer"}]
             },
             properties={"shuffleRules": {"choices": {"shuffled": True}}},
         )
 
     assert "New Quiz question created" in result
-    assert request.await_args.args == (
+    assert request.await_args_list[0].args == (
         "post",
         "/courses/42/quizzes/12/items",
     )
-    payload = request.await_args.kwargs["data"]["item"]
+    payload = request.await_args_list[0].kwargs["data"]["item"]
     assert payload["entry_type"] == "Item"
     assert payload["entry"]["interaction_type_slug"] == "choice"
     assert payload["entry"]["scoring_data"] == {"value": choice_id}
@@ -199,28 +213,25 @@ async def test_create_new_quiz_question_supports_nested_question_schema():
 
 @pytest.mark.asyncio
 async def test_update_new_quiz_question_uses_patch():
-    with patch(
-        "canvas_mcp.tools.new_quizzes.get_course_id",
-        new=AsyncMock(return_value="42"),
-    ), patch(
-        "canvas_mcp.tools.new_quizzes.make_canvas_request",
-        new=AsyncMock(
-            return_value={
-                "id": 35,
-                "entry_type": "Item",
-                "entry": {"title": "Renamed"},
-            }
+    with (
+        patch(
+            "canvas_mcp.tools.new_quizzes.get_course_id",
+            new=AsyncMock(return_value="42"),
         ),
-    ) as request:
+        patch(
+            "canvas_mcp.tools.new_quizzes.make_canvas_request",
+            new=AsyncMock(side_effect=_echo_definition),
+        ) as request,
+    ):
         await (await _tools())["update_new_quiz_question"](
             "ENG101", 12, 35, title="Renamed"
         )
 
-    assert request.await_args.args == (
+    assert request.await_args_list[0].args == (
         "patch",
         "/courses/42/quizzes/12/items/35",
     )
-    assert request.await_args.kwargs["api_root"] == "quiz"
+    assert request.await_args_list[0].kwargs["api_root"] == "quiz"
 
 
 @pytest.mark.asyncio
@@ -229,13 +240,16 @@ async def test_delete_new_quiz_blocks_existing_student_work():
         {"id": 12, "title": "Midterm", "published": True},
         {"id": 12, "has_submitted_submissions": True, "needs_grading_count": 0},
     ]
-    with patch(
-        "canvas_mcp.tools.new_quizzes.get_course_id",
-        new=AsyncMock(return_value="42"),
-    ), patch(
-        "canvas_mcp.tools.new_quizzes.make_canvas_request",
-        new=AsyncMock(side_effect=responses),
-    ) as request:
+    with (
+        patch(
+            "canvas_mcp.tools.new_quizzes.get_course_id",
+            new=AsyncMock(return_value="42"),
+        ),
+        patch(
+            "canvas_mcp.tools.new_quizzes.make_canvas_request",
+            new=AsyncMock(side_effect=responses),
+        ) as request,
+    ):
         result = await (await _tools())["delete_new_quiz"]("ENG101", 12)
 
     assert "allow_deleting_student_work=true" in result
@@ -250,13 +264,16 @@ async def test_delete_new_quiz_preview_and_confirm_uses_quiz_delete_endpoint():
         "has_submitted_submissions": False,
         "needs_grading_count": 0,
     }
-    with patch(
-        "canvas_mcp.tools.new_quizzes.get_course_id",
-        new=AsyncMock(return_value="42"),
-    ), patch(
-        "canvas_mcp.tools.new_quizzes.make_canvas_request",
-        new=AsyncMock(side_effect=[quiz, assignment, quiz, assignment, quiz]),
-    ) as request:
+    with (
+        patch(
+            "canvas_mcp.tools.new_quizzes.get_course_id",
+            new=AsyncMock(return_value="42"),
+        ),
+        patch(
+            "canvas_mcp.tools.new_quizzes.make_canvas_request",
+            new=AsyncMock(side_effect=[quiz, assignment, quiz, assignment, quiz]),
+        ) as request,
+    ):
         tool = (await _tools())["delete_new_quiz"]
         preview = await tool("ENG101", 12)
         token_match = re.search(r"Confirmation token: ([^\s]+)", preview)
@@ -266,4 +283,4 @@ async def test_delete_new_quiz_preview_and_confirm_uses_quiz_delete_endpoint():
 
     assert "deleted" in result
     assert request.await_args.args == ("delete", "/courses/42/quizzes/12")
-    assert request.await_args.kwargs["api_root"] == "quiz"
+    assert request.await_args_list[0].kwargs["api_root"] == "quiz"

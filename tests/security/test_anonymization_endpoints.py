@@ -342,3 +342,46 @@ class TestEnrollmentAnonymization:
         }]
         result = anonymize_response_data(enrollments, data_type="users")
         assert result[0]["user"]["name"] != "Bob Learner"
+
+
+@pytest.mark.parametrize("endpoint", [
+    "/courses/1/assignments/2/overrides",
+    "/courses/1/assignments/2/overrides/3?include[]=students",
+    "/api/v1/courses/1/assignments/2/overrides/3",
+    "/groups/4/memberships",
+    "/groups/4/memberships/5",
+    "/api/v1/groups/4/memberships/5",
+    "/courses/1/outcome_results",
+    "/courses/1/outcome_rollups",
+    "/api/v1/courses/1/outcome_rollups",
+])
+def test_stage1b_student_record_routes_are_full_tier(endpoint):
+    assert _endpoint_anonymization_mode(endpoint) == ANONYMIZE_FULL
+
+
+@pytest.mark.parametrize("endpoint", [
+    "/courses/1/pages/overrides",
+    "/groups/4/pages/memberships",
+])
+def test_stage1b_route_words_in_page_slugs_remain_identity_tier(endpoint):
+    assert _endpoint_anonymization_mode(endpoint) == ANONYMIZE_IDENTITY
+
+
+@pytest.mark.parametrize("endpoint", [
+    "/courses/1/assignments/2/overrides/3",
+    "/groups/4/memberships/5",
+])
+def test_stage1b_nested_student_identities_are_scrubbed(endpoint):
+    from canvas_mcp.core.client import _anonymize_for_endpoint
+
+    raw = {"id": 3, "student_ids": [9], "user": {
+        "id": 9, "name": "Jane Example", "email": "jane@example.edu",
+        "login_id": "jexample", "avatar_url": "https://canvas.invalid/avatar",
+    }}
+    scrubbed, _ = _anonymize_for_endpoint(raw, endpoint)
+    assert scrubbed["id"] == 3
+    assert scrubbed["student_ids"] == [9]
+    assert scrubbed["user"]["name"] != "Jane Example"
+    assert scrubbed["user"]["email"] != "jane@example.edu"
+    assert scrubbed["user"]["login_id"] != "jexample"
+    assert scrubbed["user"]["avatar_url"] is None

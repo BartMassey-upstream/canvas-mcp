@@ -296,18 +296,29 @@ def register_admin_tools(mcp: FastMCP) -> None:
 
         return "\n".join(lines)
 
-    @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
+    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
     @validate_params
-    async def create_student_anonymization_map(course_identifier: str | int) -> str:
-        """Create a local CSV file mapping real student data to anonymous IDs for a course.
+    async def create_student_anonymization_map(
+        course_identifier: str | int, save_directory: str = "local_maps"
+    ) -> str:
+        """Create a private local identity-map bundle without overwriting prior maps.
 
         Args:
             course_identifier: Course code or Canvas ID
+            save_directory: Local destination; existing directories require mode 0700.
+                Each call creates a new bundle with raw JSON, spreadsheet-safe CSV,
+                and a completion manifest. Available only through local stdio.
         """
         import csv
-        from pathlib import Path
+        import hashlib
+        import io
+        import json
+        from datetime import UTC, datetime
+        from urllib.parse import urlsplit
 
         from ..core.anonymization import generate_anonymous_id
+        from ..core.config import get_config
+        from ..core.local_artifacts import write_private_bundle
 
         if is_http_request_active():
             return (
@@ -315,84 +326,98 @@ def register_admin_tools(mcp: FastMCP) -> None:
                 "(stdio) server. No file was written."
             )
 
-        course_id = await get_course_id(course_identifier)
-
-        # Get all students in the course
-        params = {
-            "enrollment_type[]": "student",
-            "include[]": ["email"],
-            "per_page": 100
-        }
-
-        # skip_anonymization: this tool's entire job is to record which real
-        # student each pseudonym stands for. Fetching the roster THROUGH the
-        # anonymizer maps pseudonyms to pseudonyms, so the CSV it wrote was
-        # useless (issue #179). The file is written locally, for the
-        # instructor who already has roster access.
-        students = await fetch_all_paginated_results(
-            canvas_path('courses', course_id, 'users'), params, skip_anonymization=True
-        )
-
-        if isinstance(students, dict) and "error" in students:
-            return f"Error fetching students: {students['error']}"
-
-        if not students:
-            return f"No students found for course {course_identifier}."
-
-        # Create local_maps directory if it doesn't exist
-        maps_dir = Path("local_maps").resolve()
-        maps_dir.mkdir(exist_ok=True)
-
-        # Generate filename with course identifier
-        course_display = await get_course_code(course_id) or str(course_identifier)
-        safe_course_name = "".join(c for c in course_display if c.isalnum() or c in ("-", "_"))
-        filename = f"anonymization_map_{safe_course_name}.csv"
-        filepath = (maps_dir / filename).resolve()
-        if not filepath.is_relative_to(maps_dir):
-            return "Error: Invalid course name produced unsafe filename"
-
-        # Create mapping data
-        mapping_data = []
-        for student in students:
-            real_id = student.get("id")
-            real_name = student.get("name", "Unknown")
-            real_email = student.get("email", "No email")
-
-            # Generate the same anonymous ID that would be used by the anonymization system
-            anonymous_id = generate_anonymous_id(real_id, prefix="Student")
-
-            # Names and emails are user-controlled on many Canvas instances, and
-            # this file exists to be opened in a spreadsheet, so neutralize any
-            # leading formula marker before it becomes an executable cell.
-            mapping_data.append({
-                "real_name": csv_safe_cell(real_name),
-                "real_id": real_id,
-                "real_email": csv_safe_cell(real_email),
-                "anonymous_id": anonymous_id
-            })
-
-        # Write to CSV file
         try:
-            with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
-                fieldnames = ["real_name", "real_id", "real_email", "anonymous_id"]
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-                writer.writeheader()
-                writer.writerows(mapping_data)
-
-            result = "✅ Student anonymization map created successfully!\n\n"
-            result += f"📁 File location: {filepath}\n"
-            result += f"👥 Students mapped: {len(mapping_data)}\n"
-            result += f"🏫 Course: {course_display}\n\n"
-            result += "⚠️ **SECURITY WARNING:**\n"
-            result += "This file contains sensitive student information and should be:\n"
-            result += "• Kept secure and not shared\n"
-            result += "• Deleted when no longer needed\n"
-            result += "• Never committed to version control\n\n"
-            result += "📋 File format: CSV with columns real_name, real_id, real_email, anonymous_id\n"
-            result += "🔍 Use this file to identify students from their anonymous IDs in tool outputs."
-
-            return result
-
-        except Exception as e:
-            return f"Error creating anonymization map: {str(e)}"
+            course_id = str(await get_course_id(course_identifier))
+            if not course_id.isascii() or not course_id.isdecimal():
+                course = await make_canvas_request("get", canvas_path("courses", course_id))
+                if not isinstance(course, dict) or "error" in course:
+                    return "Error: Could not resolve the canonical course ID. No file was written."
+                course_id = str(course.get("id", ""))
+            if not course_id.isascii() or not course_id.isdecimal() or int(course_id) <= 0:
+                return "Error: Invalid canonical course ID. No file was written."
+            course_id = str(int(course_id))
+            parsed = urlsplit(get_config().canvas_api_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                return "Error: Invalid Canvas origin. No file was written."
+            host = parsed.hostname.lower()
+            if ":" in host:
+                host = f"[{host}]"
+            port = parsed.port
+            suffix = f":{port}" if port and port != {"http": 80, "https": 443}[parsed.scheme] else ""
+            origin = f"{parsed.scheme}://{host}{suffix}"
+            students = await fetch_all_paginated_results(
+                canvas_path("courses", course_id, "users"),
+                {"enrollment_type[]": "student", "include[]": ["email"], "per_page": 100},
+                skip_anonymization=True,
+            )
+            if not isinstance(students, list):
+                return "Error: Could not fetch a complete roster. No file was written."
+            if not students:
+                return "No students found. No file was written."
+            records = []
+            seen_ids: set[int] = set()
+            seen_pseudonyms: set[str] = set()
+            for student in students:
+                if not isinstance(student, dict):
+                    raise ValueError("Invalid roster record")
+                real_id = student.get("id")
+                if type(real_id) is not int or real_id <= 0 or real_id in seen_ids:
+                    raise ValueError("Invalid or duplicate student ID")
+                name, email = student.get("name"), student.get("email")
+                if (name is not None and not isinstance(name, str)) or (
+                    email is not None and not isinstance(email, str)
+                ):
+                    raise ValueError("Invalid identity fields")
+                anonymous_id = generate_anonymous_id(real_id, prefix="Student")
+                expected_id = "Student_" + hashlib.sha256(str(real_id).encode()).hexdigest()[:8]
+                if anonymous_id != expected_id:
+                    return (
+                        "Error: Cached pseudonyms do not match the declared map algorithm. "
+                        "No file was written; existing pseudonyms were not changed."
+                    )
+                if anonymous_id in seen_pseudonyms:
+                    raise ValueError("Pseudonym collision")
+                seen_ids.add(real_id)
+                seen_pseudonyms.add(anonymous_id)
+                records.append({
+                    "real_name": name, "real_id": real_id,
+                    "real_email": email, "anonymous_id": anonymous_id,
+                })
+            output = io.StringIO(newline="")
+            writer = csv.DictWriter(
+                output, fieldnames=["real_name", "real_id", "real_email", "anonymous_id"]
+            )
+            writer.writeheader()
+            writer.writerows({
+                **record,
+                "real_name": csv_safe_cell(record["real_name"] or ""),
+                "real_email": csv_safe_cell(record["real_email"] or ""),
+            } for record in records)
+            origin_hash = hashlib.sha256(origin.encode()).hexdigest()[:16]
+            bundle = write_private_bundle(
+                save_directory, f"canvas-{origin_hash}-course-{course_id}-map-v1",
+                {
+                    "identities.json": json.dumps(records, ensure_ascii=False).encode(),
+                    "anonymization_map.csv": output.getvalue().encode(),
+                },
+                {
+                    "schema_version": 1, "kind": "student_identity_map",
+                    "canvas_origin": origin, "course_id": course_id,
+                    "pseudonym_algorithm": "sha256-id8-student-v1",
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "record_count": len(records),
+                },
+            )
+            return (
+                f"Student anonymization map created successfully.\n"
+                f"File location: {bundle / 'anonymization_map.csv'}\n"
+                f"Completion manifest: {bundle / 'manifest.json'}\n"
+                f"Students mapped: {len(records)}\n"
+                "Private identity files remain local. Prior maps were not overwritten."
+            )
+        except Exception:
+            return (
+                "Error: Identity-map completion could not be confirmed. "
+                "Check the private destination and available disk space. "
+                "Any directory without a valid manifest is incomplete; do not use it."
+            )

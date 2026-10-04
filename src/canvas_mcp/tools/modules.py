@@ -4,6 +4,7 @@ Provides tools for creating, updating, and managing Canvas course modules
 and module items. Modules are the primary content organization system in Canvas.
 """
 
+import json
 from typing import Any
 
 from fastmcp import FastMCP
@@ -29,8 +30,70 @@ _DELETE_MODULE_GUARD = ConfirmationGuard(nothing_done="Nothing was deleted.")
 _DELETE_MODULE_ITEM_GUARD = ConfirmationGuard(nothing_done="Nothing was deleted.")
 
 
+def _module_content_snapshot(response: dict[str, Any], *, item: bool = False) -> dict[str, Any]:
+    fields = (
+        ("id", "module_id", "position", "type", "content_id", "published", "indent",
+         "new_tab", "iframe", "completion_requirement")
+        if item else
+        ("id", "position", "published", "unlock_at", "require_sequential_progress",
+         "prerequisite_module_ids", "items_count")
+    )
+    result = {field: response[field] for field in fields if field in response}
+    for field, allowed in (("iframe", ("width", "height")), ("completion_requirement", ("type", "min_score"))):
+        if isinstance(result.get(field), dict):
+            result[field] = {key: value for key, value in result[field].items() if key in allowed}
+    text_fields = ("title", "page_url", "external_url") if item else ("name",)
+    for field in text_fields:
+        if field in response:
+            result[field] = fence_untrusted_inline(str(response[field]), f"module {field}")
+    return result
+
+
 def register_shared_module_tools(mcp: FastMCP) -> None:
     """Register module tools accessible to both students and educators."""
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def get_module(
+        course_identifier: str | int,
+        module_id: str | int,
+        include_items: bool = False,
+    ) -> str:
+        """Read one module's authoring settings, optionally with all its items.
+
+        Student progression and completion records are excluded.
+        """
+        course_id = await get_course_id(course_identifier)
+        endpoint = canvas_path('courses', course_id, 'modules', module_id)
+        response = await make_canvas_request("get", endpoint)
+        if not isinstance(response, dict) or "error" in response:
+            return json.dumps({"error": "Could not read module settings."})
+        result = _module_content_snapshot(response)
+        if include_items:
+            items = await fetch_all_paginated_results(
+                canvas_path('courses', course_id, 'modules', module_id, 'items'),
+                {"per_page": 100},
+            )
+            if not isinstance(items, list):
+                return json.dumps({"error": "Could not read all module items."})
+            result["items"] = [_module_content_snapshot(entry, item=True) for entry in items]
+        return json.dumps(result)
+
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def get_module_item(
+        course_identifier: str | int,
+        module_id: str | int,
+        item_id: str | int,
+    ) -> str:
+        """Read one module item's authoring fields without student records."""
+        course_id = await get_course_id(course_identifier)
+        response = await make_canvas_request(
+            "get", canvas_path('courses', course_id, 'modules', module_id, 'items', item_id)
+        )
+        if not isinstance(response, dict) or "error" in response:
+            return json.dumps({"error": "Could not read module item settings."})
+        return json.dumps(_module_content_snapshot(response, item=True))
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params
@@ -475,7 +538,9 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
         external_url: str | None = None,
         new_tab: bool = False,
         completion_requirement_type: str | None = None,
-        completion_requirement_min_score: int | None = None
+        completion_requirement_min_score: int | None = None,
+        iframe_width: int | None = None,
+        iframe_height: int | None = None
     ) -> str:
         """Add an item to a module.
 
@@ -492,9 +557,11 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
             position: Position within module (1-indexed)
             indent: Indentation level (0-4)
             page_url: URL slug of the page (required for Page type)
-            external_url: URL for ExternalUrl items
+            external_url: URL for ExternalUrl or ExternalTool items
             new_tab: Open external links in new tab (default: False)
             completion_requirement_type: One of: must_view, must_submit, must_contribute, min_score, must_mark_done
+            iframe_width: Positive ExternalTool launch width in pixels
+            iframe_height: Positive ExternalTool launch height in pixels
             completion_requirement_min_score: Minimum score (only for min_score type)
         """
         # Backstop for issue 239: never publish our provenance markers.
@@ -513,6 +580,15 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
         item_params: dict[str, Any] = {
             "module_item[type]": item_type
         }
+
+        if (iframe_width is not None or iframe_height is not None) and item_type != "ExternalTool":
+            return "iframe dimensions apply only to ExternalTool items"
+
+        for dimension, value in (("width", iframe_width), ("height", iframe_height)):
+            if value is not None:
+                if value <= 0:
+                    return f"iframe_{dimension} must be positive"
+                item_params[f"module_item[iframe][{dimension}]"] = value
 
         # Handle content_id requirement
         types_requiring_content_id = ["File", "Discussion", "Assignment", "Quiz", "ExternalTool"]
@@ -533,6 +609,9 @@ def register_educator_module_tools(mcp: FastMCP) -> None:
                 return "external_url is required for ExternalUrl items"
             if title is None:
                 return "title is required for ExternalUrl items"
+            item_params["module_item[external_url]"] = external_url
+
+        if item_type == "ExternalTool" and external_url is not None:
             item_params["module_item[external_url]"] = external_url
 
         # Handle SubHeader type

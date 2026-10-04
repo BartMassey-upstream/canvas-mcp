@@ -15,6 +15,20 @@ async def _get_tool_names(mcp: FastMCP) -> set[str]:
 
 
 STUDENT_ONLY_TOOLS = {
+    "list_my_planner_items",
+    "list_my_planner_notes",
+    "get_my_planner_note",
+    "list_my_planner_overrides",
+    "get_my_planner_override",
+    "list_my_calendar_events",
+    "list_my_favorite_courses",
+    "list_my_bookmarks",
+    "get_my_bookmark",
+    "get_my_module_progress",
+    "get_my_module_item_sequence",
+    "get_my_submission_history",
+    "get_my_submission_file",
+    "get_my_submission",
     "get_my_upcoming_assignments",
     "get_my_submission_status",
     "get_my_course_grades",
@@ -23,6 +37,13 @@ STUDENT_ONLY_TOOLS = {
 }
 
 SHARED_TOOLS = {
+    "get_discussion_user_state",
+    "get_course_folder",
+    "list_course_folders",
+    "read_course_file",
+    "get_module",
+    "get_module_item",
+    "get_syllabus",
     # courses
     "list_courses",
     "get_course_details",
@@ -72,6 +93,46 @@ SELF_IDENTITY_TOOLS = {"get_my_enrollments", "get_my_profile"}
 # Exact, fail-closed profile for course construction without student records.
 # Any future change to this set must be reviewed as a data-access decision.
 CREATOR_TOOLS = {
+    "list_outcome_groups",
+    "get_outcome_group",
+    "list_course_outcomes",
+    "get_course_outcome",
+    "create_outcome_group",
+    "update_outcome_group",
+    "delete_outcome_group",
+    "create_course_outcome",
+    "update_course_outcome",
+    "link_course_outcome",
+    "unlink_course_outcome",
+    "import_course_content",
+    "get_assignment_group",
+    "get_module",
+    "get_module_item",
+    "list_content_migrations",
+    "list_content_migrators",
+    "list_content_migration_issues",
+    "get_content_migration_issue",
+    "list_quiz_question_groups",
+    "get_quiz_question_group",
+    "list_page_revisions",
+    "get_page_revision",
+    "update_course_home_page",
+    "create_quiz_question_group",
+    "update_quiz_question_group",
+    "delete_quiz_question_group",
+    "reorder_quiz_items",
+    "duplicate_page",
+    "revert_page_revision",
+    "schedule_page_publication",
+    "upload_new_quiz_media",
+    "delete_course_folder",
+    "copy_course_folder",
+    "copy_course_file",
+    "list_course_folders",
+    "get_course_folder",
+    "create_course_folder",
+    "update_course_folder",
+    "get_quiz_question",
     "add_module_item",
     "associate_rubric",
     "bulk_update_pages",
@@ -318,17 +379,39 @@ class TestRoleFiltering:
         assert "check_enrollment" not in await _get_tool_names(mcp)
 
     @pytest.mark.asyncio
-    async def test_student_tool_count(self):
-        """Student role should have approximately 37 tools."""
+    async def test_student_default_profile_has_only_reviewed_tools(self):
         mcp = FastMCP(name="test-student")
         register_all_tools(mcp, role="student")
         tools = await _get_tool_names(mcp)
-        assert 25 <= len(tools) <= 40, f"Expected ~37 student tools, got {len(tools)}: {sorted(tools)}"
+        assert tools == SHARED_TOOLS | STUDENT_ONLY_TOOLS
 
     @pytest.mark.asyncio
-    async def test_educator_tool_count(self):
-        """Educator role should have approximately 128 tools."""
+    async def test_educator_includes_creator_capabilities(self):
         mcp = FastMCP(name="test-educator")
         register_all_tools(mcp, role="educator")
         tools = await _get_tool_names(mcp)
-        assert 115 <= len(tools) <= 135, f"Expected ~128 educator tools, got {len(tools)}: {sorted(tools)}"
+        assert CREATOR_TOOLS <= tools
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_student_optional_actions_match_explicit_gate(monkeypatch, enabled):
+    import canvas_mcp.core.config as config_module
+
+    names = config_module.STUDENT_WRITE_TOOL_NAMES
+    monkeypatch.setenv("STUDENT_WRITE_TOOLS", ",".join(sorted(names)) if enabled else "")
+    monkeypatch.setattr(config_module, "_config", None)
+    mcp = FastMCP("student-explicit-write-gate")
+    register_all_tools(mcp, role="student")
+    registered = await _get_tool_names(mcp)
+    assert registered & names == (names if enabled else set())
+    assert not {"get_submission_details", "get_course_outcome_results", "create_course_group", "create_course_calendar_event"} & registered
+
+
+async def test_creator_does_not_gain_student_actions_when_all_enabled(monkeypatch):
+    import canvas_mcp.core.config as config_module
+
+    monkeypatch.setenv("STUDENT_WRITE_TOOLS", ",".join(sorted(config_module.STUDENT_WRITE_TOOL_NAMES)))
+    monkeypatch.setattr(config_module, "_config", None)
+    mcp = FastMCP("creator-all-student-flags")
+    register_all_tools(mcp, role="creator")
+    assert await _get_tool_names(mcp) == CREATOR_TOOLS
