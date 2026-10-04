@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![skills.sh](https://img.shields.io/badge/skills.sh-canvas--mcp-blue)](https://skills.sh)
 
-MCP server for Canvas LMS with **up to 139 tools** and **8 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
+MCP server for Canvas LMS with **up to 144 tools** and **9 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
 
 ## Quick Start
 
@@ -42,6 +42,13 @@ available so the changes can be reviewed upstream in smaller units:
 | `fileops` | Course-file metadata updates and safe deletion | Currently based on the integrated `main` |
 | `ci-fixes` | Fork-safe Azure CI and Windows token ownership | Currently based on the integrated `main` |
 | `exports` | Local Common Cartridge course backups | Currently based on the integrated `main` |
+| `newquiz` | New Quiz definitions and question authoring | Based on integrated history; needs extraction for upstream |
+| `settings` | Course dates and general settings | Based on integrated history; needs extraction for upstream |
+
+Current Stage 1 work adds course folders, Classic Quiz question
+feedback and direct reads, and a resumable backup skill. These
+changes need a new reviewed revision before colleagues install
+them; the existing fork tag predates this work.
 
 These changes are not all part of the published `canvas-mcp` package
 yet. To test the integrated fork rather than the latest release:
@@ -77,7 +84,7 @@ release tag.
   See CLAUDE.md "Documentation Maintenance" for full guidelines.
 -->
 
-Canvas MCP provides **up to 139 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 139. Tools are organized by user type:
+Canvas MCP provides **up to 144 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 144. Tools are organized by user type:
 
 <details>
 <summary><strong>Student Tools</strong> (click to expand)</summary>
@@ -302,12 +309,19 @@ This launches an interactive picker to install skills into your agent of choice 
 | `canvas-course-qc` | Learning Designers | Pre-semester quality audit: structure, content, publishing, completeness |
 | `canvas-accessibility-auditor` | Learning Designers | WCAG scan, prioritized report, guided remediation, verification |
 | `canvas-course-builder` | Learning Designers | Scaffold courses from specs, templates, or existing courses |
+| `canvas-course-backup` | Creators | Resume or create local course-content snapshots; report digest and recovery limits |
 
 Install a specific skill:
 
 ```bash
 npx skills add vishalsachdev/canvas-mcp -s canvas-week-plan
 ```
+
+The fork also provides `canvas-course-backup` for local, resumable
+Common Cartridge snapshots. Install it from the same reviewed
+fork checkout as the server; the upstream skills command above
+does not include unpublished fork changes. See
+[Linux fork setup](#linux-fork-setup-for-claude-code-and-codex).
 
 ### Claude Code Slash Commands
 
@@ -321,9 +335,116 @@ You: /canvas-week-plan
 Claude: [Shows prioritized weekly assignment plan]
 ```
 
-Claude Code skills are located in `.claude/skills/` and can be customized for your workflow.
+Skill sources live in `skills/`. Install them into the client
+locations described below to make them discoverable.
 
 **Want a custom skill?** [Submit a request](https://github.com/vishalsachdev/canvas-mcp/issues/new?labels=skill-request&title=[Skill%20Request]) describing your repetitive workflow!
+
+### Linux fork setup for Claude Code and Codex
+
+This setup uses local stdio and the creator profile. Choose a
+reviewed fork commit or release tag; branch names move. The
+current Stage 1 working changes are not a published release.
+Python 3.11 or newer and `uv` are required. Node is needed for
+development/TypeScript checks, not creator-only server use.
+
+```bash
+git clone https://github.com/BartMassey-upstream/canvas-mcp.git
+cd canvas-mcp
+FORK_REVISION='<reviewed commit or release tag>'
+git checkout --detach "$FORK_REVISION"
+git rev-parse HEAD
+uv tool install --force .
+uv tool list
+uv tool dir --bin
+```
+
+Replace the placeholder before running. Record the full commit
+ID alongside the installed package version. This installation
+copies the package into an isolated environment; it does not
+follow future edits to the checkout.
+
+On Linux, put general settings in
+`${XDG_CONFIG_HOME:-$HOME/.config}/canvas-mcp/env`:
+
+```dotenv
+CANVAS_API_URL=https://canvas.pdx.edu/api/v1
+CANVAS_ROLE=creator
+TIMEZONE=America/Los_Angeles
+```
+
+Use your own institution's Canvas URL if different. Put only the
+raw token in the sibling `token` file and set its mode to `0600`.
+Do not put it in a client command, shared config, or repository.
+The native token file takes precedence over an environment token.
+Use the same `XDG_CONFIG_HOME` when launching either client.
+Existing process variables override values in the `env` file.
+
+Find the installed server in the directory printed by
+`uv tool dir --bin`, then substitute its absolute path below.
+Passing `--role creator` pins the profile even if the shell has
+another role configured.
+
+```bash
+claude mcp add --transport stdio --scope user canvas \
+  -- /absolute/path/canvas-mcp-server --role creator
+codex mcp add canvas \
+  -- /absolute/path/canvas-mcp-server --role creator
+```
+
+These commands update each client's configuration. If `canvas`
+is already configured, inspect and deliberately update that
+entry rather than registering duplicate servers. Start a fresh
+client session and inspect `/mcp`. A server start validates the
+token with a live Canvas read. `canvas-mcp-server --test` also
+makes a live read; `--help` only checks the launcher.
+
+Use a read-only first prompt: "Show available creator tools and
+explain which tools can change Canvas." Then, when ready for a
+live read, ask for a course structure. Live write acceptance
+belongs in a disposable course with explicit approval.
+
+If startup fails, check the absolute launcher path, matching
+configuration directory, private token permissions, and Canvas
+URL. Reinstall and restart after an upgrade so the running
+server and client tool registry match the selected revision.
+
+For the backup skill, run these commands from the reviewed fork
+checkout. They create skill directories and preserve existing skill
+files. Inspect an existing installation before updating it.
+
+```bash
+mkdir -p "$HOME/.claude/skills" "$HOME/.agents/skills"
+mkdir -p "$HOME/.claude/skills/canvas-course-backup"
+mkdir -p "$HOME/.agents/skills/canvas-course-backup"
+cp -n skills/canvas-course-backup/SKILL.md \
+  "$HOME/.claude/skills/canvas-course-backup/SKILL.md"
+cp -n skills/canvas-course-backup/SKILL.md \
+  "$HOME/.agents/skills/canvas-course-backup/SKILL.md"
+```
+
+The copy commands preserve any existing `SKILL.md`; explicitly
+choose when to replace an older installed version. In Claude use `/canvas-course-backup`; in Codex
+request `$canvas-course-backup`. Supply the course, local backup
+directory, and whether to start or resume an export. Skills are
+installed separately from the Python server package.
+
+To upgrade or roll back, select the desired reviewed revision
+with `git checkout --detach`, repeat `uv tool install --force .`,
+update the skill from that same revision if it contains it, and
+restart the client. Keep the previous revision ID and archive
+files; changing software versions does not restore course data.
+
+Client command syntax and skill locations follow the official
+[Claude MCP documentation][claude-mcp],
+[Claude skills documentation][claude-skills],
+[Codex MCP documentation][codex-mcp], and
+[Codex skills documentation][codex-skills].
+
+[claude-mcp]: https://code.claude.com/docs/en/mcp
+[claude-skills]: https://code.claude.com/docs/en/skills
+[codex-mcp]: https://developers.openai.com/codex/mcp
+[codex-skills]: https://developers.openai.com/codex/skills
 
 ## 🔒 Privacy & Data Protection
 

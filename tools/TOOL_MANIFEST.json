@@ -32,6 +32,231 @@
   ],
   "tools": [
     {
+      "name": "get_quiz_question",
+      "category": "educator",
+      "description": "Read one Classic Quiz question definition, never student responses.",
+      "returns": "Course-content definition with author-controlled text fenced",
+      "examples": [
+        "Show Classic Quiz question 9 including feedback"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "quiz_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "question_id",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "update_course_folder",
+      "category": "educator",
+      "description": "Rename, move, or change availability settings for a course folder.",
+      "returns": "Course-content definition with author-controlled text fenced",
+      "examples": [
+        "Move this course folder and clear its lock date"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true,
+          "description": "Course code, Canvas ID, or explicit SIS ID"
+        },
+        {
+          "name": "folder_id",
+          "type": "string | integer",
+          "required": true,
+          "description": "Canvas folder ID or 'root'"
+        },
+        {
+          "name": "name",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "New folder name, containing 1 to 255 characters"
+        },
+        {
+          "name": "parent_folder_id",
+          "type": "string | integer | null",
+          "required": false,
+          "default": null,
+          "description": "Move into an existing folder in the same course"
+        },
+        {
+          "name": "lock_at",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "ISO 8601 scheduled lock date"
+        },
+        {
+          "name": "unlock_at",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "ISO 8601 scheduled unlock date"
+        },
+        {
+          "name": "locked",
+          "type": "boolean | null",
+          "required": false,
+          "default": null,
+          "description": "Lock or unlock the folder immediately"
+        },
+        {
+          "name": "hidden",
+          "type": "boolean | null",
+          "required": false,
+          "default": null,
+          "description": "Hide or show the folder"
+        },
+        {
+          "name": "position",
+          "type": "integer | null",
+          "required": false,
+          "default": null,
+          "description": "Nonnegative sort position"
+        },
+        {
+          "name": "clear_lock_at",
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Remove the scheduled lock date"
+        },
+        {
+          "name": "clear_unlock_at",
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Remove the scheduled unlock date"
+        }
+      ]
+    },
+    {
+      "name": "create_course_folder",
+      "category": "educator",
+      "description": "Create a course-content folder with optional availability settings.",
+      "returns": "Course-content definition with author-controlled text fenced",
+      "examples": [
+        "Create a Materials folder in this course"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true,
+          "description": "Course code, Canvas ID, or explicit SIS ID"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Folder name, containing 1 to 255 characters"
+        },
+        {
+          "name": "parent_folder_id",
+          "type": "string | integer | null",
+          "required": false,
+          "default": null,
+          "description": "Existing folder in the same course"
+        },
+        {
+          "name": "parent_folder_path",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Course-relative parent path; missing folders are created"
+        },
+        {
+          "name": "lock_at",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "ISO 8601 scheduled lock date"
+        },
+        {
+          "name": "unlock_at",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "ISO 8601 scheduled unlock date"
+        },
+        {
+          "name": "locked",
+          "type": "boolean | null",
+          "required": false,
+          "default": null,
+          "description": "Lock or unlock the folder immediately"
+        },
+        {
+          "name": "hidden",
+          "type": "boolean | null",
+          "required": false,
+          "default": null,
+          "description": "Hide or show the folder"
+        },
+        {
+          "name": "position",
+          "type": "integer | null",
+          "required": false,
+          "default": null,
+          "description": "Nonnegative sort position"
+        }
+      ]
+    },
+    {
+      "name": "get_course_folder",
+      "category": "shared",
+      "description": "Read a course-content folder, using 'root' for the course root.",
+      "returns": "Course-content definition with author-controlled text fenced",
+      "examples": [
+        "Show the root folder of this course"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true,
+          "description": "Course code, Canvas ID, or explicit SIS ID"
+        },
+        {
+          "name": "folder_id",
+          "type": "string | integer",
+          "required": false,
+          "default": "root",
+          "description": "Canvas folder ID or 'root'"
+        }
+      ]
+    },
+    {
+      "name": "list_course_folders",
+      "category": "shared",
+      "description": "List all course-content folders as a flat list, including subfolders.",
+      "returns": "Course-content definition with author-controlled text fenced",
+      "examples": [
+        "List course folders and their IDs"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true,
+          "description": "Course code, Canvas ID, or explicit SIS ID"
+        }
+      ]
+    },
+    {
       "name": "get_my_profile",
       "category": "shared",
       "description": "Get your own Canvas identity (user ID, name, login ID)",
@@ -333,17 +558,177 @@
       "name": "create_quiz_question",
       "category": "educator",
       "description": "Add a question definition to a Classic Quiz",
-      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "question_name", "type": "string", "required": true}, {"name": "question_text", "type": "string", "required": true}, {"name": "question_type", "type": "string", "required": true}],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "quiz_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "question_name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "question_text",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "question_type",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "points_possible",
+          "type": "number",
+          "required": false,
+          "default": 1
+        },
+        {
+          "name": "position",
+          "type": "integer | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "answers",
+          "type": "array | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "quiz_group_id",
+          "type": "integer | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "correct_comments",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "incorrect_comments",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "neutral_comments",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "text_after_answers",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ],
       "returns": "The created question definition",
-      "examples": ["Add a multiple-choice question to Classic Quiz 7"]
+      "examples": [
+        "Add a multiple-choice question to Classic Quiz 7"
+      ]
     },
     {
       "name": "update_quiz_question",
       "category": "educator",
       "description": "Update a Classic Quiz question definition",
-      "parameters": [{"name": "course_identifier", "type": "string | integer", "required": true}, {"name": "quiz_id", "type": "string | integer", "required": true}, {"name": "question_id", "type": "string | integer", "required": true}],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "quiz_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "question_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "question_name",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "question_text",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "question_type",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "points_possible",
+          "type": "number | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "position",
+          "type": "integer | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "answers",
+          "type": "array | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "quiz_group_id",
+          "type": "integer | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "correct_comments",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "incorrect_comments",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "neutral_comments",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "text_after_answers",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ],
       "returns": "The updated question definition",
-      "examples": ["Make question 9 worth two points"]
+      "examples": [
+        "Make question 9 worth two points"
+      ]
     },
     {
       "name": "delete_quiz_question",

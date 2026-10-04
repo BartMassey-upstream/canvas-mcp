@@ -72,6 +72,11 @@ SELF_IDENTITY_TOOLS = {"get_my_enrollments", "get_my_profile"}
 # Exact, fail-closed profile for course construction without student records.
 # Any future change to this set must be reviewed as a data-access decision.
 CREATOR_TOOLS = {
+    "list_course_folders",
+    "get_course_folder",
+    "create_course_folder",
+    "update_course_folder",
+    "get_quiz_question",
     "add_module_item",
     "associate_rubric",
     "bulk_update_pages",

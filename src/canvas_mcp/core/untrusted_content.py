@@ -109,6 +109,8 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     "get_page_content": _fenced("fence_untrusted"),
     "get_page_details": _fenced("fence_untrusted"),
     "get_quiz": _fenced("_format_quiz"),
+    "get_quiz_question": _fenced("_format_question"),
+    "get_course_folder": _fenced("_format_course_folder"),
     "get_peer_review_assignments": _fenced("_fence_peer_review_names"),
     "get_peer_review_comments": _fenced("fence_untrusted_fields"),
     "get_peer_review_completion_analytics": _fenced("_fence_peer_review_names"),
@@ -130,6 +132,7 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     "list_course_navigation": _fenced("_format_tab"),
     "list_conversations": _fenced("_fence_conversation_fields"),
     "list_course_files": _fenced("fence_untrusted_inline"),
+    "list_course_folders": _fenced("_format_course_folder"),
     "list_course_exports": _fenced("_export_status"),
     "list_courses": _deferred(
         "Returns course name/code and the caller's role; course identity is the documented low-risk exception."

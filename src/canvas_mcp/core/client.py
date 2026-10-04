@@ -578,7 +578,11 @@ async def make_canvas_request(
                         return {"error": f"Unsupported method: {method}"}
 
                     response.raise_for_status()
-                    result = response.json()
+                    result = (
+                        {}
+                        if response.status_code == 204 and not response.content
+                        else response.json()
+                    )
                     if _pagination is not None:
                         _pagination["current"] = str(response.request.url)
                         _pagination["next"] = response.links.get("next", {}).get("url")

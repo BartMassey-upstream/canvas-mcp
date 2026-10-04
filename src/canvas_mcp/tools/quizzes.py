@@ -92,11 +92,22 @@ def _format_question(question: dict[str, Any]) -> str:
             ),
             f"Type: {question.get('question_type', 'N/A')}",
             f"Points: {question.get('points_possible', 'N/A')}",
+            f"Position: {question.get('position', 'N/A')}",
+            f"Quiz Group ID: {question.get('quiz_group_id')}",
             "Question text:\n"
             + fence_untrusted(
                 question.get("question_text") or "", "quiz question text"
             ),
     ]
+    for field in (
+        "correct_comments", "incorrect_comments", "neutral_comments", "text_after_answers"
+    ):
+        if field in question:
+            label = field.replace("_", " ")
+            lines.append(
+                f"{label.title()}:\n"
+                + fence_untrusted(question[field] or "", f"quiz question {label}")
+            )
     if question.get("answers"):
         lines.append(
             "Answer definitions:\n"
@@ -242,13 +253,23 @@ def _question_payload(
     points_possible: float | None = None,
     position: int | None = None,
     answers: list[dict[str, Any]] | None = None,
+    quiz_group_id: int | None = None,
+    correct_comments: str | None = None,
+    incorrect_comments: str | None = None,
+    neutral_comments: str | None = None,
+    text_after_answers: str | None = None,
 ) -> dict[str, Any] | str:
     if any(
         contains_fence_markers(value)
-        for value in (question_name, question_text, answers)
+        for value in (
+            question_name, question_text, answers, correct_comments,
+            incorrect_comments, neutral_comments, text_after_answers,
+        )
         if value is not None
     ):
         return FENCE_LEAK_ERROR
+    if quiz_group_id is not None and quiz_group_id <= 0:
+        return "Error: quiz_group_id must be a positive integer."
     values = {
         "question_name": question_name,
         "question_text": question_text,
@@ -256,6 +277,11 @@ def _question_payload(
         "points_possible": points_possible,
         "position": position,
         "answers": answers,
+        "quiz_group_id": quiz_group_id,
+        "correct_comments": correct_comments,
+        "incorrect_comments": incorrect_comments,
+        "neutral_comments": neutral_comments,
+        "text_after_answers": text_after_answers,
     }
     return {key: value for key, value in values.items() if value is not None}
 
@@ -567,6 +593,25 @@ def register_quiz_tools(mcp: FastMCP) -> None:
             _format_question(question) for question in questions
         )
 
+    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @validate_params
+    async def get_quiz_question(
+        course_identifier: str | int,
+        quiz_id: str | int,
+        question_id: str | int,
+    ) -> str:
+        """Read one Classic Quiz question definition, never student responses."""
+        course_id = await get_course_id(course_identifier)
+        question = await make_canvas_request(
+            "get",
+            canvas_path("courses", course_id, "quizzes", quiz_id, "questions", question_id),
+        )
+        if not isinstance(question, dict):
+            return "Error reading quiz question: invalid Canvas response."
+        if "error" in question:
+            return f"Error reading quiz question: {question['error']}"
+        return _format_question(question)
+
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
     @validate_params
     async def create_quiz_question(
@@ -578,6 +623,11 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         points_possible: float = 1,
         position: int | None = None,
         answers: list[dict[str, Any]] | None = None,
+        quiz_group_id: int | None = None,
+        correct_comments: str | None = None,
+        incorrect_comments: str | None = None,
+        neutral_comments: str | None = None,
+        text_after_answers: str | None = None,
     ) -> str:
         """Add a question definition to a Classic Quiz."""
         payload = _question_payload(
@@ -587,6 +637,11 @@ def register_quiz_tools(mcp: FastMCP) -> None:
             points_possible=points_possible,
             position=position,
             answers=answers,
+            quiz_group_id=quiz_group_id,
+            correct_comments=correct_comments,
+            incorrect_comments=incorrect_comments,
+            neutral_comments=neutral_comments,
+            text_after_answers=text_after_answers,
         )
         if isinstance(payload, str):
             return payload
@@ -612,6 +667,11 @@ def register_quiz_tools(mcp: FastMCP) -> None:
         points_possible: float | None = None,
         position: int | None = None,
         answers: list[dict[str, Any]] | None = None,
+        quiz_group_id: int | None = None,
+        correct_comments: str | None = None,
+        incorrect_comments: str | None = None,
+        neutral_comments: str | None = None,
+        text_after_answers: str | None = None,
     ) -> str:
         """Update a question definition in a Classic Quiz."""
         payload = _question_payload(
@@ -621,6 +681,11 @@ def register_quiz_tools(mcp: FastMCP) -> None:
             points_possible=points_possible,
             position=position,
             answers=answers,
+            quiz_group_id=quiz_group_id,
+            correct_comments=correct_comments,
+            incorrect_comments=incorrect_comments,
+            neutral_comments=neutral_comments,
+            text_after_answers=text_after_answers,
         )
         if isinstance(payload, str):
             return payload

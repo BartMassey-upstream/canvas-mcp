@@ -59,11 +59,42 @@ Use this — not [`check_enrollment`](#check_enrollment) — for any question ab
 Set `CANVAS_ROLE=creator` to expose course-construction tools without tools
 that read student records. The profile supports assignments, assignment groups,
 Classic and New Quizzes, course navigation, syllabus, pages,
-modules, course files, rubrics, announcements, content migrations, and
+modules, course files and folders, rubrics, announcements, content migrations, and
 local course-content backups. It also includes accessibility review and
 excludes rosters, submissions, grading, analytics,
 peer reviews, conversations, discussions, messaging,
 anonymization maps, and code execution.
+
+
+### Course folders
+
+All folder tools take `course_identifier`. They verify course
+ownership and reject submission folders. Folder names and paths
+are fenced on reads. User/group folders are outside this scope.
+
+- `list_course_folders`: paginate all course folders as a flat
+  list, including nested folders and parent IDs.
+- `get_course_folder(folder_id="root")`: inspect one folder,
+  including lock/hidden settings and scheduled dates.
+- `create_course_folder(name, parent_folder_id=None,
+  parent_folder_path=None, lock_at=None, unlock_at=None,
+  locked=None, hidden=None, position=None)`: create a folder.
+  Choose an existing same-course parent ID or a course-relative
+  parent path; Canvas can create missing path components.
+  Omitting both places it at the course root.
+- `update_course_folder(folder_id, name=None,
+  parent_folder_id=None, lock_at=None, unlock_at=None,
+  locked=None, hidden=None, position=None,
+  clear_lock_at=False, clear_unlock_at=False)`: rename, move,
+  or set availability. Clear flags remove scheduled dates;
+  providing a date and its clear flag together is rejected.
+
+Writes require creator or educator access and the operator's
+write policy. Names must contain 1 to 255 characters; positions
+are nonnegative; dates use ISO 8601. Moving verifies both folder
+and parent ownership before writing. Folder deletion is not
+exposed. Read back settings when validating against live Canvas.
+
 
 ---
 
@@ -380,8 +411,17 @@ assignment-group ID.
   the time limit, result policy, access restrictions, and scheduled dates
 - `delete_quiz`: refuse when student work exists unless
   `allow_deleting_student_work=true`, then preview and confirm deletion
-- `list_quiz_questions`, `create_quiz_question`, and
-  `update_quiz_question`: author question definitions and answer choices
+- `list_quiz_questions` and `get_quiz_question`: read definitions,
+  answer choices, position, group ID, and fenced feedback.
+  `get_quiz_question(course_identifier, quiz_id, question_id)`
+  reads one definition without submission-version parameters.
+- `create_quiz_question` and `update_quiz_question`: author names,
+  text, types, points, positions, answer dictionaries, and the
+  optional `quiz_group_id`, `correct_comments`,
+  `incorrect_comments`, `neutral_comments`, and
+  `text_after_answers` fields. Omitted fields stay unchanged on
+  update; empty feedback strings are forwarded. Group IDs must
+  be positive; no undocumented group-removal sentinel is exposed.
 - `delete_quiz_question`: apply the same student-work opt-in before previewing
   and confirming question deletion
 
