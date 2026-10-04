@@ -50,9 +50,13 @@ from .tools import (
     register_content_export_tools,
     register_content_import_tools,
     register_content_migration_tools,
+    register_course_calendar_tools,
+    register_course_group_tools,
     register_course_tools,
     register_discovery_tools,
+    register_educator_assessment_tools,
     register_educator_assignment_tools,
+    register_educator_communication_tools,
     register_educator_course_tools,
     register_educator_discussion_tools,
     register_educator_file_tools,
@@ -70,11 +74,15 @@ from .tools import (
     register_rubric_tools,
     register_self_identity_tools,
     register_shared_assignment_tools,
+    register_shared_communication_tools,
     register_shared_content_tools,
     register_shared_discussion_tools,
     register_shared_file_tools,
     register_shared_messaging_tools,
     register_shared_module_tools,
+    register_student_communication_tools,
+    register_student_planning_tools,
+    register_student_planning_write_tools,
     register_student_tools,
     register_student_write_tools,
 )
@@ -490,9 +498,16 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
     # Caller-scoped identity: needs no roster permission, so every profile gets it.
     register_self_identity_tools(mcp)
 
+    if role != "creator":
+        register_shared_communication_tools(mcp)
+
     # Student-specific tools
     if role in ("student", "all"):
         register_student_tools(mcp)
+        register_student_planning_tools(mcp)
+        register_student_planning_write_tools(mcp)
+        if role == "student":
+            register_student_communication_tools(mcp)
         # Tier 1 writes register only for tools the operator named in
         # STUDENT_WRITE_TOOLS (default: none). See tools/student_write.py.
         register_student_write_tools(mcp)
@@ -522,6 +537,10 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
             for tool_name in _CREATOR_EXCLUDED_TOOLS:
                 mcp.local_provider.remove_tool(tool_name)
         else:
+            register_course_calendar_tools(mcp)
+            register_course_group_tools(mcp)
+            register_educator_assessment_tools(mcp)
+            register_educator_communication_tools(mcp)
             register_peer_review_tools(mcp)
             register_peer_review_comment_tools(mcp)
             register_educator_messaging_tools(mcp)

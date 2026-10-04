@@ -15,6 +15,19 @@ async def _get_tool_names(mcp: FastMCP) -> set[str]:
 
 
 STUDENT_ONLY_TOOLS = {
+    "list_my_planner_items",
+    "list_my_planner_notes",
+    "get_my_planner_note",
+    "list_my_planner_overrides",
+    "get_my_planner_override",
+    "list_my_calendar_events",
+    "list_my_favorite_courses",
+    "list_my_bookmarks",
+    "get_my_bookmark",
+    "get_my_module_progress",
+    "get_my_module_item_sequence",
+    "get_my_submission_history",
+    "get_my_submission_file",
     "get_my_submission",
     "get_my_upcoming_assignments",
     "get_my_submission_status",
@@ -24,6 +37,7 @@ STUDENT_ONLY_TOOLS = {
 }
 
 SHARED_TOOLS = {
+    "get_discussion_user_state",
     "get_course_folder",
     "list_course_folders",
     "read_course_file",
@@ -377,3 +391,27 @@ class TestRoleFiltering:
         register_all_tools(mcp, role="educator")
         tools = await _get_tool_names(mcp)
         assert CREATOR_TOOLS <= tools
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_student_optional_actions_match_explicit_gate(monkeypatch, enabled):
+    import canvas_mcp.core.config as config_module
+
+    names = config_module.STUDENT_WRITE_TOOL_NAMES
+    monkeypatch.setenv("STUDENT_WRITE_TOOLS", ",".join(sorted(names)) if enabled else "")
+    monkeypatch.setattr(config_module, "_config", None)
+    mcp = FastMCP("student-explicit-write-gate")
+    register_all_tools(mcp, role="student")
+    registered = await _get_tool_names(mcp)
+    assert registered & names == (names if enabled else set())
+    assert not {"get_submission_details", "get_course_outcome_results", "create_course_group", "create_course_calendar_event"} & registered
+
+
+async def test_creator_does_not_gain_student_actions_when_all_enabled(monkeypatch):
+    import canvas_mcp.core.config as config_module
+
+    monkeypatch.setenv("STUDENT_WRITE_TOOLS", ",".join(sorted(config_module.STUDENT_WRITE_TOOL_NAMES)))
+    monkeypatch.setattr(config_module, "_config", None)
+    mcp = FastMCP("creator-all-student-flags")
+    register_all_tools(mcp, role="creator")
+    assert await _get_tool_names(mcp) == CREATOR_TOOLS

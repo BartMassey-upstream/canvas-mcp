@@ -34,10 +34,10 @@ Reduce tool overhead by setting a role-based profile. Only tools relevant to the
 
 ```
 # In the platform config directory's env file:
-CANVAS_ROLE=student    # 41 tools (student + shared)
+CANVAS_ROLE=student    # 55 tools (76 with student-write gates)
 CANVAS_ROLE=creator    # 127 course-building tools; no student records
-CANVAS_ROLE=educator   # 168 tools (170 with all feature gates)
-CANVAS_ROLE=all        # Default profile; 174 tools by default, 179 with all feature-gated tools enabled
+CANVAS_ROLE=educator   # 210 tools (212 with all feature gates)
+CANVAS_ROLE=all        # Default profile; 229 tools by default, 248 with all feature-gated tools enabled
 ```
 
 Or via CLI flag: `canvas-mcp-server --role student` (CLI flag takes precedence over env var).
@@ -73,6 +73,13 @@ instructor can still block them in their own course.
 | `submit_assignment` | Submit your own assignment (text, URL, or any file type) |
 | `comment_on_my_submission` | Comment on your own submission |
 | `mark_module_item_done` | Mark a module item done for yourself |
+
+Personal planning, bookmarks, favorites, calendar events and
+selected discussion actions also have individual student-write
+flags. See [the extended tool list](tools/README.md#educator-and-student-completion-tools).
+These tools use self-only identities; course-bound actions check
+course policy. Planner completion may also change module progress.
+Editing/deleting existing personal objects requires confirmation.
 
 Three things to know before using them:
 

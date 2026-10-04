@@ -145,6 +145,8 @@ class TestAPITokenSecurity:
                 # Check for suspicious long strings that might be tokens
                 matches = token_pattern.findall(line)
                 for match in matches:
+                    if match[1:-1] == "late_submission_minimum_percent_enabled":
+                        continue
                     # Allow certain known patterns (UUIDs, test data, etc.)
                     if "test" in match.lower() or "example" in match.lower():
                         continue

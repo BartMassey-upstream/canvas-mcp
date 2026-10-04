@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![skills.sh](https://img.shields.io/badge/skills.sh-canvas--mcp-blue)](https://skills.sh)
 
-MCP server for Canvas LMS with **up to 179 tools** and **9 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
+MCP server for Canvas LMS with **up to 248 tools** and **9 agent skills**. Designed for Claude Desktop, Cursor, Codex, Windsurf, and [40+ other agents](https://skills.sh); setup and capabilities vary by client.
 
 ## Quick Start
 
@@ -85,7 +85,14 @@ release tag.
   See CLAUDE.md "Documentation Maintenance" for full guidelines.
 -->
 
-Canvas MCP provides **up to 179 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 179. Tools are organized by user type:
+Canvas MCP provides **up to 248 tools** for interacting with Canvas LMS; the default profile registers fewer, and optional feature-gated tools can raise the total to 248. Tools are organized by user type:
+
+The integrated fork also covers differentiated assignment dates,
+sections, course groups, late policies, outcome-result summaries,
+discussion/inbox actions, calendar events, and personal planning.
+See [API coverage and boundaries](docs/api-coverage.md) and the
+[additional tools](tools/README.md#educator-and-student-completion-tools).
+Student writes remain individually disabled by default.
 
 <details>
 <summary><strong>Student Tools</strong> (click to expand)</summary>

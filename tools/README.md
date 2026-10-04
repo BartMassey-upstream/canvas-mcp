@@ -2698,3 +2698,80 @@ The local import limit is 256 MiB, 20,000 archive entries and
 2 GiB expanded. Imports refuse hosted HTTP local paths and
 unsupported storage destinations. A returned migration ID is
 not proof of import completion; poll status and review issues.
+
+## Educator and student completion tools
+
+These additions are excluded from the creator profile. Full
+signatures and profile visibility are in
+[the tool manifest](TOOL_MANIFEST.json); implementation boundaries
+and deferred live checks are in
+[API coverage](../docs/api-coverage.md).
+
+| Educator/all tools | Purpose |
+|---|---|
+| `list_assignment_overrides`, `get_assignment_override` | Read differentiated due/availability dates |
+| `create_assignment_override`, `update_assignment_override`, `delete_assignment_override` | Confirm student/section/group overrides; preserve omitted dates |
+| `list_course_sections`, `get_course_section` | Read course sections |
+| `create_course_section`, `update_course_section`, `delete_course_section` | Confirm section changes; deletion requires an empty ordinary section |
+| `get_submission_details` | Read one student's status, optional content/history/comments with privacy controls |
+| `get_course_late_policy`, `create_course_late_policy`, `update_course_late_policy` | Inspect or confirm course-wide late/missing penalties |
+| `unassign_peer_review` | Confirm removal of an assigned reviewer |
+| `get_course_outcome_results`, `get_course_outcome_rollups` | Page through scores and mastery summaries without linked student profiles |
+| `list_group_categories`, `create_group_category`, `update_group_category`, `delete_group_category` | Manage collaborative course group sets; no cascading deletion |
+| `get_course_group`, `create_course_group`, `update_course_group`, `delete_course_group` | Manage course groups, with empty-only deletion |
+| `list_course_group_memberships`, `add_course_group_member`, `remove_course_group_member` | Explicit membership changes before submitted group work; no implicit moves |
+| `delete_discussion_topic` | Confirm topic deletion; student content requires explicit opt-in |
+| `reply_to_conversation`, `update_conversation_settings`, `delete_conversation` | Confirm changes to course-bound inbox threads |
+| `list_course_calendar_events`, `get_course_calendar_event`, `create_course_calendar_event`, `update_course_calendar_event`, `delete_course_calendar_event` | Course calendar events, excluding appointments and series-wide effects |
+
+`get_discussion_user_state` is available in student, educator and
+all profiles. It returns only your subscription/read status.
+Educators can use `update_discussion_entry`,
+`delete_discussion_entry`, `set_discussion_subscription` and
+`set_discussion_read_state`. A student additionally needs each
+name enabled in `STUDENT_WRITE_TOOLS`, course-policy approval,
+and ownership when editing or deleting an entry. Actual course
+permissions are checked even in the `all` profile.
+
+| Student/all reads | Purpose |
+|---|---|
+| `list_my_planner_items` | Your planner items and completion/dismissal state |
+| `list_my_planner_notes`, `get_my_planner_note` | Your personal or course-linked notes |
+| `list_my_planner_overrides`, `get_my_planner_override` | Your completion/dismissal overrides |
+| `list_my_calendar_events` | Personal or explicitly enrolled-course calendar |
+| `list_my_favorite_courses` | Dashboard course selection |
+| `list_my_bookmarks`, `get_my_bookmark` | Your saved navigation links |
+| `get_my_module_progress`, `get_my_module_item_sequence` | Your progression and previous/current/next content |
+| `get_my_submission_history`, `get_my_submission_file` | Your attempts and verified attachment metadata |
+
+Additional student actions are individually disabled by default:
+
+- `create_my_planner_note`, `update_my_planner_note`,
+  `delete_my_planner_note`;
+- `create_my_planner_override`, `update_my_planner_override`,
+  `delete_my_planner_override`;
+- `create_my_calendar_event`, `update_my_calendar_event`,
+  `delete_my_calendar_event`;
+- `add_my_favorite_course`, `remove_my_favorite_course`;
+- `create_my_bookmark`, `update_my_bookmark`, `delete_my_bookmark`.
+
+Enable only the exact actions you want, for example:
+
+```bash
+STUDENT_WRITE_TOOLS=create_my_planner_note,update_my_planner_note
+```
+
+Changing planner completion can also change a module requirement.
+Course-bound actions therefore check the course's agent-write
+policy. Course-linked override creates and updates additionally require
+`mark_module_item_done` to be enabled and allowed by the course,
+because Canvas synchronizes the forwarded completion state. Editing or deleting existing notes, overrides, bookmarks
+and calendar events uses a preview and confirmation. Override
+creation is confirmed too. Personal calendar writes cannot modify
+course events, appointments, or recurring series.
+
+Override actions resolve their target in your own planner feed.
+For older or distant-future items, provide `target_start_date`
+and `target_end_date` around the item's date; Canvas's default
+feed covers only the nearby weeks. A missing feed item is an
+explicit error, never permission to guess its course.

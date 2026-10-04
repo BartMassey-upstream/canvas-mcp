@@ -75,6 +75,82 @@ No claim of complete restorability follows from an export digest.
 A successful automated test does not establish institution feature
 availability or permission behavior.
 
+## Stage 1b: educator and student capabilities
+
+These tools extend the educator/all and student/all profiles.
+Creator remains a course-authoring profile without these student
+records or personal workflows.
+
+| Family | Supported practical workflows | Boundaries |
+|---|---|---|
+| Differentiated assignments | Override list/detail/create/update/delete for student, section or group targets | Every write is confirmed; omitted dates are preserved; clearing a date and inheriting the assignment date are separate operations |
+| Sections | List/detail/create/update and confirmed empty-section deletion | No SIS-managed or cross-listed section changes; no enrollment creation, removal or role changes |
+| Assessment records | Individual submission detail with optional content, bounded history and comments; late-policy read/create/update; outcome scores/rollups; peer-review unassignment | Educator permission required; central anonymization applies; signed attachment URLs and embedded profiles omitted |
+| Course groups | Group-set settings, group creation/editing, membership reads/add/remove and empty-only deletion | Course-owned collaborative groups only; known SIS-managed groups refused; no tags, SIS imports, implicit member moves or membership changes after submitted group work |
+| Discussions | Own subscription/read state; confirmed entry edits/deletion and topic deletion | Moderator permissions checked at runtime; student edits require ownership, an enabled flag and course policy; attached entries must be edited in Canvas to preserve attachments |
+| Conversations | Confirmed reply, state/star/subscription changes and removal from the caller's inbox | Bound to a verified course context and moderator permission; no student conversation-write variant |
+| Personal planning | Planner items, notes and completion/dismissal overrides; note and override writes | Self only; writes individually disabled by default; course policy also applies where completion changes module progress |
+| Calendar and dashboard | Course and personal event reads/authoring, favorite courses and bookmarks | Personal writes individually gated; no appointments, recurring-series changes or calendar-wide bulk mutations |
+| Student progress | Module progress/sequence, own submission history and attachment metadata | No arbitrary user selector, observer impersonation, quiz-taking, group submissions or signed download URLs |
+
+The operator's `ALLOWED_WRITE_TOOLS` still determines whether
+write tools are available. `STUDENT_WRITE_TOOLS` separately enables
+individual student actions; it defaults to empty. Course policy is
+checked again before course-bound student writes. Course-linked
+planner override creates and updates also require the
+`mark_module_item_done` operator flag and course permission,
+because Canvas synchronizes the forwarded completion state. Registering the
+`all` profile does not grant Canvas permissions or exempt a student
+from these checks.
+
+New group, assessment and communication changes use previews with
+single-use tokens and re-read their targets when confirmed. Group
+membership changes refuse unknown submission status and implicit
+moves between groups. Group-set deletion requires an empty group inventory.
+These checks reduce unintended changes; Canvas does not offer an
+atomic preview-and-write transaction across multiple endpoints.
+Canvas may hide SIS metadata from an educator, so absent SIS
+fields do not certify that a group was never institution-managed.
+Group deletion checks visible collaborations and content; legacy
+external-provider content may not be enumerable. Concurrent group
+or content additions after preflight can still be deleted by the
+native API. Keep those objects quiescent during deletion.
+
+### Deliberate remaining boundaries
+
+These are scope or policy decisions, not unimplemented promises:
+
+- Account administration, SIS enrollment synchronization,
+  authentication, developer keys and course lifecycle management
+  remain outside a course-level assistant's scope.
+- External-tool configuration, institution-specific integrations,
+  grade passback, SIS imports and differentiation tags require
+  separate deployment and permission decisions.
+- Quiz attempts, group submissions, assessment-structure replacement
+  and student impersonation remain excluded by existing policy.
+- Appointment booking/cancellation and automated student allocation
+  can reserve scarce resources or change other people's schedules
+  and groups; no general-purpose endpoint bypass is provided.
+- Nonempty group deletion and section cross-listing can destroy or
+  relocate records. Use Canvas's own workflows for those operations.
+- Student group self-signup is excluded because changing group
+  membership can affect classmates' assignments. Educator tools
+  provide explicit, checked membership changes.
+
+The deferred live acceptance checks above apply to Stage 1b too.
+Local tests establish tool behavior against documented contracts,
+not the exact features or permissions of a particular institution.
+
+### Repository validation
+
+The completed local Stage 1b pass passed 2,509 Python tests with
+22 skips, Ruff, mypy across 64 source files, and the generated
+manifest consistency check. A clean installed wheel passed mocked
+stdio reads in creator, educator and student profiles with
+anonymization enabled. The wheel's five new modules were checked
+against the working sources; local credentials and evidence were
+excluded. These tests did not contact a live Canvas instance.
+
 ## Sources
 
 Audited against the official Canvas API and, where the published
@@ -96,3 +172,14 @@ above summarize implemented scope and local design decisions.
 - [Outcome groups](https://developerdocs.instructure.com/services/canvas/resources/outcome_groups)
 - [Content migrations](https://developerdocs.instructure.com/services/canvas/resources/content_migrations)
 - [Content exports](https://developerdocs.instructure.com/services/canvas/resources/content_exports)
+- [Sections](https://developerdocs.instructure.com/services/canvas/resources/sections)
+- [Late policy](https://developerdocs.instructure.com/services/canvas/resources/late_policy)
+- [Groups](https://developerdocs.instructure.com/services/canvas/resources/groups)
+- [Group categories](https://developerdocs.instructure.com/services/canvas/resources/group_categories)
+- [Discussions](https://developerdocs.instructure.com/services/canvas/resources/discussion_topics)
+- [Conversations](https://developerdocs.instructure.com/services/canvas/resources/conversations)
+- [Planner](https://developerdocs.instructure.com/services/canvas/resources/planner)
+- [Calendar events](https://developerdocs.instructure.com/services/canvas/resources/calendar_events)
+- [Bookmarks](https://developerdocs.instructure.com/services/canvas/resources/bookmarks)
+- [Favorites](https://developerdocs.instructure.com/services/canvas/resources/favorites)
+- [Outcome results](https://developerdocs.instructure.com/services/canvas/resources/outcome_results)

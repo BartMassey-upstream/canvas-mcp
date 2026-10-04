@@ -269,6 +269,25 @@ def _endpoint_anonymization_mode(endpoint: str) -> str:
     if self_indices:
         segments = [seg for i, seg in enumerate(segments) if i not in self_indices]
 
+    if any(
+        segments[index] == "courses"
+        and len(segments[index:]) in (5, 6)
+        and segments[index + 2] == "assignments"
+        and segments[index + 4] == "overrides"
+        for index in range(max(0, len(segments) - 4))
+    ) or any(
+        segments[index] == "groups"
+        and len(segments[index:]) in (3, 4)
+        and segments[index + 2] == "memberships"
+        for index in range(max(0, len(segments) - 2))
+    ) or any(
+        segments[index] == "courses"
+        and len(segments[index:]) == 3
+        and segments[index + 2] in {"outcome_results", "outcome_rollups"}
+        for index in range(max(0, len(segments) - 2))
+    ):
+        return ANONYMIZE_FULL
+
     # Discussion content endpoints carry student posts and names
     if 'discussion_topics' in segments and _has_route_segment(
         segments, {'entries', 'view', 'entry_list', 'replies'}

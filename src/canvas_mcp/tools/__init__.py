@@ -8,9 +8,18 @@ from .assignments import (
     register_shared_assignment_tools,
 )
 from .code_execution import register_code_execution_tools
+from .communication_actions import (
+    register_educator_communication_tools,
+    register_shared_communication_tools,
+    register_student_communication_tools,
+)
 from .content_exports import register_content_export_tools
 from .content_imports import register_content_import_tools
 from .content_migrations import register_content_migration_tools
+from .course_calendar import register_course_calendar_tools
+from .course_groups import (
+    register_course_group_tools,
+)
 from .courses import (
     register_course_tools,
     register_educator_course_tools,
@@ -20,6 +29,9 @@ from .discovery import register_discovery_tools
 from .discussions import (
     register_educator_discussion_tools,
     register_shared_discussion_tools,
+)
+from .educator_assessment import (
+    register_educator_assessment_tools,
 )
 from .enrollment import register_enrollment_tools
 from .files import register_educator_file_tools, register_shared_file_tools
@@ -37,10 +49,23 @@ from .peer_reviews import register_peer_review_tools
 from .quizzes import register_quiz_tools
 from .rubrics import register_rubric_tools
 from .self_identity import register_self_identity_tools
+from .student_planning import (
+    register_student_planning_tools,
+    register_student_planning_write_tools,
+)
 from .student_tools import register_student_tools
 from .student_write import register_student_write_tools
 
 __all__ = [
+    "register_course_calendar_tools",
+    "register_shared_communication_tools",
+    "register_student_communication_tools",
+    "register_educator_communication_tools",
+    "register_course_group_tools",
+    "register_educator_assessment_tools",
+    "register_student_planning_tools",
+    "register_student_planning_write_tools",
+
     'register_accessibility_tools',
     'register_admin_tools',
     'register_assignment_group_tools',

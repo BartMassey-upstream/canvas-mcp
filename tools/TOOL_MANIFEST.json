@@ -32,6 +32,40 @@
   ],
   "tools": [
     {
+      "name": "add_course_group_member",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview adding an active course student; refuse implicit moves or existing work.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "group_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "user_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "add_module_item",
       "category": "educator",
       "description": "Add an item to a module.\n\nRequired fields depend on item_type: content_id for File, Discussion,\nAssignment, Quiz, and ExternalTool; page_url for Page; title for\nSubHeader and ExternalUrl.",
@@ -142,6 +176,24 @@
         "creator",
         "educator",
         "all"
+      ]
+    },
+    {
+      "name": "add_my_favorite_course",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Add an enrolled course to your dashboard favorites, subject to its agent-write policy.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        }
       ]
     },
     {
@@ -847,6 +899,95 @@
       ]
     },
     {
+      "name": "create_assignment_override",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm one explicit student, course-section or assignment-group override.\n\nStudent overrides require a title. Canvas verifies active student enrollment\nand conflicts with existing targets. Clear flags explicitly override a date\nto null; omitted dates inherit the assignment defaults.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "assignment_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "student_ids",
+          "type": "array | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "course_section_id",
+          "type": "integer | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "group_id",
+          "type": "integer | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "title",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "due_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "unlock_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "lock_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "clear_due_at",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "clear_unlock_at",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "clear_lock_at",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "create_content_migration",
       "category": "educator",
       "description": "Preview or confirm a full course-copy migration request.\n\nThe first call returns a target-occupancy preview and a short-lived\ntoken. A second call with the token and identical arguments requests\nthe migration. Date shifting accepts either all four date fields or\nnone.",
@@ -909,6 +1050,71 @@
         "creator",
         "educator",
         "all"
+      ]
+    },
+    {
+      "name": "create_course_calendar_event",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm creating one course calendar event; dates require timezones.\n\nOmit dates for an undated event. All-day events use midnight timestamps.\nNo appointment, recurrence, section, attendee or cross-calendar settings.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "start_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "end_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "location_name",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "location_address",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "all_day",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
       ]
     },
     {
@@ -1013,6 +1219,112 @@
       ]
     },
     {
+      "name": "create_course_group",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and create an invitation-only collaborative course group.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "group_category_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "create_course_late_policy",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm the first course late policy only when Canvas reports none.\n\nPercentage fields must be finite and 0..100; interval is hour/day.\nDeductions default disabled. The new policy is verified by readback.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "missing_submission_deduction_enabled",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "missing_submission_deduction",
+          "type": "number",
+          "required": false,
+          "default": 0
+        },
+        {
+          "name": "late_submission_deduction_enabled",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "late_submission_deduction",
+          "type": "number",
+          "required": false,
+          "default": 0
+        },
+        {
+          "name": "late_submission_interval",
+          "type": "string",
+          "required": false,
+          "default": "day"
+        },
+        {
+          "name": "late_submission_minimum_percent_enabled",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "late_submission_minimum_percent",
+          "type": "number",
+          "required": false,
+          "default": 0
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "create_course_outcome",
       "category": "educator",
       "returns": "Tool result; Canvas-authored content is marked as untrusted data",
@@ -1085,6 +1397,53 @@
       ]
     },
     {
+      "name": "create_course_section",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm an empty section with bounded name/date settings; never enroll users.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "start_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "end_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "restrict_enrollments_to_section_dates",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "create_discussion_topic",
       "category": "educator",
       "description": "Create and publish a discussion topic in a course.\n\nThe topic is always created published (there is no draft option here),\nso students can see it on creation unless delayed_post_at schedules it\nfor later. Unpublishing afterwards with update_discussion_topic does not\nundo that initial visibility; if the topic must not be seen yet, use\ndelayed_post_at or confirm with the user first.\nIf create_announcement failed, do not post that content here instead:\nreport the failure, because re-posting it publishes the message\nsomewhere the user did not choose.",
@@ -1143,6 +1502,35 @@
       "roles": [
         "educator",
         "all"
+      ]
+    },
+    {
+      "name": "create_group_category",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and create a course group set with self-signup disabled.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
       ]
     },
     {
@@ -1206,6 +1594,183 @@
         "creator",
         "educator",
         "all"
+      ]
+    },
+    {
+      "name": "create_my_bookmark",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Create your personal bookmark; arbitrary associated data and identity fields are excluded.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "position",
+          "type": "integer | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "create_my_calendar_event",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Create a standalone event only on your personal calendar.\n\nTimed events require ISO timestamps with explicit timezones.\nAll-day events use all_day_date=YYYY-MM-DD; times are excluded.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "start_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "end_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "location_name",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "location_address",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "all_day",
+          "type": "boolean | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "all_day_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "create_my_planner_note",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Create a personal note, optionally related to an enrolled course under its agent-write policy.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "todo_date",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "details",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "course_identifier",
+          "type": "string | integer | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "create_my_planner_override",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm planner preferences for an item in your feed; completion can also affect your module progress. Use target_start_date/target_end_date for items outside the default recent feed.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "plannable_type",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "plannable_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "marked_complete",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "dismissed",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "target_start_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "target_end_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
       ]
     },
     {
@@ -2025,6 +2590,40 @@
       ]
     },
     {
+      "name": "delete_assignment_override",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm removing one override, restoring assignment defaults for its target.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "assignment_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "override_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "delete_assignment_with_confirmation",
       "category": "educator",
       "description": "Delete an assignment. Two-step: preview first, then confirm with the token.\n\nPermanent: removes the assignment together with every submission and grade\nattached to it. Canvas may retain a recycle-bin copy depending on admin settings.",
@@ -2072,6 +2671,64 @@
         "creator",
         "educator",
         "all"
+      ]
+    },
+    {
+      "name": "delete_conversation",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm removing a conversation from your own inbox view.\n\nOther participants retain their messages. Requires course moderation\npermission and a conversation associated with that course.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "conversation_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "delete_course_calendar_event",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm deleting one ordinary single-context course event.\n\nAppointments, reservations, recurrence series, section children and\nmulti-context events are refused. Requires actual manage_calendar rights.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "event_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
       ]
     },
     {
@@ -2143,6 +2800,163 @@
         },
         {
           "name": "folder_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "delete_course_group",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview deletion only of a group with no members, content or assignments.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "group_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "delete_course_section",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm deleting an empty local section; refuse all remaining enrollments.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "section_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "delete_discussion_entry",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm deleting an entry/reply and its author/content.\n\nThis removes participation that may count toward a grade. Replies use\nthe same entry-ID route. Non-moderators can delete only their own entry\nwith the enabled student gate and course policy.",
+      "roles": [
+        "student",
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "topic_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "entry_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "delete_discussion_topic",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm deleting a discussion, including its backing assignment.\n\nRequires course moderation permission. Existing participation or graded\nsubmissions require allow_deleting_student_work=True in both calls.\nAnnouncements use their separate guarded deletion tool.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "topic_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "allow_deleting_student_work",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "delete_group_category",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview deletion of an empty course group set; never cascade to groups.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "group_category_id",
           "type": "string | integer",
           "required": true
         },
@@ -2230,6 +3044,114 @@
         "creator",
         "educator",
         "all"
+      ]
+    },
+    {
+      "name": "delete_my_bookmark",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm deletion of your personal bookmark.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "bookmark_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "delete_my_calendar_event",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm deletion of your standalone personal event; shared/appointment/series events are refused.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "event_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "delete_my_planner_note",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm deletion of your note, enforcing its course policy when applicable.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "note_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "delete_my_planner_override",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm removal of your planner completion/dismissal preferences; optional target_start_date/target_end_date find nonrecent targets.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "override_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "target_start_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "target_end_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
       ]
     },
     {
@@ -3085,6 +4007,34 @@
       ]
     },
     {
+      "name": "get_assignment_override",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read one course-owned override; titles are withheld under anonymization.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "assignment_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "override_id",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
       "name": "get_content_migration_issue",
       "category": "educator",
       "returns": "Tool result; Canvas-authored content is marked as untrusted data",
@@ -3170,6 +4120,29 @@
         "student",
         "educator",
         "all"
+      ]
+    },
+    {
+      "name": "get_course_calendar_event",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read one ordinary course event; excludes reservation/participant data.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "event_id",
+          "type": "integer",
+          "required": true
+        }
       ]
     },
     {
@@ -3307,6 +4280,47 @@
       ]
     },
     {
+      "name": "get_course_group",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read one group after verifying it belongs to the requested course.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "group_id",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "get_course_late_policy",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read bounded course-wide late and missing submission deduction settings.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
       "name": "get_course_outcome",
       "category": "educator",
       "returns": "Tool result; Canvas-authored content is marked as untrusted data",
@@ -3325,6 +4339,125 @@
         },
         {
           "name": "outcome_id",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "get_course_outcome_results",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read one bounded page of visible outcome scores, excluding linked student profiles.\n\nOptional ID filters accept up to 100 unique positive Canvas IDs.\nhas_more/next_page reflect Canvas's next-page header. Hidden results,\nlinked user objects and arbitrary include parameters are unavailable.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "user_ids",
+          "type": "array | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "outcome_ids",
+          "type": "array | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "page",
+          "type": "integer",
+          "required": false,
+          "default": 1
+        },
+        {
+          "name": "per_page",
+          "type": "integer",
+          "required": false,
+          "default": 50
+        }
+      ]
+    },
+    {
+      "name": "get_course_outcome_rollups",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read one bounded outcome mastery rollup page or course mean/median aggregate.\n\nLinked profiles and student names are omitted. Scores are capped at\n100 per rollup with explicit truncation metadata. ID filters accept\npositive numeric IDs only.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "user_ids",
+          "type": "array | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "outcome_ids",
+          "type": "array | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "page",
+          "type": "integer",
+          "required": false,
+          "default": 1
+        },
+        {
+          "name": "per_page",
+          "type": "integer",
+          "required": false,
+          "default": 50
+        },
+        {
+          "name": "aggregate",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "aggregate_stat",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "get_course_section",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read one verified course section without students, enrollment records or SIS IDs.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "section_id",
           "type": "string | integer",
           "required": true
         }
@@ -3453,6 +4586,30 @@
       ]
     },
     {
+      "name": "get_discussion_user_state",
+      "category": "shared",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read your subscription/unread state; does not mark the topic read.",
+      "roles": [
+        "student",
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "topic_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
       "name": "get_discussion_with_replies",
       "category": "shared",
       "description": "Read a discussion topic's title and a preview of every entry.\n\nReturns the topic title (not its body) and each top-level entry's author,\npost time, and a text preview cut to 200 characters; with\ninclude_replies=True each entry's replies are fetched too, also as\npreviews. For full entry text use list_discussion_entries with\ninclude_full_content=True, and get_discussion_entry_details for a single\nentry.",
@@ -3572,6 +4729,24 @@
       ]
     },
     {
+      "name": "get_my_bookmark",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read one bookmark on the hard-coded users/self route.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "bookmark_id",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
       "name": "get_my_course_grades",
       "category": "student",
       "description": "Get your current grades across all enrolled courses.",
@@ -3612,6 +4787,47 @@
       ]
     },
     {
+      "name": "get_my_module_item_sequence",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read previous/current/next items for yourself; mastery-path selection is excluded.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "item_id",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "get_my_module_progress",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read your module completion/progression state and all item requirements in an enrolled course.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
       "name": "get_my_peer_reviews_todo",
       "category": "student",
       "description": "Get peer reviews YOU need to complete.",
@@ -3640,6 +4856,42 @@
       "roles": [
         "student",
         "all"
+      ]
+    },
+    {
+      "name": "get_my_planner_note",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read one note owned by the current user.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "note_id",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "get_my_planner_override",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read one planner override owned by the current user.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "override_id",
+          "type": "string | integer",
+          "required": true
+        }
       ]
     },
     {
@@ -3685,6 +4937,57 @@
       "roles": [
         "student",
         "all"
+      ]
+    },
+    {
+      "name": "get_my_submission_file",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read attachment metadata only after confirming it belongs to your submission or attempts.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "assignment_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "file_id",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "get_my_submission_history",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read your attempts, submitted text and attachment metadata; no other students, grader identities, or signed URLs.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "assignment_id",
+          "type": "string | integer",
+          "required": true
+        }
       ]
     },
     {
@@ -4310,6 +5613,64 @@
       ]
     },
     {
+      "name": "get_submission_details",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read one student's submission status and optional history/comments through the central privacy gate.\n\nContent is opt-in; central anonymization can redact it. Attachment signed\nURLs, user profiles, graders and embedded course objects are omitted.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "assignment_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "student_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "include_history",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "include_comments",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "include_content",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "history_limit",
+          "type": "integer",
+          "required": false,
+          "default": 20
+        },
+        {
+          "name": "comment_limit",
+          "type": "integer",
+          "required": false,
+          "default": 50
+        }
+      ]
+    },
+    {
       "name": "get_syllabus",
       "category": "shared",
       "description": "Get the complete Canvas Syllabus tab content for a course, untruncated.\n\nUnlike get_course_content_overview (which returns only a ~1000-char\npreview), this returns the full syllabus body so later sections such as\ngrading policies, weighting, and final-exam details remain accessible.",
@@ -4552,6 +5913,29 @@
       ]
     },
     {
+      "name": "list_assignment_overrides",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "List visible section, group and student override dates without embedded users.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "assignment_id",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
       "name": "list_assignments",
       "category": "educator",
       "description": "List assignments for a specific course.",
@@ -4704,6 +6088,36 @@
       ]
     },
     {
+      "name": "list_course_calendar_events",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "List ordinary single-course events; default is all dated/undated events.\n\nOptional bounds use YYYY-MM-DD. Appointment slots, sections, recurring\nseries, shared calendars, and assignment due-date events are excluded.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "start_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "end_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "list_course_exports",
       "category": "educator",
       "description": "List course-content exports newest first without signed URLs.",
@@ -4795,6 +6209,29 @@
       ]
     },
     {
+      "name": "list_course_group_memberships",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read course group membership IDs, user IDs, state and moderator flags.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "group_id",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
       "name": "list_course_navigation",
       "category": "educator",
       "description": "List the tabs in a course's left-hand navigation.",
@@ -4837,6 +6274,24 @@
           "type": "string | integer | null",
           "required": false,
           "default": null
+        }
+      ]
+    },
+    {
+      "name": "list_course_sections",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "List section settings and student counts; never return embedded rosters or SIS IDs.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
         }
       ]
     },
@@ -4944,6 +6399,24 @@
       ]
     },
     {
+      "name": "list_group_categories",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "List collaborative group sets owned by this course; no member records.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        }
+      ]
+    },
+    {
       "name": "list_groups",
       "category": "educator",
       "description": "List all groups and their members for a specific course.",
@@ -5043,6 +6516,153 @@
         "educator",
         "all"
       ]
+    },
+    {
+      "name": "list_my_bookmarks",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read your bookmarks without arbitrary associated data.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": []
+    },
+    {
+      "name": "list_my_calendar_events",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read your personal calendar, or an explicitly selected enrolled course; exclude reservations and participant lists.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "start_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "end_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "course_identifier",
+          "type": "string | integer | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "event_type",
+          "type": "string",
+          "required": false,
+          "default": "event"
+        },
+        {
+          "name": "undated",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "list_my_favorite_courses",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read dashboard favorites; Canvas returns an enrolled-course fallback if none were selected.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": []
+    },
+    {
+      "name": "list_my_planner_items",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read your planner objects, statuses and visibility overrides without observer identity overrides.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "start_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "end_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "course_identifier",
+          "type": "string | integer | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "filter",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "list_my_planner_notes",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read your personal/course notes with optional dates and enrolled-course filtering.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "start_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "end_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "course_identifier",
+          "type": "string | integer | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "list_my_planner_overrides",
+      "category": "student",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Read your planner completion/dismissal preferences.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": []
     },
     {
       "name": "list_new_quiz_items",
@@ -5517,6 +7137,64 @@
       ]
     },
     {
+      "name": "remove_course_group_member",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview removing one course group member; refuse groups with submitted work.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "group_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "user_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "remove_my_favorite_course",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm removal from your course favorites, subject to its agent-write policy.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "reorder_quiz_items",
       "category": "educator",
       "returns": "Tool result; Canvas-authored content is marked as untrusted data",
@@ -5546,6 +7224,46 @@
         {
           "name": "group_id",
           "type": "integer | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "reply_to_conversation",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm sending a reply to an existing course-context inbox thread.\n\nRequires course discussion moderation permission. Default replies to\nevery current audience member. Explicit recipients must already belong\nto that audience; adding people, forwarding, and attachments are omitted.\nReads never mark the thread read. No student variant is offered because\ninbox threads can span courses with different student-write policies.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "conversation_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "recipient_ids",
+          "type": "array | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
           "required": false,
           "default": null
         }
@@ -5961,6 +7679,82 @@
       ]
     },
     {
+      "name": "set_discussion_read_state",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm your read/unread state for one discussion.\n\nDefault marks only the topic's initial text. include_entries=True also\nmarks all replies, without changing manually forced-read flags.\nNon-moderators require the enabled student gate and course policy.",
+      "roles": [
+        "student",
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "topic_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "read",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "include_entries",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "set_discussion_subscription",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm your topic notification subscription.\n\nCanvas's initial-post/group/announcement subscription restrictions are\nrespected. Non-moderators require their student gate and course policy.",
+      "roles": [
+        "student",
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "topic_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "subscribed",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "submit_assignment",
       "category": "student_write",
       "description": "Submit one of YOUR OWN assignments. Consumes an attempt.\n\nTwo-step by design. Call it without a confirmation_token to get a\npreview of exactly what would be sent plus a token; show that preview\nto the student, and only after they approve it call again passing the\ntoken to actually submit.\nThe token expires, is single-use, and is void if the content or the\nattempt count changed since the preview.",
@@ -6035,6 +7829,45 @@
       "roles": [
         "student",
         "all"
+      ]
+    },
+    {
+      "name": "unassign_peer_review",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm removal of an incomplete assigned peer review; preserve completed reviews.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "assignment_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "submission_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "reviewer_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
       ]
     },
     {
@@ -6400,6 +8233,224 @@
       ]
     },
     {
+      "name": "update_assignment_override",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm changes while preserving omitted current overridden dates.\n\nOnly student overrides can change student_ids or title. Clear flags set a\nnull override; inherit flags remove that override and restore base dates.\nGroup/section targets cannot change. Anonymized titles are not roundtripped.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "assignment_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "override_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "student_ids",
+          "type": "array | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "title",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "due_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "unlock_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "lock_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "clear_due_at",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "clear_unlock_at",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "clear_lock_at",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "inherit_due_at",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "inherit_unlock_at",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "inherit_lock_at",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "update_conversation_settings",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm your inbox state, star, or group-thread subscription.\n\nDoes not edit sent messages. Requires course moderation permission and\na thread associated with that course. Subscriptions apply only to group\nconversations; Canvas's private-thread restriction is checked first.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "conversation_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "workflow_state",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "subscribed",
+          "type": "boolean | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "starred",
+          "type": "boolean | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "update_course_calendar_event",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm changes to one ordinary course event, preserving omitted fields.\n\nEvent/calendar context cannot be moved. No recurrence/series, appointment,\nsection children, shared calendars or attendees. Dates need timezones.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "event_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "start_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "end_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "location_name",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "location_address",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "all_day",
+          "type": "boolean | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "update_course_dates",
       "category": "educator",
       "description": "Preview and confirm changes to course availability dates.\n\nDates use ISO 8601. A date and its matching clear flag are mutually\nexclusive. Every change is two-step because course availability can\nremove student access and is not restored by a course-content export.",
@@ -6655,6 +8706,47 @@
       ]
     },
     {
+      "name": "update_course_group",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and edit a course group's name and description, preserving members.\n\nKnown SIS-managed groups are refused. Hidden SIS provenance cannot be\ncertified; Canvas's documented SIS stickiness override is disabled.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "group_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "update_course_home_page",
       "category": "educator",
       "returns": "Tool result; Canvas-authored content is marked as untrusted data",
@@ -6675,6 +8767,72 @@
           "name": "default_view",
           "type": "string",
           "required": true
+        }
+      ]
+    },
+    {
+      "name": "update_course_late_policy",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm course-wide deductions; percentages must be 0..100 and interval hour/day.\n\nChanges can affect existing student grades. Only existing policies are\npatched; omitted fields are preserved and every write is read back.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "missing_submission_deduction_enabled",
+          "type": "boolean | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "missing_submission_deduction",
+          "type": "number | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "late_submission_deduction_enabled",
+          "type": "boolean | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "late_submission_deduction",
+          "type": "number | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "late_submission_interval",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "late_submission_minimum_percent_enabled",
+          "type": "boolean | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "late_submission_minimum_percent",
+          "type": "number | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
         }
       ]
     },
@@ -6758,6 +8916,71 @@
         },
         {
           "name": "vendor_guid",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "update_course_section",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview/confirm local section name/date changes without overriding SIS stickiness.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "section_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "start_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "end_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "clear_start_at",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "clear_end_at",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "restrict_enrollments_to_section_dates",
+          "type": "boolean | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
           "type": "string | null",
           "required": false,
           "default": null
@@ -6936,6 +9159,46 @@
       ]
     },
     {
+      "name": "update_discussion_entry",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm replacing an entry or reply's complete HTML body.\n\nNon-moderators require the enabled student gate, course policy, and\nownership. Entries with attachments must be edited in Canvas because\nits message-only update can remove the attachment.",
+      "roles": [
+        "student",
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "topic_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "entry_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "update_discussion_topic",
       "category": "educator",
       "description": "Update an existing discussion topic or announcement.",
@@ -7030,6 +9293,59 @@
       "roles": [
         "educator",
         "all"
+      ]
+    },
+    {
+      "name": "update_group_category",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview group-set settings; use 'disabled' to clear signup or auto-leader.\n\ngroup_limit=0 removes the limit. Omitted settings remain unchanged.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "group_category_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "self_signup",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "auto_leader",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "group_limit",
+          "type": "integer | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
       ]
     },
     {
@@ -7197,6 +9513,216 @@
         "creator",
         "educator",
         "all"
+      ]
+    },
+    {
+      "name": "update_my_bookmark",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm replacement of your bookmark fields.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "bookmark_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "url",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "position",
+          "type": "integer | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "update_my_calendar_event",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm changes to your standalone personal event.\n\nOmitted fields are preserved; empty description/location clears text.\nUse clear_dates=true to make the event undated, not empty timestamps.\nShared/appointment/recurring events and context changes are excluded.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "event_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "start_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "end_at",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "location_name",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "location_address",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "all_day",
+          "type": "boolean | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "all_day_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "clear_dates",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "update_my_planner_note",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm replacement of your note fields; its course/link association is preserved.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "note_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "details",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "todo_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
+      "name": "update_my_planner_override",
+      "category": "student_write",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview and confirm your planner preferences, preserving the unspecified setting; completion can affect module progress. Use target_start_date/target_end_date for nonrecent targets.",
+      "roles": [
+        "student",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "override_id",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "marked_complete",
+          "type": "boolean | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "dismissed",
+          "type": "boolean | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "target_start_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "target_end_date",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
       ]
     },
     {
