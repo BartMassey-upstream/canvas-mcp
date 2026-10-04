@@ -15,20 +15,50 @@ the requested feature. Preserve unrelated user changes.
 Locate `uv` on `PATH`, falling back to `$HOME/.local/bin/uv`, and use that
 resolved executable for every `uv` command below.
 
+## Local CI validation
+
+Before a requested commit, merge, or release, run applicable CI
+checks locally whenever possible. Read the current workflows in
+`.github/workflows/` for commands, dependency installation,
+interpreter versions, environment flags and required jobs. Use
+those definitions as the source of truth; a generic local test
+run alone does not establish CI compatibility.
+
+- Run `git diff --check` and the CI quality gates:
+  `uv run --frozen ruff check src/ tests/` and
+  `uv run --frozen mypy src/`. Use the resolved `uv` executable.
+  Match CI's locked tools; where CI deliberately resolves fresh
+  dependencies, reproduce that in an isolated environment.
+- For completed feature/release work, run the full Python suite
+  on locally available CI matrix versions, including the oldest
+  supported version when possible. Match CI environment flags,
+  including `FASTMCP_MCP_CAMELCASE_COMPAT=false`. Unit tests must
+  pass without the developer's Canvas URL, token or config files;
+  use explicit synthetic configuration only where the CI step
+  calls for it, such as installed-wheel smoke tests.
+- Run the applicable TypeScript build/tests, confirmation proofs,
+  security checks, distribution audit and clean installed-wheel
+  MCP workflows using the workflow's commands and pinned tools.
+  Package checks must import the installed wheel, not the source
+  checkout. Keep Canvas calls synthetic; CI validation does not
+  authorize live writes, deployment or publication.
+- Keep temporary environments, downloads and artifacts inside
+  ignored project directories. If downloading test interpreters,
+  set `UV_PYTHON_INSTALL_DIR` inside the project and use
+  `uv python install --no-bin` to avoid user-level launchers.
+- Fix reproduced failures before integration. If a check cannot
+  run locally because of platform, credentials or unavailable
+  tooling, record the exact check and reason as unverified.
+  Do not silently skip it or report a local pass as a GitHub pass.
+- Reuse passing evidence only when the tested code and relevant
+  environment are unchanged. After conflict resolution or other
+  integration changes, rerun affected checks. Scale validation
+  for documentation-only edits to their actual CI impact.
+
 When the user requests the full local drill:
 
-1. Before committing, run `git diff --check`, the focused tests, and the same
-   Python quality gates as CI:
-
-   ```bash
-   uv run --frozen ruff check src/ tests/
-   uv run --frozen mypy src/
-   ```
-
-   Substitute the resolved `uv` executable when the fallback is needed. Use
-   the full test suite for a completed feature or after integration when
-   practical. Rerun Ruff and mypy after integration when conflict resolution
-   or merging changed Python files.
+1. Complete the applicable local CI validation above and retain
+   its results before committing.
 2. Commit on the feature branch only when explicitly requested. Follow the
    repository's current commit-message and attribution rules.
 3. Merge the feature branch into local `main` only when requested. Preserve a
@@ -85,6 +115,7 @@ When the user requests the full local drill:
    from this checkout and perform a local registry or help smoke test that
    does not call the live Canvas API.
 
-Report the feature and merge commit IDs, branch/worktree state, checks run,
+Report the feature and merge commit IDs, branch/worktree state,
+local CI results (including versions and unverified checks),
 installation result, and whether anything was pushed. If a requested action
 was not authorized, leave it undone and say so plainly.
