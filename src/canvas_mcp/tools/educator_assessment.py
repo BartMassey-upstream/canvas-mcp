@@ -690,7 +690,7 @@ def register_educator_assessment_tools(mcp: FastMCP) -> None:
         )
         if error:
             return {"error": error}
-        payload = {
+        payload: dict[str, Any] = {
             key: current[key]
             for key in ("due_at", "unlock_at", "lock_at")
             if key in current and not inherited[key]

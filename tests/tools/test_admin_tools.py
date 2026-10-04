@@ -18,8 +18,9 @@ import pytest
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def mock_canvas_api():
+def mock_canvas_api(monkeypatch):
     """Fixture to mock Canvas API calls for admin tools."""
+    monkeypatch.setenv("CANVAS_API_URL", "https://canvas.invalid/api/v1")
     with patch('canvas_mcp.tools.admin_tools.get_course_id') as mock_get_id, \
          patch('canvas_mcp.tools.admin_tools.get_course_code') as mock_get_code, \
          patch('canvas_mcp.tools.admin_tools.fetch_all_paginated_results') as mock_fetch, \
@@ -332,7 +333,7 @@ class TestCreateStudentAnonymizationMap:
         assert manifest['course_id'] == '60366'
         assert manifest['schema_version'] == 1
         assert manifest['pseudonym_algorithm'] == 'sha256-id8-student-v1'
-        assert manifest['canvas_origin'].startswith('https://')
+        assert manifest['canvas_origin'] == 'https://canvas.invalid'
         assert 'SYNTHETIC' not in result + caplog.text
         assert 'synthetic@example' not in result + caplog.text
 
@@ -401,3 +402,18 @@ class TestCreateStudentAnonymizationMap:
         assert mock_canvas_api['fetch_all_paginated_results'].call_args.args[0] == '/courses/60366/users'
         bundle = next((tmp_path / 'local_maps').iterdir())
         assert json.loads((bundle / 'manifest.json').read_text())['course_id'] == '60366'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize('configured_url', [None, 'invalid-origin'])
+    async def test_missing_or_invalid_origin_stops_before_roster_read(
+        self, mock_canvas_api, tmp_path, monkeypatch, configured_url
+    ):
+        monkeypatch.chdir(tmp_path)
+        if configured_url is None:
+            monkeypatch.delenv('CANVAS_API_URL', raising=False)
+        else:
+            monkeypatch.setenv('CANVAS_API_URL', configured_url)
+        result = await get_tool_function('create_student_anonymization_map')('60366')
+        assert result == 'Error: Invalid Canvas origin. No file was written.'
+        mock_canvas_api['fetch_all_paginated_results'].assert_not_called()
+        assert not (tmp_path / 'local_maps').exists()

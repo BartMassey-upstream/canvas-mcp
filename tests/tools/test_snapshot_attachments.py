@@ -383,7 +383,8 @@ async def test_too_many_redirects_are_bounded(parent, tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_dns_private_address_rejected(monkeypatch):
+@pytest.mark.parametrize("address", ["127.0.0.1", 123])
+async def test_dns_private_or_non_ip_address_rejected(monkeypatch, address):
     import asyncio
     import socket
 
@@ -393,7 +394,7 @@ async def test_dns_private_address_rejected(monkeypatch):
         "getaddrinfo",
         AsyncMock(
             return_value=[
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443))
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 443))
             ]
         ),
     )
