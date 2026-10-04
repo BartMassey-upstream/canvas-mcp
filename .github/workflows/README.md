@@ -101,6 +101,36 @@ gh workflow run create-release.yml -f tag_name=v1.0.7-test
 - Scans dependencies for known vulnerabilities
 - Checks for secrets in code
 
+The dependency scan audits `uv.lock`, including all optional
+extras, and fails on known vulnerabilities. It remains enabled
+on forks. Review the `dependency-scan-reports` artifact for the
+affected packages and fixed versions.
+
+Dependabot checks the root `uv` project daily and includes
+transitive dependencies. Its pull requests still need review
+and merging; scheduled scans can find newly disclosed issues
+before an update is merged. GitHub documents this support in
+its [supported ecosystems][dependabot-ecosystems] and
+[dependency allow rules][dependabot-allow].
+
+To update affected packages locally and repeat the CI audit:
+
+```bash
+uv lock --upgrade-package PACKAGE
+uv export --frozen --format requirements-txt \
+  --no-emit-project --no-hashes --all-extras \
+  > requirements-audit.txt
+uvx --python 3.11 pip-audit -r requirements-audit.txt \
+  --ignore-vuln CVE-2025-69872
+```
+
+The exception above matches the existing CI exception for
+diskcache; it is not a reason to add new exceptions for
+dependencies with available fixes.
+
+[dependabot-ecosystems]: https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories
+[dependabot-allow]: https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference#allow
+
 ## Maintenance Workflows
 
 ### weekly-maintenance.yml
@@ -115,6 +145,12 @@ gh workflow run create-release.yml -f tag_name=v1.0.7-test
 - Reviews Canvas API compatibility
 - Scans for code quality issues
 - Creates maintenance report as GitHub issue
+
+This job runs only on `vishalsachdev/canvas-mcp`, where the
+Claude GitHub App and credentials are configured. Forks skip
+it, including manual dispatches. The weekly security workflow
+and Dependabot provide dependency checks independently of
+this AI-generated maintenance report.
 
 ### auto-label-issues.yml
 **Purpose**: Automatically labels issues based on content.
