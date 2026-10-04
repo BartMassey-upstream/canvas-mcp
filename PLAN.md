@@ -12,10 +12,12 @@ Upstreaming is useful but secondary and must not block local
 product work.
 
 Stage 1 delivers a verified, installable fork with usable
-workflows. Stage 1b subsequently covers educator and student
-gaps. Stage 2 extracts reviewable upstream contributions from
-that work. Keep the existing integrated history; do not
-reconstruct working `main` merely to prepare pull requests.
+workflows. Stage 1b covers educator and student gaps. Stage 2
+extracts reviewable upstream contributions. Stage 3 develops
+dependable daily workflows, educator snapshots and recovery
+evidence; it does not depend on Stage 2 being finished. Keep the
+existing integrated history; do not reconstruct working `main`
+merely to prepare pull requests.
 
 The integrated fork should continue to provide:
 
@@ -47,6 +49,11 @@ The integrated fork should continue to provide:
   Stage 1 work. Complete the repository-local educator/student
   work and commit it; keep live acceptance deferred.
 - Upstream preparation remains secondary in Stage 2.
+- Stage 3: Bart authorized the first repository-local pass and
+  the remaining feasible local reliability, workflow, snapshot
+  and CI work. Canvas reads are allowed; no writes may reach
+  Canvas. Mutation tests use synthetic mocks. Active installation
+  changes, commits and publication remain separate.
 
 ## Unattended Stage 1 checklist
 
@@ -259,7 +266,8 @@ Known New Quiz limits require confirmation and clear
 documentation:
 
 - stimulus and item-bank entries are readable but not authored;
-- hot-spot media upload is not exposed; and
+- hot-spot media upload is implemented with bounded local upload
+  validation; live persistence acceptance remains pending; and
 - publication is controlled through the backing assignment.
 
 Do not silently work around these limits. Pursue additional API
@@ -747,69 +755,740 @@ Ask separately before creating upstream PRs. Upstream review
 delays must not block continued fork maintenance or local
 releases.
 
-## Deferred work
+## Stage 3: dependable workflows and educator recovery
 
-### Student-data backups
+**Status: first repository-local pass implemented and verified.**
+Bart authorized S3-A, the highest-impact S3-B findings, and S3-C.
+No writes may reach Canvas, including provisioning test fixtures
+or cleanup. Reads are allowed, but this pass uses synthetic data
+and mock transports only. Active client installations and the
+later packages remain deferred.
 
-Common Cartridge exports intentionally omit enrollments,
-submissions, grades, interactions, and other student records. If
-educator-mode work later needs a local safety snapshot, design
-this as a separate feature, not an extension of creator mode.
+### Purpose, baseline, and sequencing
 
-At minimum, define:
+Make the broad API coverage dependable in actual work for Bart
+and colleagues: course preparation, teaching, reviewable grading
+and communication, personal planning, and local recovery
+evidence.
+Keep Linux, Claude Code and Codex as the initial client targets.
+Do not assume one preferred daily workflow; provide several
+representative paths and use actual experience to refine them.
 
-- exactly which records are exported;
-- a documented machine-readable archive format and manifest;
-- pagination, attachment handling, checksums, and resumability;
-- private-file permissions, destination restrictions, and refusal
-  over remote HTTP transport;
-- anonymized versus identified modes;
-- retention and secure-deletion guidance; and
-- restoration expectations, since Canvas APIs may not support a
-  full replay of student state.
+Start from the completed local increments:
 
-Treat this as sensitive FERPA data and obtain institutional
-approval for the AI client and storage workflow before using
-identified exports.
+- `ea2396a`: unattended Stage 1 creator completion;
+- `5d532fe`: unattended Stage 1b educator/student completion;
+- `96d4a6a`: tracked completion and handoff plan.
 
-### Additional New Quiz coverage
+These establish local implementation evidence, including 2,509
+passing Python tests and installed-wheel mocked stdio checks.
+They do not establish live PSU behavior, archive restorability,
+or successful independent colleague installation.
 
-The Stage 1 audit confirmed a documented hot-spot media upload
-flow. Keep implementation in the remaining creator backlog; it
-needs explicit upload-host and response validation. Stimulus and
-item-bank authoring still require supported API evidence. Do not
-bypass supported APIs with browser automation.
+Stage 2 upstream preparation is independent and secondary.
+The authorized Stage 3 repository-local work proceeds without
+waiting for upstream review or sandbox availability.
+Carry the outstanding Stage 1/1b acceptance rows forward under
+their original names; do not count them as already completed or
+as newly implemented Stage 3 features.
 
-### Educator workflows
+Suggested priority and dependency order:
 
-Creator mode is suitable for course setup without student
-records. If weekly named-student check-ins are later required,
-separately evaluate PSU-approved AI tooling, educator mode,
-anonymization boundaries, and a controlled local
-re-identification workflow.
+| Package | Priority | Main dependency | First deliverable |
+|---|---|---|---|
+| S3-A: acceptance and fixtures | P0 | Existing fork | Executable offline workflow matrix |
+| S3-B: reliable tool outcomes | P0 | S3-A | Verified writes and usable failure recovery |
+| S3-C: private local artifacts | P1 | Existing export/map paths | Shared private-file contract |
+| S3-D: daily workflows | P1 | S3-A/B; C for identity artifacts | Reviewed client-neutral workflow guides |
+| S3-E: student-record snapshots | P1 | S3-C and synthetic schema | Resumable local evidence archive |
+| S3-F: comparison and identity lookup | P2 | S3-C/E | Local comparison and selective lookup |
+| S3-G: remaining API gaps | P2 | Workflow evidence | Bounded additions with supported contracts |
+| S3-H: live pilot and delivery | P1 | Accepted local slices and sandbox | Verified pinned colleague release |
 
-If re-identification is needed, prefer a narrow local lookup tool
-that maps selected pseudonyms only after explicit user direction.
-Do not send the complete identity map to the model, and do not
-add this tool to creator mode. Configure `agy` against the
-PSU-approved Gemini account separately from this repository if
-that institutional route is chosen.
+P0 means required before relying on new workflows; P1 is the
+main product work; P2 follows demonstrated workflow needs.
+S3-H should validate finished slices as the sandbox becomes
+available, rather than wait for every P2 item. Do not make a
+usable creator release depend on student-data export approval.
+
+### S3-A. Acceptance matrix and reusable synthetic fixtures
+
+Create one maintained matrix, proposed at
+`docs/workflow-acceptance.md`, linking to `docs/api-coverage.md`
+for capability boundaries rather than duplicating its inventory.
+Each row must record:
+
+- actor, Canvas permissions, server profile and feature flags;
+- fixture objects, required data and expected tools/parameters;
+- expected reads, writes, approvals and final persisted state;
+- automated evidence and the tested package revision;
+- live evidence by institution, client, revision and date;
+- result: not run, passed, failed, blocked, or unsupported;
+- cleanup/recovery scope and unresolved limitations.
+
+Build shared synthetic fixtures with multiple pages of results,
+multiple sections/groups, missing fields, restricted permissions,
+submitted work, partial failures, and changed objects. Include
+an instructor, a restricted educator and a student, without real
+student records. Keep these fixtures usable through both direct
+tool tests and MCP stdio calls against an installed wheel.
+
+Minimum connected scenarios:
+
+| Scenario | Required observed behavior |
+|---|---|
+| Construct and revise a course unit | Linked page/file/module/assignment/rubric remain coherent; unrelated settings survive edits |
+| Author Classic and New Quizzes | Supported question data persists; publication uses the correct backing resource |
+| Differentiate dates and organize groups | Dates preserve omission/clear/inherit semantics; membership guards protect submitted work |
+| Weekly educator review | Missing, late, ungraded and unavailable data remain distinct; every finding links to its source |
+| Grade or correct a batch | Preview/dry-run precedes authorized writes; partial outcomes are itemized and recoverable |
+| Follow up on peer reviews or discussions | Draft recipients/content first; confirmation cannot be reused or redirected |
+| Personal planning and calendar | Self-only scope, disabled-write behavior and course/module policy dependencies hold |
+| Back up and resume | Interrupted exports/downloads reuse identifiers and never silently create duplicates |
+| Snapshot and compare records | Declared coverage, missing data and changed records remain explicit |
+
+Acceptance: every scenario has specified fixtures, expected
+behavior and a separately marked live row. Existing capabilities
+have executable offline checks. Snapshot/comparison scenarios
+now have S3-E/F synthetic evidence. Absence of a sandbox, New
+Quizzes entitlement or test-student account must produce a
+specific blocked row, not a blanket pass or an attempt to use
+real students instead.
+
+### S3-B. Reliability, result contracts, and bounded execution
+
+Audit existing behavior before adding another abstraction.
+Reuse `core/tool_results.py`, `core/write_outcome.py`, the
+confirmation guards and the shared Canvas client. Preserve
+existing public signatures unless a documented migration is
+necessary.
+
+1. Inventory tool results used by the workflow matrix.
+   Distinguish
+   preview, verified success, pending asynchronous work, partial
+   success, rejected/no-write, and unknown write outcome. Add
+   structured fields where workflows currently need to parse
+   prose, retaining useful human-readable output and compatible
+   existing consumers.
+2. Give high-consequence writes priority: grades, messages,
+   dates/settings, imports, quiz authoring and membership
+   changes.
+   Verify returned identity/scope and intended persisted fields.
+   Use a fresh read where response echo alone is insufficient;
+   report unverified writes without claiming that nothing
+   changed.
+3. Exercise New Quiz creation/update for each of the twelve
+   currently supported writable types. Audit existing tests and
+   official request/response schemas at implementation time.
+   Cover scoring/feedback, required interaction data, partial
+   updates, media, and preservation of unrelated fields. Create
+   regression tests for actual uncovered contracts, not merely a
+   test that repeats each implementation branch.
+4. Define batch failure behavior: validate the whole proposed
+   input before starting, bound concurrency, preserve per-item
+   outcomes and stop on authentication/policy failures. Retrying
+   reads may be safe; retrying an uncertain message, submission,
+   grade change or import requires inspecting current state
+   first.
+5. Reuse export/migration resume patterns for workflows that need
+   checkpoints. Persist operation IDs and completed/uncertain
+   steps, never credentials or reusable confirmation tokens.
+   After restart, re-read targets and obtain a new preview when
+   required. Do not introduce a background scheduler.
+6. Check discovery, manifest signatures, role filtering, content
+   fencing, student-write dependencies and operator policy in
+   every slice. A disabled capability must lead to an explanation
+   and an available safe path, not a fallback through code
+   execution or a different identity.
+
+Acceptance: stale previews, timeout-after-write, partial batches,
+revoked permissions, malformed responses and interrupted sessions
+have meaningful tests and actionable results. No claim of atomic
+rollback or exactly-once behavior may exceed what Canvas exposes.
+
+### S3-C. Private local artifacts and identity-map hardening
+
+Do this before expanding identified student exports. The current
+`create_student_anonymization_map` already writes a local CSV;
+it is not a new feature to recreate. Audit its overwrite,
+permission, destination and identity handling against the
+stronger
+local-file patterns in `content_exports.py` and credential code.
+
+Define a shared Linux local-artifact contract:
+
+- stdio-only access to an explicitly scoped local destination;
+- private directories (0700) and files (0600), including
+  temporary files;
+- exclusive creation, no silent overwrite, path traversal or
+  symlink escape, and no dependence on a permissive process
+  umask;
+- clear behavior for collisions, disk exhaustion, cancellation,
+  interrupted writes and previously incomplete artifacts;
+- atomic completion markers and integrity metadata where useful;
+- no raw student records, identity maps, tokens or signed URLs in
+  logs, tool results, exception text or repository test evidence.
+
+Keep raw archival data distinct from display transformations.
+Use CSV formula protection for spreadsheet-facing reports and
+content fences for model-facing prose. Neither should silently
+rewrite the authoritative archive or a future Canvas payload.
+
+Namespace maps by Canvas origin, course and format/algorithm
+version; detect wrong-course or stale maps. Review the current
+stable pseudonym algorithm and cross-course linkability. Do not
+silently change existing pseudonyms or invalidate stored maps.
+Pseudonymization is not a promise that free text, IDs or
+documents
+cannot identify someone.
+
+Acceptance: synthetic tests verify file permissions, path and
+transport boundaries, non-overwrite behavior, cleanup of partial
+files and model/log redaction. Existing local-map callers receive
+an explicit migration path if destination or format changes.
+
+### S3-D. Repeatable educator and student workflows
+
+Extend the existing skills under `skills/` before creating new
+ones. Reconcile their tool names, role requirements, approvals
+and defaults with the generated manifest. Start with
+`canvas-course-qc`, `canvas-bulk-grading`,
+`canvas-peer-review-manager`, `canvas-discussion-facilitator`,
+`canvas-week-plan` and `canvas-course-backup`.
+
+For each workflow, specify inputs, prerequisite reads, proposed
+changes, user review point, exact write scope, verification,
+interruption recovery and a concise final report. Separate read
+and draft phases from execution. Do not assume every existing
+write tool has a confirmation token or dry-run argument.
+
+Deliver these initial workflow packs:
+
+1. **Course readiness and revision.** Review dates, publication,
+   assignment groups, module links, files, rubric associations,
+   accessibility and quiz settings; produce a proposed repair
+   list. Apply only authorized repairs and report each result.
+2. **Weekly educator review.** Summarize missing/late/ungraded
+   work, peer-review progress and selected outcome summaries.
+   Show denominators, observation times and unavailable data.
+   Use pseudonymous/minimal output by default; do not infer a
+   student's motivation, diagnosis or risk from sparse signals.
+3. **Assessment review and correction.** Collect the assignment,
+   complete rubric and relevant submission state; prepare a
+   reviewable batch; recheck changed attempts before writing.
+   Preserve unsupported manual, moderated or provisional grading
+   paths as explicit Canvas UI steps.
+4. **Communication and follow-up.** Build a deduplicated
+   recipient
+   list and draft, then show the actual send/delete preview.
+   Review delivery/partial outcomes before retrying. Do not turn
+   a weekly review into automatic messaging or scheduling.
+5. **Dates, sections, groups and calendar.** Show scope and
+   effects before changes; respect submitted-work guards, SIS
+   restrictions and calendar/appointment exclusions.
+6. **Personal planning.** Help students inspect workload, notes,
+   submission history and module progress. Explain missing
+   student-write tools normally; check the dependent module gate
+   for course-linked planner overrides and use explicit date
+   bounds for older/future planner targets.
+
+Keep examples portable between Claude and Codex. Code execution
+must remain optional and explicitly privileged: a large batch
+alone is not a reason to enable it or bypass ordinary tools.
+Document a bounded ordinary-tool route wherever practical.
+
+Acceptance: the same intended workflow can be exercised in
+installed-wheel offline tests for both client configurations,
+with zero writes in read/draft-only scenarios. Actual client
+sessions are verified under S3-H; mocked stdio is not a
+substitute.
+
+### S3-E. Local student-record snapshots
+
+Build a separate educator-only feature. Common Cartridge remains
+a content archive, and creator mode must not gain student-record
+access. The first snapshot milestone is evidence preservation and
+comparison; automatic restoration is not part of it.
+
+Proposed first data contract:
+
+| Data family | Initial treatment |
+|---|---|
+| Course/assignment/rubric definitions | Store enough versioned context to interpret the captured records |
+| Enrollment, section and group references | Minimal scoped identifiers/roles/state; names and contact details are separate opt-ins |
+| Submission and grade state | Status, attempts, timestamps, scores and rubric assessments visible to the authorized educator |
+| Peer-review and outcome state | Selected assignment/outcome references and visible completion/results |
+| Submission bodies, comments and attachments | Separate explicit inclusion flags; excluded from the default snapshot |
+| Inbox and discussion content | Excluded from the first archive; a later workflow must justify capture scope |
+| Credentials and signed download URLs | Never archived |
+
+Specify the schema before the exporter. Use a versioned JSON
+manifest, streamed record files and an optional attachment tree.
+The manifest should include origin/course, package/schema
+versions, selected scope and filters, start/end times, captured
+counts, per-family completion/errors, file sizes/digests and
+consistency limitations. Keep identities and credentials out of
+filenames and model-visible resume summaries.
+
+Implement and test:
+
+1. A scope/destination preview showing which data classes will be
+   read and retained. Use synthetic records for development.
+   Do not treat existing roster permission as approval to store
+   arbitrary extra data or reveal it to an AI client.
+2. Course-scoped paginated collection with bounded requests,
+   cancellation and streaming output. Mark permission-limited
+   or unavailable families; an empty response is not proof that
+   no records exist across the whole course.
+3. Resumption bound to origin/course, scope and schema. Preserve
+   already verified files, deduplicate records, and handle
+   expired pagination/download state explicitly. Revalidate
+   identity and permissions before continuing.
+4. Optional attachment download with per-file/total limits,
+   validated destinations/redirects, safe filenames and hashes.
+   Resolve temporary URLs internally and never send Canvas
+   credentials to an external storage host.
+5. Consistency reporting for a course changing during capture.
+   Canvas reads across endpoints are not a transaction. Record
+   observation windows, changes detected and required recapture;
+   never call a best-effort snapshot an atomic point-in-time
+   copy.
+6. A local verifier that checks schema, expected files, digests,
+   duplicates and completion flags without any Canvas access.
+   Report complete, partial, interrupted or corrupt accurately.
+7. Retention and removal instructions for approved storage,
+   including temporary files, secondary copies and identity maps.
+   Do not promise physical secure erasure on SSDs or backups.
+   Do not invent encryption/key management; document the approved
+   storage protection actually in use.
+
+Privacy modes must state what leaves the server, what remains in
+local files, and which fields still allow identification. Start
+with synthetic/minimal metadata fixtures; treat even pseudonymous
+student archives as restricted. Identified real-data collection
+requires the institution/client/storage conditions below to be
+settled before use, without blocking the offline implementation.
+
+Acceptance: interrupted multi-page exports resume correctly;
+malformed or partial data cannot pass as complete; the verifier
+finds corruption and missing files; model-facing output contains
+only approved summaries and artifact references. Tests cover
+large synthetic courses without loading every record into model
+context or keeping every attachment in memory.
+
+### S3-F. Comparison, recovery guidance and selective identity
+
+Add a local comparison report before any restoration writer.
+Compare compatible snapshots by stable scoped IDs, distinguish
+added/removed/changed/unavailable records, and treat a permission
+change or partial archive as uncertainty rather than mass
+deletion.
+Validate archives as untrusted local input; reject path escapes,
+oversized expansion and malformed manifests without executing
+archive content or fetching embedded URLs.
+
+Maintain a recovery matrix for each captured family:
+
+- preserved evidence only;
+- a supported manual recovery procedure;
+- a separately reviewed API recovery candidate;
+- not reconstructible through the supported API.
+
+Do not replay submissions, attempts, grades, enrollments,
+messages
+or peer-review state automatically. A future recovery writer
+needs
+its own source/target mapping, fresh preview, conflict policy,
+student-work checks and explicit authorization. Content import
+into a disposable target stays a separate, existing workflow.
+
+If named follow-up is needed, prefer a local human-facing lookup
+of selected pseudonyms from the protected map. Verify origin,
+course and mapping version; handle missing/stale entries. Return
+only a success/status summary to the model by default. An MCP
+response containing names is itself disclosure to the client and
+must not be described as a purely local lookup. Never expose the
+entire mapping as a convenience step.
+
+Acceptance: synthetic comparisons and identity lookups preserve
+scope, detect incomplete evidence, and cannot silently identify
+people to the model. Real named-student use remains conditional
+on the approved institutional workflow.
+
+### S3-G. Evidence-driven capability and discovery gaps
+
+Revisit `docs/api-coverage.md` against the workflow matrix and
+current official API documentation. Record each missing operation
+or parameter as supported-and-needed, institution-dependent,
+unsupported, or intentionally excluded, with its reason.
+Implement supported gaps in small reviewed slices after the
+higher-priority reliability work. Do not invent a missing feature
+merely because a different tool name would be convenient.
+
+Hot-spot media upload is already implemented. Remaining New Quiz
+work is schema/round-trip and live acceptance evidence, plus a
+fresh check for supported stimulus/item-bank authoring APIs.
+Absent supported evidence, retain the exclusion without scraping
+private endpoints or automating the Canvas UI.
+
+Audit the Python MCP catalog and TypeScript code API separately.
+Show which workflow operations are available on each surface;
+broad MCP coverage does not imply TypeScript parity. Do not
+promise a wrapper for every tool. Any future shared backend or
+TypeScript expansion must preserve permission, operator policy,
+confirmation and content boundaries; the current privileged
+execution path is not an acceptable substitute for those
+controls.
+
+Keep quiz-taking, group submissions, impersonation, SIS/account
+administration, appointment booking and other recorded exclusions
+intact unless Bart explicitly changes the relevant scope/policy.
+Rich MCP App interfaces, additional operating systems, hosted
+institutional deployment and new AI-provider integrations are
+separate follow-on choices, not Stage 3 release requirements.
+
+Acceptance: every new capability has supported API evidence,
+meaningful behavior tests, correct roles/write gates and current
+manifest/docs; unsupported claims do not reappear in skills.
+
+### S3-H. Sandbox pilot, real clients and colleague delivery
+
+When a sandbox is ready, record its Canvas origin and explicit
+course IDs, the available permissions/features and test actors.
+Prefer two disposable course shells: a source for construction
+and a separate import/recovery target. If only one is available,
+run the safe applicable rows and leave recovery blocked. Do not
+create courses, enroll people or use real students implicitly.
+
+Before live actions, prepare the concrete fixture/change list,
+source/target/destination and cleanup inventory for approval.
+Reuse authorization for the exact approved scope; do not ask
+again for routine steps it already covers. A newly available
+sandbox is not, by itself, permission to populate or delete it.
+Only delete objects whose fixture IDs and ownership are verified;
+never treat an arbitrary unpublished course as disposable.
+
+Run the pilot in this order:
+
+1. Verify the pinned installed revision and read-only discovery
+   in actual Claude and Codex sessions. Repair active installs
+   only under the separate outside-project authorization.
+2. Run creator construction/edit/readback, publication
+   boundaries,
+   Classic/New Quiz cases, files and course-setting rows. Compare
+   Canvas API state with the UI rather than only tool prose.
+3. Run content export/resume/download and a representative import
+   into the distinct target. Record what survives: linked files,
+   module links, rubrics, settings and each relevant quiz type.
+4. Use authorized test actors to exercise educator permissions,
+   student writes, group/submission guards, draft/confirmation
+   and
+   synthetic grade/message cases. Keep unavailable role cases
+   explicitly blocked instead of weakening the checks.
+5. Exercise student-record capture/comparison with synthetic test
+   records before any approved real-data use. Confirm permission,
+   schema and storage limits in the actual environment.
+6. Have a colleague install the pinned Linux package and follow
+   the quick-start without Bart's checkout or undocumented shell
+   state. Record first-run errors and repair the instructions.
+
+Classify failures by implementation, institution feature, token
+scope, client behavior or documented unsupported operation.
+Reproduce real defects as synthetic regressions where possible.
+Record irreversible effects and unknown outcomes explicitly;
+cleanup is not proof of a complete rollback.
+
+Release accepted slices through the existing fork release process
+only when requested. Check package/version consistency, migration
+notes, install/upgrade/rollback guidance and applicable CI gates.
+Do not wait for upstream PRs to merge. Keep identified archives,
+identity maps and live evidence out of distributable artifacts.
+
+### Decisions deferred until they are needed
+
+No further answer is needed for the authorized local first pass.
+Use these defaults; real-use decisions remain deferred:
+
+| Decision | Working default | Required before real use |
+|---|---|---|
+| First workflows | Read-only readiness and weekly review, then reviewed changes | Bart may reprioritize from sandbox experience |
+| Test data | Synthetic fixtures and disposable test actors | Approved course IDs, actors and exact live action scope |
+| Snapshot purpose | Local evidence/comparison; no automatic restoration | Agreement on retained data families for real courses |
+| Identity exposure | Minimal/pseudonymous reports; local-only maps | Approved client and named-student disclosure workflow |
+| Storage | Project-local synthetic artifacts only | Authorized private destination, access, retention and storage protection |
+| Client/platform | Linux; Claude Code and Codex | Approved active-install changes and actual sessions |
+| Publication | Local reviewable increments | Separate commit/release/push or PR authorization |
+
+Do not assume PSU-approved AI or storage arrangements from a
+server role or an anonymization flag. If a separate approved
+client/provider is selected for named-student work, keep that
+configuration outside this repository and separately authorized.
+Choosing that route is not a prerequisite for synthetic tests or
+creator-mode improvements.
+
+### First authorized implementation pass and exit criteria
+
+The authorized first autonomous slice is S3-A plus the
+highest-impact S3-B findings, followed by S3-C. Work on synthetic
+fixtures and repository-local changes;
+produce a reviewable diff and test evidence before requesting
+any live or installation action. Do not start S3-E by harvesting
+real course records to discover what an archive should contain.
+
+Suggested later review boundaries are workflow/skill updates,
+student snapshot format/collector, local verifier/comparison,
+and optional selective identity lookup. Keep each independently
+reviewable; commit only when requested. Include applicable
+Python, TypeScript, manifest, security and installed-wheel checks
+for the changed surface, without rerunning unrelated suites on
+every documentation edit.
+
+Track these completion gates separately:
+
+- [x] S3-A matrix, baseline workflow tests and future scenario
+      specifications complete.
+- [x] S3-B prioritized consequential outcomes and recovery paths
+      verified synthetically; remaining breadth noted below.
+- [x] S3-C private artifact/map writer contract implemented and
+      tested; report/dataset migration and S3-F lookup complete.
+- [x] S3-D workflow guides verified against current tool behavior
+      and synthetic scenarios; real client sessions remain open.
+- [x] S3-E snapshot schema, capture/resume, verifier and optional
+      bounded attachment downloads implemented and tested.
+- [x] S3-F comparisons and selected local identity workflow
+      verified synthetically.
+- [x] S3-G workflow coverage/discovery crosswalk recorded;
+      supported additions and deliberate exclusions documented.
+- [ ] S3-H applicable sandbox rows and both real clients
+      verified.
+- [ ] Independent colleague Linux installation acceptance
+      recorded.
+- [ ] Accepted release scope, remaining limitations and recovery
+      evidence documented; publication performed only if
+      requested.
+
+Report repository-local completion separately from operational
+acceptance. Record blocked live rows and explicitly declined
+optional scope without pretending either has passed. The
+first-pass record below is historical. The second-pass record tracks the subsequently authorized local work separately
+from sandbox, client and colleague acceptance.
+
+
+### First-pass execution record (2026-10-04)
+
+Branch: `feature/stage3-first-pass`, based on `96d4a6a`.
+This is an uncommitted local increment; no release, push or
+active client installation was performed. The previously drafted
+Stage 3 plan is retained and now records the authorization.
+No writes reached Canvas. Connected read/draft tests reject all
+write methods; authoring tests use synthetic mocked responses.
+No live course or student records were needed.
+
+Implemented scope:
+
+- S3-A: [workflow acceptance](docs/workflow-acceptance.md), nine
+  scenario contracts with separately blocked live rows, shared
+  fail-closed synthetic transport, and connected educator,
+  restricted-educator, student and messaging-preview tests.
+  Existing focused suites provide the broader baseline;
+  snapshot/comparison rows remain planned for S3-E/F.
+- S3-B, first subset: New Quiz and question create/update now
+  independently read the returned definition and verify identity
+  and requested persisted fields. Tests cover all twelve
+  supported question-type forwarding contracts, nested values,
+  stale or malformed responses, and uncertain outcomes.
+  These tests do not establish live institution-specific schema
+  acceptance or every scoring/property combination.
+- S3-B, first subset: grading validates the entire batch's
+  supported input shape, IDs, finite values, comment provenance
+  and bounded concurrency before requests. Dry-run uses the same
+  validation. Canvas still interprets letter/percent grades and
+  applies its own permissions and assignment/rubric constraints.
+- S3-B, shared transport: automatic 429 retries now apply only to
+  reads. A rate-limited write returns an uncertain outcome after
+  one attempt; callers must inspect before retrying.
+- S3-C: a reusable private Linux artifact writer and hardened
+  identity-map export. Each new bundle has private permissions,
+  exclusive files, a durable completion manifest, hashes,
+  canonical origin/course/version metadata and capture time.
+  Symlink components, traversal, collisions and mismatched cached
+  pseudonyms are rejected. Raw JSON and spreadsheet-safe CSV
+  remain separate. Legacy flat maps are untouched; migration is
+  documented in `tools/README.md` and the educator guide.
+- Distribution inspection found ignored scratch dependency tests
+  entering the source archive. Explicit build exclusions now
+  keep scratch directories, local maps and the local virtualenv
+  out of distributions. Both distribution formats were inspected.
+
+Validation of the final source:
+
+- Python: **2,670 passed, 22 skipped**. Skips retain their
+  existing optional/live-platform requirements.
+- Ruff: passed across `src/` and `tests/`.
+- Mypy: passed across all 65 source files.
+- Generated tool manifest: regenerated and consistency checked.
+- Built sdist and wheel; installed locked runtime dependencies
+  and the wheel into isolated `_stage3/clean`.
+- Installed-wheel MCP stdio: instructor, restricted educator and
+  student workflows passed. Imported paths were verified inside
+  that environment; every run recorded zero Canvas writes.
+- TypeScript and active Claude/Codex installations were unchanged;
+  the prior TypeScript evidence remains the applicable baseline.
+
+Tested wheel: `canvas_mcp-1.13.0+bart.1-py3-none-any.whl`.
+SHA-256:
+`e7c81328b80f0a48c070ffaabe0e0eadfce6b3537d8493341c61d972b4094288`.
+Rebuild after any source change and record a new digest before
+using this working-tree version as release evidence.
+
+At the end of the first pass, remaining S3-B included consistent
+structured outcomes across
+other tool families, stopping later batches on revoked access,
+itemized uncertain/partial grading outcomes, and broader
+consequential-write verification. At that point, report/export
+writer migration, map validation/lookup and weekly-review source
+links/unavailable-field counts were still outstanding.
+At that point, S3-D through S3-H, live Canvas mutations, actual
+client sessions and colleague acceptance were pending. The
+second-pass record below supersedes this local backlog.
+
+
+### Second-pass execution record (2026-10-04)
+
+Bart authorized the remaining feasible local work and the CI
+packaging gate. This extends the first-pass working tree on
+`feature/stage3-first-pass`; it does not commit, publish, install
+into active clients, or mutate Canvas. All connected evidence
+uses synthetic fixtures with Canvas writes rejected.
+
+Implemented scope:
+
+- S3-B: batch grading independently reads each target before and
+  after one dispatch. Per-row `expected_attempt` binds a reviewed
+  proposal; changed/missing attempts skip before writing. Null
+  attempts require explicit never-submitted evidence. Structured
+  recovery and the compatible text footer distinguish verified,
+  rejected, unknown and unattempted rows. Feedback/rating fields
+  must persist too. Authorization failures stop later batches;
+  already dispatched requests remain subject to readback. No
+  automatic retries of uncertain writes were added.
+- S3-B: message responses cannot claim success from malformed
+  data; asynchronous acceptance remains queued, not delivered.
+  Course-date reads require matching identity and explicit fields
+  even when clearing dates. Group membership writes verify the
+  persisted user/group/state and distinguish pending membership.
+- S3-B/D: assignment analytics includes source links, observation
+  times, unavailable-field counts and explicit denominator gaps.
+  Absent evidence does not become a known missing submission or
+  zero score.
+- S3-C: peer-review report/dataset saves use private, unique
+  bundles and hashes; no overwrite. Migration notes tell scripts
+  to use returned paths. Distribution exclusions cover snapshots,
+  maps, reports, exports and scratch/virtualenv directories.
+- S3-D: six client-neutral workflow guides now cover reviewed
+  grading, course readiness, weekly review, peer-review follow-up,
+  discussions and backups. Synthetic review checked current
+  signatures, preview/confirmation and partial-failure recovery.
+- S3-E: versioned scoped snapshots with opt-in text/identities,
+  bounded response reads, immutable private pages/checkpoints,
+  resume, permission/scope checks, unavailable-field counts and
+  explicit nontransactional consistency limits. Expired cursors,
+  corruption, changed observations and scope limits cannot turn
+  into a complete archive. See [the format and recovery
+  contract](docs/record-snapshots.md).
+- S3-E: separately approved local attachment downloads select
+  only captured references, recheck current submission/context,
+  stream with per-file/aggregate bounds and preserve partial
+  evidence. Only public Canvas/S3 HTTPS targets are supported;
+  pinned public IPs, restricted redirects and Canvas-only
+  credentials protect the downloader. No arbitrary URL fetcher,
+  automatic retry/resume or restoration writer was introduced.
+- S3-F: local verification checks schema, scope, private modes,
+  counts and hashes for record and attachment bundles. Record
+  comparisons require matching origin/course/caller/scope and
+  report unknown additions/removals under incomplete coverage.
+  Selected identity lookup validates map integrity, algorithm and
+  freshness, then saves only selected identities privately. It
+  returns no names to the model.
+- S3-G: [API coverage](docs/api-coverage.md) now distinguishes MCP
+  workflow coverage from TypeScript helpers and retains the
+  recorded unsupported/institution-dependent exclusions.
+- S3-H preparation/CI: the required Linux test job now builds and
+  audits sdist/wheel contents, installs hash-locked dependencies
+  and the wheel in a clean environment, then exercises synthetic
+  MCP stdio workflows for educator, restricted educator, student
+  and creator. Snapshot capture/verify/compare are connected
+  checks. The driver rejects source-checkout imports and records
+  zero Canvas writes.
+
+Validation of the final implementation:
+
+- Python 3.13: **2,946 passed, 22 skipped**. Existing optional and
+  platform/live skips remain explicit; CI covers Python 3.11–3.13.
+- Ruff passed across `src/` and `tests/`; Mypy passed for all 70
+  source files. Generated manifest consistency and diff checks
+  passed. Six edited workflow skills passed format validation.
+- Built sdist/wheel and passed distribution inspection. Installed
+  hash-locked runtime dependencies and the wheel in isolated
+  `_stage3/final-clean`; no active installation changed.
+- Installed-wheel MCP stdio: all four profiles passed, including
+  two local snapshot captures, verification and comparison. Every
+  recorded Canvas request was GET, and every run had zero writes.
+  Package imports resolved inside the clean installation.
+- TypeScript source was unchanged; existing Stage 1b build/test
+  evidence remains applicable. GitHub CI itself has not run this
+  uncommitted patch.
+
+Tested wheel: `canvas_mcp-1.13.0+bart.1-py3-none-any.whl`.
+SHA-256:
+`25be43eff27e8bb54b82fffffa2b0a5d4df9057ee55d744a7e8e56ac36d04a8a`.
+Rebuild and retest after implementation changes; the digest
+identifies this local tested artifact, not a published release.
+
+Remaining boundaries:
+
+- The prioritized reliability fixes are complete locally. A
+  universal structured-outcome/readback retrofit across every
+  legacy writer is not claimed. Individual write families still
+  use their documented contracts; new failures should get scoped
+  regression fixes. Readback is not an atomic Canvas transaction
+  or proof against later concurrent edits.
+- The real sandbox acceptance matrix, actual Claude/Codex
+  sessions, colleague installation and institution-specific
+  New Quiz/import/permission behavior remain unverified. These
+  retain the existing deferred Stage 1/1b requirements.
+- Real record retention, named-student client disclosure and
+  storage decisions still require an approved environment/scope.
+  Snapshot hashes provide local integrity, not authenticated
+  origin or a restorable backup of all Canvas state.
+- Attachments on unsupported storage hosts and large captures
+  beyond bounded limits remain explicit exclusions. Record
+  comparisons do not restore data or compare attachment bytes.
+- CI changes are validated locally; a GitHub run requires a
+  separately authorized commit/push. Active installations,
+  releases, upstream extraction and publication remain separate.
+
 
 ## Handoff checklist
 
-- Keep the tracked `PLAN.md` current.
-- Follow the recorded Linux, Claude/Codex, creator-only scope.
-- Execute the extracted unattended Stage 1 checklist.
-- Preserve the starting integrated revision and unrelated work.
-- Establish Python and TypeScript baselines and fix relevant
-  failures.
-- Build the workflow acceptance matrix and close priority gaps.
-- Package and test the repeatable session-backup workflow.
-- Verify a pinned clean install and reconcile setup
-  documentation.
-- Record attended installation, live acceptance, recovery, and
-  colleague-testing steps that remain outstanding.
-- Fetch upstream when available; do not stall local work on SSH.
-- Keep PR reconstruction secondary and preserve integrated
-  `main`.
-- Obtain explicit authorization for commits and external actions.
+- Keep the tracked `PLAN.md` current as decisions and evidence
+  change. Stage 3 local implementation and CI checks are complete;
+  operational acceptance remains separate.
+- Preserve the completed Stage 1/1b local commits and recorded
+  test results. Revalidate affected behavior after actual changes.
+- Keep Linux, Claude/Codex, profile boundaries and colleague
+  usability as the product priorities.
+- Leave Stage 1/1b live Canvas, recovery, actual-client and
+  independent colleague acceptance pending until performed.
+- Bart is arranging a sandbox. Once available, record its scope
+  and prepare concrete live actions for authorization; do not
+  assume course availability authorizes mutations or cleanup.
+- Keep active installation changes and real-data client/storage
+  decisions separate from repository-local development.
+- Preserve the completed Stage 3 local validation evidence. Keep
+  every real Canvas mutation blocked until separately authorized,
+  including test setup and cleanup.
+- Treat upstream extraction as the separate, secondary Stage 2
+  track. Preserve integrated history and unrelated local work.
+- Obtain the required authorization for commits, releases,
+  pushes, PRs and other external actions.

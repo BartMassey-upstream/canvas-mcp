@@ -17,7 +17,7 @@ from ..core.untrusted_content import (
     fence_untrusted,
     fence_untrusted_fields,
 )
-from ..core.validation import validate_params
+from ..core.validation import coerce_canvas_id, validate_params
 from ..core.write_confirmation import ConfirmationGuard, redeem_confirmation
 from ..core.write_outcome import NO_WRITE_STATUSES, RequestFailure, WriteOutcome
 
@@ -250,9 +250,29 @@ async def _post_conversation(
     # Canvas requires form data on /conversations
     response = await make_canvas_request("post", "/conversations", data=data, use_form_data=True)
 
-    if "error" in response:
+    if isinstance(response, dict) and "error" in response:
         error_response: dict[str, Any] = response
         return error_response
+    if response == [] and mode == "async" and len(recipient_ids) > 1 and not group_conversation:
+        return {
+            "success": False,
+            "queued": True,
+            "delivery_confirmed": False,
+            "message": "Canvas accepted asynchronous message creation. Delivery is pending; inspect Canvas Inbox batch status before retrying.",
+        }
+    conversations = response if isinstance(response, list) else [response]
+    if not conversations or any(
+        not isinstance(item, dict)
+        or coerce_canvas_id(item.get("id", "")) is None
+        or int(str(item["id"])) <= 0
+        for item in conversations
+    ):
+        failure: dict[str, Any] = RequestFailure(
+            "Conversation delivery could not be confirmed. Check Canvas Inbox before retrying; a retry may send duplicate messages.",
+            WriteOutcome.MAY_HAVE_WRITTEN,
+        )
+        failure.update(delivery_uncertain=True, nothing_sent=False)
+        return failure
 
     return {
         "success": True,

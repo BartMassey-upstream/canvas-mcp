@@ -57,6 +57,8 @@ def _deferred(rationale: str) -> ReadToolContentPolicy:
 # still exercise the returned values; this registry prevents coverage from
 # silently shrinking when a tool is added or its fencing path is removed.
 READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
+    "verify_record_snapshot": _safe("Returns only validated local archive counts and static status, never record values."),
+    "compare_record_snapshots": _safe("Returns only validated local comparison counts, never student identities or content."),
     "list_course_calendar_events": _fenced("_event_view"),
     "get_course_calendar_event": _fenced("_event_view"),
     "get_course_outcome_results": _safe("Only scores, timestamps, identifiers and pagination metadata; linked profiles omitted."),

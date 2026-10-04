@@ -1057,6 +1057,7 @@ class TestCourseSettings:
     @pytest.mark.asyncio
     async def test_course_dates_refuse_silently_ignored_date(self, mock_api):
         mock_api.return_value = {
+            "id": 60366,
             "course_code": "CS101",
             "start_at": None,
             "end_at": None,
@@ -1072,6 +1073,7 @@ class TestCourseSettings:
     @pytest.mark.asyncio
     async def test_course_dates_send_explicit_null_when_clearing(self, mock_api):
         state = {
+            "id": 60366,
             "course_code": "CS101",
             "start_at": "2026-09-28T15:00:00Z",
             "end_at": "2026-12-12T07:59:59Z",
@@ -1097,6 +1099,7 @@ class TestCourseSettings:
     @pytest.mark.asyncio
     async def test_course_date_token_rejects_concurrent_change(self, mock_api):
         state = {
+            "id": 60366,
             "course_code": "CS101",
             "start_at": None,
             "end_at": "2026-12-12T07:59:59Z",

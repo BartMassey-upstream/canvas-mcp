@@ -55,6 +55,11 @@ class Effect(StrEnum):
 
 
 TOOL_EFFECTS: dict[str, Effect] = {
+    "capture_record_snapshot": Effect.LOCAL_WRITE,
+    "download_snapshot_attachments": Effect.LOCAL_WRITE,
+    "verify_record_snapshot": Effect.READ,
+    "compare_record_snapshots": Effect.READ,
+    "lookup_student_identities": Effect.LOCAL_WRITE,
     "list_course_calendar_events": Effect.READ,
     "get_course_calendar_event": Effect.READ,
     "create_course_calendar_event": Effect.CANVAS_WRITE,

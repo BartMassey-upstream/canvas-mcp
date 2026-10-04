@@ -1,226 +1,90 @@
 ---
 name: canvas-peer-review-manager
-description: Educator peer review management for Canvas LMS. Tracks completion rates, analyzes comment quality, flags problematic reviews, sends targeted reminders, and generates instructor-ready reports. Trigger phrases include "peer review status", "how are peer reviews going", "who hasn't reviewed", "review quality", or any peer review follow-up task.
+description: Review Canvas peer-review completion and comment evidence, prepare scoped educator follow-up, and send or change assignments only after approval.
 ---
 
 # Canvas Peer Review Manager
 
-A complete peer review management workflow for educators using Canvas LMS. Monitor completion, analyze quality, identify students who need follow-up, send reminders, and export data -- all through MCP tool calls against the Canvas API.
-
-## Prerequisites
-
-- **Canvas MCP server** must be running and connected to the agent's MCP client (e.g., Claude Code, Cursor, Codex, OpenCode).
-- The authenticated user must have an **educator or instructor role** in the target Canvas course.
-- The assignment must have **peer reviews enabled** in Canvas (either manual or automatic assignment).
-- **FERPA-conscious handling**: Set `ENABLE_DATA_ANONYMIZATION=true` in the Canvas MCP server environment to anonymize supported student identity fields. When enabled, names render as `Student_xxxxxxxx` hashes while preserving functional user IDs for messaging. This control does not by itself establish compliance.
-
-## Steps
-
-### 1. Identify the Assignment
-
-Ask the user which course and assignment to manage peer reviews for. Accept a course code, Canvas ID, or course name, plus an assignment name or ID.
-
-If the user does not specify, prompt:
-
-> Which course and assignment would you like to check peer reviews for?
-
-Use `list_courses` and `list_assignments` to help the user find the right identifiers.
-
-### 2. Check Peer Review Completion
-
-Call `get_peer_review_completion_analytics` with the course identifier and assignment ID. This returns:
-
-- Overall completion rate (percentage)
-- Number of students with all reviews complete, partial, and none complete
-- Per-student breakdown showing completed vs. assigned reviews
-
-**Key data points to surface:**
-
-| Metric | What It Tells You |
-|--------|-------------------|
-| Completion rate | Overall health of the peer review cycle |
-| "None complete" count | Students who haven't started -- highest priority for reminders |
-| "Partial complete" count | Students who started but didn't finish |
-| Per-student breakdown | Exactly who needs follow-up |
-
-### 3. Review the Assignment Mapping
-
-If the user wants to understand who is reviewing whom, call `get_peer_review_assignments` with:
-
-- `include_names=true` for human-readable output
-- `include_submission_details=true` for submission context
-
-This shows the full reviewer-to-reviewee mapping with completion status.
-
-### 4. Extract and Read Comments
-
-Call `get_peer_review_comments` to retrieve actual comment text. Parameters:
-
-- `include_reviewer_info=true` -- who wrote the comment
-- `include_reviewee_info=true` -- who received the comment
-- `anonymize_students=true` -- recommended when sharing results or working with sensitive data
-
-This reveals what students actually wrote in their reviews.
-
-### 5. Analyze Comment Quality
-
-Call `analyze_peer_review_quality` to generate quality metrics across all reviews. The analysis includes:
-
-- **Average quality score** (1-5 scale)
-- **Word count statistics** (mean, median, range)
-- **Constructiveness analysis** (constructive feedback vs. generic comments vs. specific suggestions)
-- **Sentiment distribution** (positive, neutral, negative)
-- **Flagged reviews** that fall below quality thresholds
-
-Optionally pass `analysis_criteria` as a JSON string to customize what counts as high/low quality.
-
-### 6. Flag Problematic Reviews
-
-Call `identify_problematic_peer_reviews` to automatically flag reviews needing instructor attention. Flagging criteria include:
-
-- Very short or empty comments
-- Generic responses (e.g., "looks good", "nice work")
-- Lack of constructive feedback
-- Potential copy-paste or identical reviews
-
-Pass custom `criteria` as a JSON string to override default thresholds.
-
-### 7. Get the Follow-up List
-
-Call `get_peer_review_followup_list` to get a prioritized list of students requiring action:
-
-- `priority_filter="urgent"` -- students with zero reviews completed
-- `priority_filter="medium"` -- students with partial completion
-- `priority_filter="all"` -- everyone who needs follow-up
-- `days_threshold=3` -- adjusts urgency calculation based on days since assignment
-
-### 8. Send Reminders
-
-Both send tools are two-call: the first call returns a preview and a `confirmation_token` and sends nothing; show the preview to the instructor, then call again with the token (and identical arguments) to send.
-
-For targeted direct Inbox messages, call `send_peer_review_inbox_messages` with:
-
-- `recipient_ids` -- list of Canvas user IDs from the analytics results
-- `custom_message` -- optional custom text (a default template is used if omitted)
-- `subject_prefix` -- defaults to "Peer Review Reminder"
-
-Example flow:
-
-1. Get incomplete reviewers from step 2
-2. Extract their user IDs
-3. Review the recipient list with the user
-4. Send reminders after confirmation
-
-For an automated pipeline, call `send_peer_review_followup_campaign` with the course identifier and assignment ID; the first call returns analytics plus a preview of urgent vs. gentle recipients and a token. This tool:
-
-1. Runs completion analytics automatically
-2. Segments students into "urgent" (none complete) and "partial" groups
-3. Sends the reminders only on the confirming call with the token
-4. Returns combined analytics and messaging results
-
-**Warning:** The campaign tool sends real messages. Always confirm with the instructor before running it.
-
-### 9. Export Data
-
-Call `extract_peer_review_dataset` to export all peer review data for external analysis:
-
-- `output_format="csv"` or `output_format="json"`
-- `include_analytics=true` -- appends quality metrics to the export
-- `anonymize_data=true` -- recommended for sharing or archival
-- `save_locally=true` -- saves to a local file; set to `false` to return data inline
-
-### 10. Generate Instructor Reports
-
-Call `generate_peer_review_feedback_report` for a formatted, shareable report:
-
-- `report_type="comprehensive"` -- full analysis with samples of low-quality reviews
-- `report_type="summary"` -- executive overview only
-- `report_type="individual"` -- per-student breakdown
-- `include_student_names=false` -- recommended for privacy-conscious reporting
-
-For a completion-focused report (rather than quality-focused), use `generate_peer_review_report` with options for executive summary, student details, action items, and timeline analysis. This report can be saved to a file with `save_to_file=true`.
-
-## Use Cases
-
-**"How are peer reviews going?"**
-Run steps 1-2. Present completion rate, highlight any concerning patterns (e.g., "Only 60% complete, 8 students haven't started").
-
-**"Who hasn't done their reviews?"**
-Run steps 1-2, then step 7 with `priority_filter="urgent"`. List the students who need follow-up.
-
-**"Are the reviews any good?"**
-Run steps 4-6. Present quality scores, flag generic or low-effort reviews, and surface recommendations.
-
-**"Send reminders to stragglers"**
-Run steps 1-2 to identify incomplete reviewers, then step 8. Always confirm the recipient list before sending.
-
-**"Give me a full report"**
-Run steps 2, 5, 6, and 10. Combine completion analytics with quality analysis into a comprehensive instructor report.
-
-**"Export everything for my records"**
-Run step 9 with `output_format="csv"` and `anonymize_data=true` for a privacy-conscious dataset.
-
-## MCP Tools Used
-
-| Tool | Purpose |
-|------|---------|
-| `list_courses` | Discover active courses |
-| `list_assignments` | Find assignments with peer reviews enabled |
-| `get_peer_review_assignments` | Full reviewer-to-reviewee mapping |
-| `get_peer_review_completion_analytics` | Completion rates and per-student breakdown |
-| `get_peer_review_comments` | Extract actual comment text |
-| `analyze_peer_review_quality` | Quality metrics (scores, word counts, constructiveness) |
-| `identify_problematic_peer_reviews` | Flag low-quality or empty reviews |
-| `get_peer_review_followup_list` | Prioritized list of students needing follow-up |
-| `send_peer_review_inbox_messages` | Send targeted direct Canvas Inbox messages |
-| `send_peer_review_followup_campaign` | Automated analytics-to-messaging pipeline |
-| `extract_peer_review_dataset` | Export data as CSV or JSON |
-| `generate_peer_review_feedback_report` | Quality-focused instructor report |
-| `generate_peer_review_report` | Completion-focused instructor report |
-
-## Example
-
-**User:** "How are peer reviews going for Assignment 3 in BADM 350?"
-
-**Agent:** Calls `get_peer_review_completion_analytics` and presents:
-
-```
-## Peer Review Status: Assignment 3
-
-- **Completion rate:** 72% (23/32 students fully complete)
-- **Partial:** 5 students (started but not finished)
-- **Not started:** 4 students
-
-### Students Needing Follow-up
-**Not started (urgent):**
-- Student_a8f7e23 (0 of 3 reviews done)
-- Student_b2c91d4 (0 of 3 reviews done)
-- Student_f5e67a1 (0 of 3 reviews done)
-- Student_d9c34b2 (0 of 3 reviews done)
-
-**Partial (needs nudge):**
-- Student_c1d82e5 (1 of 3 reviews done)
-- Student_e4f03a9 (2 of 3 reviews done)
-```
-
-**User:** "Send reminders to the ones who haven't started"
-
-**Agent:** Confirms the 4 recipients, then calls `send_peer_review_inbox_messages` with their user IDs.
-
-**User:** "Now check if the completed reviews are any good"
-
-**Agent:** Calls `analyze_peer_review_quality` and presents quality scores, flags 3 reviews as too short, and recommends the instructor follow up with specific students.
-
-## Safety Guidelines
-
-- **Confirm before sending** -- Always present the recipient list and message content to the instructor before calling any messaging tool.
-- **Anonymize by default** -- Use `anonymize_students=true` or `anonymize_data=true` when reviewing data in shared contexts.
-- **Respect rate limits** -- The Canvas API allows roughly 700 requests per 10 minutes. For large courses, the messaging tools send messages sequentially with built-in delays.
-- **FERPA-conscious handling** -- Never display student names in logs, shared screens, or exported files unless the instructor has explicitly confirmed the context is appropriate.
-
-## Notes
-
-- Peer reviews must be enabled on the assignment in Canvas before any of these tools return data.
-- The `send_peer_review_followup_campaign` tool combines analytics and messaging: the first call previews recipients and returns a token, and the second call (with the token) sends real messages. Make the second call only after the instructor approves the preview.
-- Quality analysis uses heuristics (word count, keyword matching, sentiment). It identifies likely low-quality reviews but is not a substitute for instructor judgment.
-- This skill pairs well with `canvas-morning-check` for a full course health overview that includes peer review status alongside submission rates and grade distribution.
+Use educator/all profile with Canvas instructor/TA permissions.
+Works in Claude or Codex. Discover available tools and inspect
+signatures using `search_canvas_tools`; creator intentionally
+excludes student records. Use minimal IDs/pseudonyms by default.
+Server anonymization protects supported fields, not a complete
+compliance guarantee or permission to publish student records.
+
+## Read and draft
+
+Establish course/assignment IDs, reporting interval, deadline,
+timezone and any section/group scope. Read assignment details to
+verify peer reviews are enabled and distinguish assignment due
+date from peer-review due date. Use
+`get_peer_review_completion_analytics`, `list_peer_reviews` and,
+when mappings are needed, `get_peer_review_assignments` with
+`include_names=false` and minimal submission details.
+
+Report reviews completed/reviews assigned separately from
+reviewers fully complete/reviewers assigned. A reviewer with no
+completed reviews is “0 completed”, not proven “not started”.
+Do not use course enrollment as a denominator unless verified
+eligible and assigned. Empty/unavailable mappings do not prove
+100% completion. Record observation time and source tool/IDs.
+
+For requested comment review, call `get_peer_review_comments`
+with `anonymize_students=true` explicitly (default is false).
+Heuristic `analyze_peer_review_quality` and
+`identify_problematic_peer_reviews` results are signals for human
+review, not objective grades, motivation or diagnosis. Quote
+only retrieved evidence; flag truncated/unavailable text.
+`get_peer_review_followup_list` priorities are tool heuristics,
+not independent proof of deadline violations.
+
+Prepare a deduplicated recipient list, factual draft and exact
+course/assignment scope. Weekly educator review may also use
+`list_submissions`, `get_assignment_analytics` and selected
+`get_course_outcome_results`/`get_course_outcome_rollups`; inspect
+all pages via their explicit page/next-page fields. Keep counts
+and denominators separate, label unavailable or partial data,
+and do not turn monitoring into automatic communication.
+
+## Approved action phase
+
+Messaging tools use two calls. First call
+`send_peer_review_inbox_messages` with the chosen `recipient_ids`
+and draft or `send_peer_review_followup_campaign` only if its
+segmentation is wanted. Show the actual recipient/message
+preview. After approval repeat identical arguments with the
+returned `confirmation_token`. A campaign confirming call sends
+real messages; this skill authorizes no autonomous campaign.
+
+`assign_peer_review` currently has no token or dry run: review
+the exact reviewer/reviewee IDs and current mapping before an
+approved call. `unassign_peer_review` requires preview/token and
+refuses completed reviews. Read mappings after allocation
+changes; respect guards rather than deleting work to bypass them.
+Inspect any unfamiliar write signature before calling it.
+
+On partial delivery, retain confirmed recipient results and
+unconfirmed IDs. Re-read status where available; do not send the
+same reminder again because a response timed out. Stop at an
+expired or changed preview and generate a new reviewed preview.
+Ordinary bounded batches suffice; large classes do not require
+privileged code execution.
+
+## Export and report
+
+Only save records in an explicitly chosen authorized destination.
+`extract_peer_review_dataset` defaults to local saving; use
+`save_locally=false` for an inline review, and explicitly choose
+`anonymize_data=true`. Reports can include sensitive evidence;
+use `include_student_names=false` where available. Report
+observation time, source IDs, actual coverage, completed actions,
+unconfirmed outcomes and next steps. Do not automatically export,
+message or schedule at the end of a read-only review.
+
+## Synthetic example
+
+“Review progress; draft reminders, don't send.” If 18/30 reviews
+are complete and 4/10 reviewers finished all reviews, report
+60% of reviews and 40% of reviewers, with the retrieval time.
+Two inaccessible reviews remain unavailable, not zero-quality.
+Draft one message per deduplicated recipient and make zero writes.

@@ -429,10 +429,12 @@ async def make_canvas_request(
     files: dict[str, tuple[str, bytes, str]] | None = None,
     api_root: Literal["rest", "quiz"] = API_ROOT_REST,
     _pagination: dict[str, str | None] | None = None,
+    _max_response_bytes: int | None = None,
 ) -> Any:
     """Make a request to the Canvas API with proper error handling.
 
-    Automatically retries on rate limit errors (429) with exponential backoff.
+    Retries read-only requests on rate limits (429) with exponential backoff.
+    Writes are never retried automatically because their outcome may be unknown.
 
     Args:
         method: HTTP method (get, post, put, patch, delete)
@@ -539,7 +541,22 @@ async def make_canvas_request(
                         retry_info = f" (retry {attempt}/{MAX_RETRIES})" if attempt > 0 else ""
                         log_debug(f"Making {method.upper()} request to {sanitize_url(url)}{retry_info}")
 
-                    if method.lower() == "get":
+                    if method.lower() == "get" and _max_response_bytes is not None:
+                        if type(_max_response_bytes) is not int or not 1 <= _max_response_bytes <= 32 * 1024 * 1024:
+                            raise ValueError("Invalid response byte bound")
+                        async with client.stream("GET", url, params=params) as streamed:
+                            chunks: list[bytes] = []
+                            size = 0
+                            async for chunk in streamed.aiter_bytes():
+                                size += len(chunk)
+                                if size > _max_response_bytes:
+                                    raise ValueError("Response exceeds the configured byte bound")
+                                chunks.append(chunk)
+                            response = httpx.Response(
+                                streamed.status_code, headers=streamed.headers,
+                                content=b"".join(chunks), request=streamed.request,
+                            )
+                    elif method.lower() == "get":
                         response = await client.get(url, params=params)
                     elif method.lower() == "post":
                         if files:
@@ -622,7 +639,11 @@ async def make_canvas_request(
 
                 except httpx.HTTPStatusError as e:
                     # Handle rate limiting with exponential backoff
-                    if e.response.status_code == 429 and attempt < MAX_RETRIES:
+                    if (
+                        e.response.status_code == 429
+                        and method.lower() in {"get", "head"}
+                        and attempt < MAX_RETRIES
+                    ):
                         # Check for Retry-After header
                         retry_after = e.response.headers.get('Retry-After')
                         if retry_after:
@@ -639,6 +660,8 @@ async def make_canvas_request(
 
                     # Not a rate limit error or out of retries - format and return error
                     error_message = f"HTTP error: {e.response.status_code}"
+                    if e.response.status_code == 429 and method.lower() not in {"get", "head"}:
+                        error_message += "; write outcome unknown, not retried. Inspect the target before retrying"
                     try:
                         error_details = e.response.json()
                         error_message += f", Details: {error_details}"
@@ -653,7 +676,7 @@ async def make_canvas_request(
 
                     outcome = (WriteOutcome.REJECTED if e.response.status_code in NO_WRITE_STATUSES
                                else WriteOutcome.MAY_HAVE_WRITTEN)
-                    return RequestFailure(error_message, outcome)
+                    return RequestFailure(error_message, outcome, e.response.status_code)
 
                 except Exception as e:
                     log_error(f"Request failed for {sanitize_url(endpoint)}", error_type=type(e).__name__)

@@ -1,7 +1,7 @@
 """Peer review comment extraction and analysis MCP tools for Canvas API."""
 
-import csv
 import json
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +14,7 @@ from ..core.cache import get_course_id
 from ..core.client import make_canvas_request
 from ..core.credentials import is_http_request_active
 from ..core.csv_safety import csv_safe_cell, rows_to_csv_string
-from ..core.file_validation import sanitize_filename
+from ..core.local_artifacts import write_private_bundle
 from ..core.path import canvas_path
 from ..core.peer_review_comments import PeerReviewCommentAnalyzer
 from ..core.untrusted_content import (
@@ -38,8 +38,15 @@ _PEER_REVIEW_FENCE_FIELDS = {
 }
 
 _PEER_REVIEW_CSV_HEADER = (
-    'review_id', 'reviewer_id', 'reviewer_name', 'reviewee_id', 'reviewee_name',
-    'comment_text', 'word_count', 'character_count', 'timestamp',
+    "review_id",
+    "reviewer_id",
+    "reviewer_name",
+    "reviewee_id",
+    "reviewee_name",
+    "comment_text",
+    "word_count",
+    "character_count",
+    "timestamp",
 )
 
 
@@ -77,7 +84,7 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
         include_reviewer_info: bool = True,
         include_reviewee_info: bool = True,
         include_submission_context: bool = False,
-        anonymize_students: bool = False
+        anonymize_students: bool = False,
     ) -> str:
         """Retrieve actual comment text for peer reviews on an assignment.
 
@@ -99,7 +106,7 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
                 include_reviewer_info=include_reviewer_info,
                 include_reviewee_info=include_reviewee_info,
                 include_submission_context=include_submission_context,
-                anonymize_students=anonymize_students
+                anonymize_students=anonymize_students,
             )
 
             if "error" in result:
@@ -117,7 +124,7 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
         course_identifier: str | int,
         assignment_id: str | int,
         analysis_criteria: str | None = None,
-        generate_report: bool = True
+        generate_report: bool = True,
     ) -> str:
         """Analyze the quality and content of peer review comments.
 
@@ -143,7 +150,7 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
                 course_id=course_id,
                 assignment_id=int(assignment_id),
                 analysis_criteria=criteria,
-                generate_report=generate_report
+                generate_report=generate_report,
             )
 
             if "error" in result:
@@ -160,7 +167,7 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
     async def identify_problematic_peer_reviews(
         course_identifier: str | int,
         assignment_id: str | int,
-        criteria: str | None = None
+        criteria: str | None = None,
     ) -> str:
         """Flag reviews that may need instructor attention.
 
@@ -184,7 +191,7 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
             result = await analyzer.identify_problematic_peer_reviews(
                 course_id=course_id,
                 assignment_id=int(assignment_id),
-                criteria=parsed_criteria
+                criteria=parsed_criteria,
             )
 
             if "error" in result:
@@ -196,11 +203,9 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
         except Exception as e:
             return f"Error in identify_problematic_peer_reviews: {str(e)}"
 
-    # idempotent_hint=True: the default filename is fixed (peer_reviews_<name>_<id>)
-    # and the write opens with mode "w", so a repeat overwrites the same file and
-    # converges. destructive_hint=True for the same reason: a caller-supplied
-    # filename overwrites whatever is there.
-    @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
+    @mcp.tool(
+        annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False)
+    )
     @validate_params
     async def extract_peer_review_dataset(
         course_identifier: str | int,
@@ -209,18 +214,18 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
         include_analytics: bool = True,
         anonymize_data: bool = True,
         save_locally: bool = True,
-        filename: str | None = None
+        filename: str | None = None,
     ) -> str:
         """Export all peer review data in various formats for analysis.
 
         Args:
             course_identifier: Course code or Canvas ID
             assignment_id: Canvas assignment ID
-            output_format: Output format (csv, json, xlsx)
+            output_format: Output format (csv, json)
             include_analytics: Include quality analytics
             anonymize_data: Anonymize student data
             save_locally: Save file locally
-            filename: Custom filename
+            filename: Requested dataset path; a private unique bundle is created in its parent
         """
         if save_locally and is_http_request_active():
             return (
@@ -238,91 +243,91 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
                 include_reviewer_info=True,
                 include_reviewee_info=True,
                 include_submission_context=True,
-                anonymize_students=anonymize_data
+                anonymize_students=anonymize_data,
             )
 
             if "error" in comments_data:
-                return f"Error getting comments data: {comments_data['error']}"
-
-            # Generate filename if not provided
-            if not filename:
-                assignment_name = comments_data.get("assignment_info", {}).get("assignment_name", "assignment")
-                safe_name = "".join(c for c in assignment_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                filename = f"peer_reviews_{safe_name}_{assignment_id}"
-
-            # Sanitize filename and confine to exports directory
-            if save_locally:
-                exports_dir = Path("./exports").resolve()
-                exports_dir.mkdir(parents=True, exist_ok=True)
-                filename = sanitize_filename(Path(filename).name)
+                return (
+                    "Error: Could not generate the local peer review dataset."
+                    if save_locally
+                    else f"Error getting comments data: {comments_data['error']}"
+                )
 
             # Include analytics if requested
             if include_analytics:
                 analytics_data = await analyzer.analyze_peer_review_quality(
-                    course_id=course_id,
-                    assignment_id=int(assignment_id)
+                    course_id=course_id, assignment_id=int(assignment_id)
                 )
                 if "error" not in analytics_data:
                     comments_data["quality_analytics"] = analytics_data
 
-            # Export based on format
-            if output_format.lower() == "json":
-                output_filename = f"{filename}.json"
-                if save_locally:
-                    resolved = (exports_dir / output_filename).resolve()
-                    if not resolved.is_relative_to(exports_dir):
-                        return "Error: Invalid filename - path outside allowed directory"
-                    with open(resolved, 'w', encoding='utf-8') as f:
-                        json.dump(comments_data, f, indent=2, ensure_ascii=False)
-                    return f"Data exported to {resolved}"
-                else:
-                    # Fence only the model-facing copy — the on-disk export
-                    # above is a data artifact and stays raw.
-                    import copy
-                    fenced = copy.deepcopy(comments_data)
-                    fence_untrusted_fields(fenced, _PEER_REVIEW_FENCE_FIELDS)
-                    return json.dumps(fenced, indent=2)
-
-            elif output_format.lower() == "csv":
-                output_filename = f"{filename}.csv"
-                if save_locally:
-                    resolved = (exports_dir / output_filename).resolve()
-                    if not resolved.is_relative_to(exports_dir):
-                        return "Error: Invalid filename - path outside allowed directory"
-                    with open(resolved, 'w', newline='', encoding='utf-8') as f:
-                        writer = csv.writer(f)
-
-                        # Write header
-                        writer.writerow(_PEER_REVIEW_CSV_HEADER)
-
-                        # Write data
-                        for review in comments_data.get("peer_reviews", []):
-                            writer.writerow(_peer_review_csv_row(review))
-
-                    return f"Data exported to {resolved}"
-                else:
-                    # Return CSV as string. Built with the stdlib writer rather
-                    # than f-string concatenation, which mis-quotes any comment
-                    # containing a comma or a newline. This model-facing return
-                    # embeds raw names + peer comments (csv_safe_cell stops
-                    # formulas, not prompt injection), so wrap it in one
-                    # provenance fence (issue 239); the saved file above is raw.
-                    csv_string = rows_to_csv_string(
+            if save_locally:
+                extension = output_format.lower()
+                if extension not in {"csv", "json"}:
+                    return "Error: Local dataset format must be csv or json."
+                target = (
+                    Path(filename).expanduser()
+                    if filename
+                    else Path("exports/dataset.csv")
+                )
+                if not re.fullmatch(r"[A-Za-z0-9_-]+(?:\.(?:csv|json))?", target.name):
+                    return "Error: Local dataset filename must have a safe basename and dataset extension."
+                content = (
+                    json.dumps(comments_data, indent=2, ensure_ascii=False)
+                    if extension == "json"
+                    else rows_to_csv_string(
                         _PEER_REVIEW_CSV_HEADER,
                         (
                             _peer_review_csv_row(review)
                             for review in comments_data.get("peer_reviews", [])
                         ),
                     )
-                    return fence_untrusted(
-                        csv_string, "peer review dataset CSV (contains student names)"
-                    )
+                )
+                artifact_name = f"dataset.{extension}"
+                bundle = write_private_bundle(
+                    str(target.parent),
+                    "peer-review-dataset",
+                    {artifact_name: content.encode("utf-8")},
+                    {
+                        "kind": "peer_review_dataset",
+                        "course_id": str(course_id),
+                        "assignment_id": str(assignment_id),
+                        "format": extension,
+                        "anonymized": anonymize_data,
+                    },
+                )
+                return json.dumps(
+                    {"saved_to": str(bundle / artifact_name), "status": "saved"}
+                )
+
+            if output_format.lower() == "json":
+                import copy
+
+                fenced = copy.deepcopy(comments_data)
+                fence_untrusted_fields(fenced, _PEER_REVIEW_FENCE_FIELDS)
+                return json.dumps(fenced, indent=2)
+
+            elif output_format.lower() == "csv":
+                csv_string = rows_to_csv_string(
+                    _PEER_REVIEW_CSV_HEADER,
+                    (
+                        _peer_review_csv_row(review)
+                        for review in comments_data.get("peer_reviews", [])
+                    ),
+                )
+                return fence_untrusted(
+                    csv_string, "peer review dataset CSV (contains student names)"
+                )
 
             else:
                 return f"Error: Unsupported output format '{output_format}'. Supported formats: csv, json"
 
         except Exception as e:
-            return f"Error in extract_peer_review_dataset: {str(e)}"
+            return (
+                "Error: Could not save the private peer review dataset; inspect the destination before retrying."
+                if save_locally
+                else f"Error in extract_peer_review_dataset: {str(e)}"
+            )
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params
@@ -331,7 +336,7 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
         assignment_id: str | int,
         report_type: str = "comprehensive",
         include_student_names: bool = False,
-        format_type: str = "markdown"
+        format_type: str = "markdown",
     ) -> str:
         """Create instructor-ready reports on peer review quality.
 
@@ -348,8 +353,7 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
 
             # Get analytics data
             analytics_data = await analyzer.analyze_peer_review_quality(
-                course_id=course_id,
-                assignment_id=int(assignment_id)
+                course_id=course_id, assignment_id=int(assignment_id)
             )
 
             if "error" in analytics_data:
@@ -357,16 +361,18 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
 
             # Get problematic reviews
             problematic_data = await analyzer.identify_problematic_peer_reviews(
-                course_id=course_id,
-                assignment_id=int(assignment_id)
+                course_id=course_id, assignment_id=int(assignment_id)
             )
 
             # Get assignment info
             assignment_response = await make_canvas_request(
-                "get",
-                canvas_path('courses', course_id, 'assignments', assignment_id)
+                "get", canvas_path("courses", course_id, "assignments", assignment_id)
             )
-            assignment_name = assignment_response.get("name", "Unknown Assignment") if "error" not in assignment_response else "Unknown Assignment"
+            assignment_name = (
+                assignment_response.get("name", "Unknown Assignment")
+                if "error" not in assignment_response
+                else "Unknown Assignment"
+            )
 
             # Generate report based on type
             if format_type.lower() == "markdown":
@@ -379,14 +385,16 @@ def register_peer_review_comment_tools(mcp: FastMCP) -> None:
         except Exception as e:
             return f"Error in generate_peer_review_feedback_report: {str(e)}"
 
-    print("Peer review comment analysis tools registered successfully!", file=sys.stderr)
+    print(
+        "Peer review comment analysis tools registered successfully!", file=sys.stderr
+    )
 
 
 def _generate_markdown_report(
     analytics_data: dict[str, Any],
     problematic_data: dict[str, Any],
     assignment_name: str,
-    report_type: str
+    report_type: str,
 ) -> str:
     """Generate a markdown report from analytics data."""
 
@@ -430,49 +438,56 @@ def _generate_markdown_report(
         "",
         "## Sentiment Distribution",
         "",
-        f"- **Positive Sentiment:** {sentiment.get('positive_sentiment', 0)*100:.1f}%",
-        f"- **Neutral Sentiment:** {sentiment.get('neutral_sentiment', 0)*100:.1f}%",
-        f"- **Negative Sentiment:** {sentiment.get('negative_sentiment', 0)*100:.1f}%",
-        ""
+        f"- **Positive Sentiment:** {sentiment.get('positive_sentiment', 0) * 100:.1f}%",
+        f"- **Neutral Sentiment:** {sentiment.get('neutral_sentiment', 0) * 100:.1f}%",
+        f"- **Negative Sentiment:** {sentiment.get('negative_sentiment', 0) * 100:.1f}%",
+        "",
     ]
 
     if problematic_summary:
-        report_lines.extend([
-            "## Flagged Issues",
-            "",
-        ])
+        report_lines.extend(
+            [
+                "## Flagged Issues",
+                "",
+            ]
+        )
         for flag_type, count in problematic_summary.items():
             flag_name = flag_type.replace("_", " ").title()
             report_lines.append(f"- **{flag_name}:** {count} reviews")
         report_lines.append("")
 
     if flagged and report_type == "comprehensive":
-        report_lines.extend([
-            "## Sample Low-Quality Reviews",
-            "",
-        ])
+        report_lines.extend(
+            [
+                "## Sample Low-Quality Reviews",
+                "",
+            ]
+        )
         for i, review in enumerate(flagged[:5]):  # Show top 5
-            report_lines.extend([
-                f"### Review {i+1}",
-                f"- **Quality Score:** {review.get('quality_score', 0)}/5.0",
-                f"- **Word Count:** {review.get('word_count', 0)}",
-                f"- **Flag Reason:** {review.get('flag_reason', 'Unknown')}",
-                f"- **Comment Preview:** {fence_untrusted_inline(review.get('comment', 'No comment'), 'peer review comment')}",
-                ""
-            ])
+            report_lines.extend(
+                [
+                    f"### Review {i + 1}",
+                    f"- **Quality Score:** {review.get('quality_score', 0)}/5.0",
+                    f"- **Word Count:** {review.get('word_count', 0)}",
+                    f"- **Flag Reason:** {review.get('flag_reason', 'Unknown')}",
+                    f"- **Comment Preview:** {fence_untrusted_inline(review.get('comment', 'No comment'), 'peer review comment')}",
+                    "",
+                ]
+            )
 
     if recommendations:
-        report_lines.extend([
-            "## Recommendations",
-            "",
-        ])
+        report_lines.extend(
+            [
+                "## Recommendations",
+                "",
+            ]
+        )
         for i, rec in enumerate(recommendations, 1):
             report_lines.append(f"{i}. {rec}")
         report_lines.append("")
 
-    report_lines.extend([
-        "---",
-        "*Generated by Canvas MCP Peer Review Comment Analyzer*"
-    ])
+    report_lines.extend(
+        ["---", "*Generated by Canvas MCP Peer Review Comment Analyzer*"]
+    )
 
     return "\n".join(report_lines)

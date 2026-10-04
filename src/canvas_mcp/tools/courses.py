@@ -25,7 +25,7 @@ from ..core.untrusted_content import (
     fence_untrusted,
     fence_untrusted_inline,
 )
-from ..core.validation import validate_params
+from ..core.validation import coerce_canvas_id, validate_params
 from ..core.write_confirmation import (
     ConfirmationGuard,
     preview_with_token,
@@ -1053,6 +1053,12 @@ def register_educator_course_tools(mcp: FastMCP) -> None:
         if "error" in current:
             return f"Error fetching current course dates: {current['error']}"
 
+        expected_course_id = coerce_canvas_id(current.get("id", ""))
+        if expected_course_id is None or int(expected_course_id) <= 0 or (
+            str(course_id).isascii() and str(course_id).isdecimal()
+            and int(expected_course_id) != int(str(course_id))
+        ):
+            return "Error: the current course identity could not be verified."
         current_state = _course_date_state(current)
         proposed_state = {**current_state, **updates}
         setting_a_date = any(
@@ -1131,7 +1137,10 @@ def register_educator_course_tools(mcp: FastMCP) -> None:
         verify = await make_canvas_request(
             "get", canvas_path("courses", course_id), params={"include[]": "term"}
         )
-        if not isinstance(verify, dict) or "error" in verify:
+        if (
+            not isinstance(verify, dict) or "error" in verify
+            or coerce_canvas_id(verify.get("id", "")) != expected_course_id
+        ):
             return unconfirmed_write_warning(
                 "the course date update",
                 {"Course": course_display, "Requested": updates},
@@ -1146,7 +1155,7 @@ def register_educator_course_tools(mcp: FastMCP) -> None:
                 if key in ("start_at", "end_at")
                 else actual == expected
             )
-            if not matches:
+            if key not in verify or not matches:
                 mismatches.append({"field": key, "expected": expected, "actual": actual})
         if mismatches:
             return {

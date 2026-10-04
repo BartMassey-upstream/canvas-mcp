@@ -36,8 +36,8 @@ Reduce tool overhead by setting a role-based profile. Only tools relevant to the
 # In the platform config directory's env file:
 CANVAS_ROLE=student    # 55 tools (76 with student-write gates)
 CANVAS_ROLE=creator    # 127 course-building tools; no student records
-CANVAS_ROLE=educator   # 210 tools (212 with all feature gates)
-CANVAS_ROLE=all        # Default profile; 229 tools by default, 248 with all feature-gated tools enabled
+CANVAS_ROLE=educator   # 215 tools (217 with all feature gates)
+CANVAS_ROLE=all        # Default profile; 234 tools by default, 253 with all feature-gated tools enabled
 ```
 
 Or via CLI flag: `canvas-mcp-server --role student` (CLI flag takes precedence over env var).

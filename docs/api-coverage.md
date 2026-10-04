@@ -183,3 +183,48 @@ above summarize implemented scope and local design decisions.
 - [Bookmarks](https://developerdocs.instructure.com/services/canvas/resources/bookmarks)
 - [Favorites](https://developerdocs.instructure.com/services/canvas/resources/favorites)
 - [Outcome results](https://developerdocs.instructure.com/services/canvas/resources/outcome_results)
+
+## Stage 3: local evidence and reliability
+
+Educator/all profiles add scoped record capture, local integrity
+verification, conservative comparison, selected identity lookup,
+and explicitly selected attachment downloads. These tools are
+local stdio only. Capture and downloads use Canvas GETs; local
+writes remain subject to the operator's tool policy. See
+[record snapshots](record-snapshots.md) for schema, privacy,
+limits, resume behavior and recovery boundaries.
+
+Grades now have per-target readback/recovery outcomes. Course-date
+verification checks identity as well as requested values. Message
+responses distinguish queued work, observed conversation creation
+and uncertain delivery. These checks do not prove that a student
+read a message or make multi-target changes transactional.
+
+### MCP and TypeScript surfaces
+
+The TypeScript modules call Canvas directly. They are a smaller,
+privileged API surface, not wrappers that inherit Python MCP
+confirmation and policy checks. Code execution remains off by
+default, excluded from creator mode, and unnecessary for the
+ordinary-tool workflows below. Missing TypeScript coverage is
+intentional unless a concrete workflow needs a safe shared API.
+
+| Workflow | Python MCP | TypeScript named helpers |
+|---|---|---|
+| Course discovery/context | Course/profile/enrollment tools | `listCourses`, `getCourseDetails` |
+| Submission review | Submission detail/history/analytics | `listSubmissions` |
+| Reviewed grading | Rubric grading and batch recovery | `gradeWithRubric`, `bulkGrade`; direct execution does not inherit MCP previews or the new recovery wire contract |
+| Discussion work | Topics/entries/replies/own-state tools | `listDiscussions`, `postEntry`, `bulkGradeDiscussion` |
+| Inbox follow-up | Preview/confirmation and conversation tools | `sendMessage`; privileged direct write |
+| Creator authoring | Assignments/pages/modules/files/rubrics/quizzes/settings | No corresponding named authoring helpers |
+| Student planning/calendar | Self-scoped gated tools | No corresponding named helpers |
+| Snapshots/identity/local recovery | Capture/verify/compare/lookup/selected attachment tools | No corresponding named helpers |
+| Course export/import | Guarded export, download, migration/import tools | No corresponding named helpers |
+
+The generic TypeScript HTTP helpers are not evidence of safe
+workflow parity. Do not use them to bypass a missing MCP tool,
+role, permission, confirmation or operator policy. Supported
+New Quiz stimulus/item-bank authoring is still absent from the
+public authoring contract checked for this work; the exclusion
+remains. Quiz-taking, group submissions, impersonation, account/
+SIS administration and appointment booking also remain excluded.

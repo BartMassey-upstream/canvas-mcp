@@ -9,6 +9,12 @@ description: >-
 
 # Canvas Course Backup
 
+Use creator/educator/all profile with the required Canvas
+course-content permissions in Claude or Codex. Discover current
+signatures using `search_canvas_tools`; export tools may be
+unavailable under an operator write allowlist. Do not bypass
+that restriction or enable privileged code execution.
+
 Use the local Canvas MCP export tools. The archive contains
 course content, not enrollments, submissions, grades, or student
 interactions. It is not a complete rollback guarantee.
@@ -27,6 +33,14 @@ For beginning/end snapshots, use distinct directories such as
 root. Create directories only within authorized local scope.
 The download tool chooses the archive name from course/export
 IDs; it has no filename parameter.
+
+Read `get_course_settings` to establish course identity and
+`list_course_exports` to identify any explicitly chosen existing
+export. A read-only backup audit may inspect those and status
+without creating an export. Record the source tools and
+observation times; an export count does not measure content
+coverage. Missing permission or metadata is unavailable data,
+not a successful backup.
 
 Before starting a new export, obtain explicit approval for the
 exact course export unless already given for this action. A
@@ -108,3 +122,33 @@ restoration. Do not declare that it is now safe to make arbitrary
 edits. Restore/import testing belongs in a separately authorized
 disposable course. At session end, repeat only when requested
 and authorized; otherwise leave the end snapshot pending.
+
+
+## Separate restoration scope
+
+If restoration is requested, inspect actual
+`import_course_content` or `create_content_migration` signatures
+and preview the specific target course. Local `.imscc` import
+uses a fingerprinted local archive and target-occupancy preview;
+its confirming call can add/overwrite course content. Course
+copy date shifts also affect imported dates. Neither action is
+an automatic rollback or restoration of student records.
+Show the actual preview and obtain approval for the exact target,
+archive/source and date shift before confirming. Keep migration
+IDs; poll status and inspect issues. Completed with issues is not
+a clean restoration. Do not retry an ambiguous import creation
+or upload without inspecting the reported recovery migration.
+Live restore acceptance belongs to a separately approved target.
+
+## Synthetic examples
+
+“Tell me whether export 8 is ready; don't create anything.” Read
+its status only; report state/time/course/export IDs. Make zero
+writes even if the archive expired.
+
+“Back up course 12 into this directory.” Once that exact export
+is authorized, create once and retain its ID. On interruption,
+resume the same export. A download collision keeps the existing
+archive; use another authorized directory. Report saved bytes
+and SHA-256 only after a successful download. Do not import the
+archive or schedule another export as a side effect.

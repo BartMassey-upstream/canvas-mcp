@@ -354,3 +354,82 @@ async def test_group_delete_refuses_other_group_content(tools, api, family):
     result = await tools["delete_course_group"](1, 3)
     assert "content" in str(result)
     assert all(call.args[0] == "get" for call in api[1].call_args_list)
+
+
+@pytest.mark.parametrize("state", ["accepted", "invited", "requested"])
+async def test_membership_creation_verifies_persisted_state(tools, api, state):
+    original = api[1].side_effect
+
+    async def request(method, endpoint, **kwargs):
+        if endpoint == "/groups/3/memberships/7" and method == "get":
+            return {**MEMBER, "workflow_state": state}
+        return await original(method, endpoint, **kwargs)
+
+    api[1].side_effect = request
+    preview = await tools["add_course_group_member"](1, 3, 9)
+    result = await tools["add_course_group_member"](
+        1, 3, 9, confirmation_token=token(preview)
+    )
+    assert result["status"] == ("created" if state == "accepted" else "pending")
+    assert result["membership_active"] is (state == "accepted")
+    assert result["membership_state"] == state
+    assert api[1].await_args.args == ("get", "/groups/3/memberships/7")
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"id": 8},
+        {"group_id": 99},
+        {"user_id": 999},
+        {"workflow_state": "deleted"},
+        {"workflow_state": "inactive"},
+        {"workflow_state": None},
+        {"workflow_state": {}},
+        {"error": "PRIVATE identity read failure"},
+    ],
+)
+async def test_membership_creation_invalid_readback_is_unknown_and_not_replayed(
+    tools, api, changed
+):
+    original = api[1].side_effect
+    posts = []
+
+    async def request(method, endpoint, **kwargs):
+        if endpoint == "/groups/3/memberships" and method == "post":
+            posts.append(kwargs)
+        if endpoint == "/groups/3/memberships/7" and method == "get":
+            return {**MEMBER, **changed}
+        return await original(method, endpoint, **kwargs)
+
+    api[1].side_effect = request
+    preview = await tools["add_course_group_member"](1, 3, 9)
+    confirmation = token(preview)
+    result = await tools["add_course_group_member"](
+        1, 3, 9, confirmation_token=confirmation
+    )
+    replay = await tools["add_course_group_member"](
+        1, 3, 9, confirmation_token=confirmation
+    )
+    assert result["write_unconfirmed"] is True
+    assert result.get("status") != "created"
+    assert "PRIVATE" not in str(result)
+    assert "already used" in str(replay)
+    assert len(posts) == 1
+
+
+async def test_membership_creation_readback_exception_is_redacted_unknown(tools, api):
+    original = api[1].side_effect
+
+    async def request(method, endpoint, **kwargs):
+        if endpoint == "/groups/3/memberships/7" and method == "get":
+            raise OSError("PRIVATE readback details")
+        return await original(method, endpoint, **kwargs)
+
+    api[1].side_effect = request
+    preview = await tools["add_course_group_member"](1, 3, 9)
+    result = await tools["add_course_group_member"](
+        1, 3, 9, confirmation_token=token(preview)
+    )
+    assert result["write_unconfirmed"] is True
+    assert "PRIVATE" not in str(result)

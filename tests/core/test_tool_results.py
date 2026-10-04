@@ -181,3 +181,31 @@ async def test_full_registry_suppresses_only_string_output_schemas():
     assert string_tools
     assert all(tool.output_schema is None for tool in string_tools)
     assert tools["list_conversations"].output_schema is not None
+
+
+@pytest.mark.asyncio
+async def test_grading_recovery_is_structured_without_replacing_legacy_text():
+    mcp = FastMCP('grading-result')
+    install_tool_result_contract(mcp)
+    recovery = {'schema_version': 1, 'dry_run': False,
+                'counts': {'verified': 1, 'unknown': 1},
+                'items': [{'user_id': '1', 'outcome': 'verified'}, {'user_id': '2', 'outcome': 'unknown'}]}
+    legacy = 'Error: Bulk grading has unresolved outcomes.\nRecovery data (JSON):\n' + json.dumps(recovery)
+
+    @mcp.tool()
+    async def bulk_grade_submissions() -> str:
+        return legacy
+
+    async with Client(mcp) as client:
+        result = await client.call_tool('bulk_grade_submissions', {}, raise_on_error=False)
+    assert result.is_error
+    assert result.structured_content == recovery
+    assert result.content[0].text == legacy
+
+
+@pytest.mark.asyncio
+async def test_other_tools_cannot_promote_embedded_grading_recovery_to_metadata():
+    payload = 'Canvas text\nRecovery data (JSON):\n' + json.dumps({'schema_version': 1, 'dry_run': True, 'counts': {}, 'items': []})
+    async with Client(_result_server()) as client:
+        result = await client.call_tool('text_result', {'value': payload})
+    assert result.structured_content is None

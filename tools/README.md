@@ -1767,19 +1767,51 @@ Get the server's current data anonymization configuration and statistics.
 ---
 
 #### `create_student_anonymization_map`
-Create a local CSV file mapping real student data to anonymous IDs for a course.
+Create a private local bundle mapping student identities to
+existing anonymous IDs. This tool makes Canvas reads only.
 
 > **Local (stdio) servers only.** This tool refuses all HTTP calls without fetching identities or writing a file; run it on a local stdio server to create the map.
 
 **Parameters:**
 - `course_identifier`: Course code or ID
+- `save_directory`: Local destination (default `local_maps`);
+  existing directories must belong to the current user with
+  mode `0700`. Symlink paths and parent traversal are refused.
 
 **Example:**
 ```
 "Create an anonymization map for BADM 350"
 ```
 
-**Returns:** Path to the CSV mapping file plus a summary of mapped students. Keep mapping files in `local_maps/` secure and never commit them to version control.
+**Returns:** Private CSV and manifest paths plus the record count.
+Each call creates a new bundle; existing maps are never replaced.
+Directories use mode `0700`, and files use `0600`.
+
+The bundle contains `identities.json` (raw identity values),
+`anonymization_map.csv` (the same four columns as before, with
+spreadsheet formula protection), and `manifest.json` (completion,
+origin, canonical course ID, schema/algorithm version, capture
+time, counts, and SHA-256 file digests). A bundle without a valid
+manifest is incomplete. Verify its metadata and digests before
+using it; the timestamp records capture time, not freshness.
+
+**Migration:** Older flat `anonymization_map_<course>.csv` files
+remain untouched. Update callers to use the returned CSV path
+inside the new bundle instead of predicting a course-name path.
+If an existing `local_maps` directory is too permissive, inspect
+its ownership and contents before setting mode `0700`, or choose
+a new private destination. Do not use an older map for another
+origin/course or assume it reflects a current roster.
+
+Pseudonyms retain the existing first eight SHA-256 hex digits of
+the numeric user ID; they remain linkable across courses and
+origins. The writer rejects duplicate IDs and pseudonym collisions
+within a map. Neither pseudonyms nor private file permissions
+provide encryption or remove identifiers from free text.
+Keep all bundle files out of version control. Failed writes are
+cleaned up when possible; process termination or cleanup failure
+can leave an incomplete private directory. There is no automatic
+map reader, freshness check, or recovery/restore operation yet.
 
 ---
 
@@ -2775,3 +2807,54 @@ For older or distant-future items, provide `target_start_date`
 and `target_end_date` around the item's date; Canvas's default
 feed covers only the nearby weeks. A missing feed item is an
 explicit error, never permission to guess its course.
+
+## Local educator evidence and recovery
+
+The educator/all profiles include five local-stdio tools:
+
+| Tool | Behavior |
+|---|---|
+| `capture_record_snapshot` | Preview and confirm scoped record retention; checkpoint and resume reads |
+| `verify_record_snapshot` | Verify a record archive or separate attachment bundle locally |
+| `compare_record_snapshots` | Compare matching record scopes; incomplete coverage yields unknown additions/removals |
+| `lookup_student_identities` | Validate a private map and save only selected identities locally; return no names |
+| `download_snapshot_attachments` | Preview and confirm 1–20 selected attachment downloads with byte limits |
+
+Capture, lookup and attachment download are local writes and
+respect `ALLOWED_WRITE_TOOLS`. None mutates Canvas. Creator and
+student profiles exclude these tools. See the
+[record format and recovery contract](../docs/record-snapshots.md)
+for scope flags, confirmation, limits, private storage, freshness,
+comparison, retention and interrupted-capture handling.
+
+`extract_peer_review_dataset` and `generate_peer_review_report`
+now use private,
+unique artifact bundles with integrity manifests. The returned
+paths are authoritative; repeated calls do not overwrite prior
+files. Update scripts that assumed a flat destination filename.
+Legacy files remain untouched. JSON retains raw values; CSV
+neutralizes spreadsheet formulas. Explicit report text remains
+subject to each tool's existing output/anonymization policy.
+
+### Batch grading recovery
+
+`bulk_grade_submissions` retains its text result and also returns
+MCP `structuredContent` with `schema_version=1`, `dry_run`,
+`counts` and per-student `items`. Items distinguish `verified`,
+`rejected`, `unknown` and `unattempted`, with grade/comment
+verification flags and recovery actions. A dry run verifies no
+persisted grade. Ordinary calls still default to `dry_run=false`.
+
+Each `grades[user_id]` may include `expected_attempt`: a reviewed
+nonnegative integer, or explicit `null` for confirmed unsubmitted
+work. Mismatches skip that row before its PUT. The tool independently
+reads back each dispatched grade and requested rubric/comment
+fields. These observations are not an atomic lock against Canvas
+changes. Revoked authorization stops later batches; already
+submitted requests are inspected. Uncertain writes are never
+blindly retried. Inspect individual outcomes before requesting
+another reviewed batch, especially when feedback may have appended.
+
+Assignment analytics now reports source URLs, observation times
+and unavailable-field counts. Missing or inaccessible evidence
+is not converted into a zero grade or a known missing submission.

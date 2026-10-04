@@ -47,8 +47,11 @@ from .pages import register_educator_page_crud_tools, register_page_tools
 from .peer_review_comments import register_peer_review_comment_tools
 from .peer_reviews import register_peer_review_tools
 from .quizzes import register_quiz_tools
+from .record_snapshots import register_record_snapshot_tools
 from .rubrics import register_rubric_tools
 from .self_identity import register_self_identity_tools
+from .snapshot_attachments import register_snapshot_attachment_tools
+from .snapshot_review import register_snapshot_review_tools
 from .student_planning import (
     register_student_planning_tools,
     register_student_planning_write_tools,
@@ -57,6 +60,9 @@ from .student_tools import register_student_tools
 from .student_write import register_student_write_tools
 
 __all__ = [
+    "register_record_snapshot_tools",
+    "register_snapshot_review_tools",
+    "register_snapshot_attachment_tools",
     "register_course_calendar_tools",
     "register_shared_communication_tools",
     "register_student_communication_tools",

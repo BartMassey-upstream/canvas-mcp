@@ -16,7 +16,7 @@ from ..core.untrusted_content import (
     contains_fence_markers,
     fence_untrusted,
 )
-from ..core.validation import validate_params
+from ..core.validation import coerce_canvas_id, validate_params
 from ..core.write_confirmation import (
     ConfirmationGuard,
     preview_with_token,
@@ -232,6 +232,28 @@ async def _change(
             "error": "The write response had no object ID. Check Canvas before retrying.",
             "write_unconfirmed": True,
         }
+    if name == "add_course_group_member":
+        membership_id = coerce_canvas_id(raw.get("id", ""))
+        if membership_id is None or int(membership_id) <= 0:
+            return {"error": "The membership ID was not confirmed. Check Canvas before retrying.", "write_unconfirmed": True}
+        try:
+            persisted = await make_canvas_request("get", path + canvas_path(membership_id))
+        except Exception:
+            return {"error": "Membership readback failed. Check Canvas before retrying.", "write_unconfirmed": True}
+        if (
+            not isinstance(persisted, dict) or "error" in persisted
+            or coerce_canvas_id(persisted.get("id", "")) != membership_id
+            or str(persisted.get("group_id")) != path.split("/")[2]
+            or str(persisted.get("user_id")) != str(payload["user_id"])
+            or not isinstance(persisted.get("workflow_state"), str)
+            or persisted.get("workflow_state") not in {"accepted", "invited", "requested"}
+        ):
+            return {"error": "The membership's persisted identity and state were not confirmed. Check Canvas before retrying.", "write_unconfirmed": True}
+        membership_state = persisted["workflow_state"]
+        return {"status": "created" if membership_state == "accepted" else "pending",
+                "membership_state": membership_state,
+                "membership_active": membership_state == "accepted",
+                "result": _view(persisted)}
     if read_path:
         raw = await make_canvas_request("get", read_path)
     if (

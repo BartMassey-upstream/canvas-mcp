@@ -397,7 +397,7 @@
     {
       "name": "bulk_grade_submissions",
       "category": "educator",
-      "description": "Grade multiple submissions efficiently with concurrent processing.\n\nSupports both rubric-based and simple point-based grading in batches.",
+      "description": "Grade multiple submissions efficiently with concurrent processing.\n\nSupports both rubric-based and simple point-based grading in batches.\nEach target is read before a single write and inspected afterward.\nResults retain prose and append versioned recovery JSON identifying\nverified, rejected, unknown, and unattempted targets. Authorization\nfailures stop later batches; already dispatched writes cannot be undone.\nComments append, so unknown comment outcomes must be inspected before retry.",
       "parameters": [
         {
           "name": "course_identifier",
@@ -415,7 +415,7 @@
           "name": "grades",
           "type": "object",
           "required": true,
-          "description": "Dict mapping user_id to {rubric_assessment?, grade?, comment?}.\nOMIT `comment` unless the instructor explicitly asked for written\nfeedback. \"Assign grade 8\" means the grade ONLY. A comment is\nvisible to the student in SpeedGrader, APPENDS a new comment on\nevery call rather than replacing the previous one, and cannot be\nun-sent. Never generate a comment that merely restates the grade\nor narrates that grading happened."
+          "description": "Dict mapping user_id to {rubric_assessment?, grade?, comment?, expected_attempt?}.\nexpected_attempt binds the write to the reviewed attempt; null\nrequires an explicitly never-submitted baseline.\nOMIT `comment` unless the instructor explicitly asked for written\nfeedback. \"Assign grade 8\" means the grade ONLY. A comment is\nvisible to the student in SpeedGrader, APPENDS a new comment on\nevery call rather than replacing the previous one, and cannot be\nun-sent. Never generate a comment that merely restates the grade\nor narrates that grading happened."
         },
         {
           "name": "dry_run",
@@ -501,6 +501,84 @@
       ]
     },
     {
+      "name": "capture_record_snapshot",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview then capture a private educator record snapshot using Canvas GETs only.\n\nConfirm identical arguments after reviewing the local storage scope.\nEach call reads at most page_budget record pages (1..100), plus course,\npermission and caller checks. Resume an interrupted/partial directory\nwith the original scope and a fresh preview. Names, content and comments\nare excluded by default. Attachment IDs/size/type may be explicitly\nincluded for a separate bounded download. Bytes, Inbox and discussions\nare excluded from this capture.\nNumeric IDs remain identifying; summaries contain no student records.\nThis is scoped evidence, not a transaction or a restoration operation.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true
+        },
+        {
+          "name": "save_directory",
+          "type": "string",
+          "required": false,
+          "default": "local_snapshots"
+        },
+        {
+          "name": "families",
+          "type": "array | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "assignment_ids",
+          "type": "array | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "include_bodies",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "include_comments",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "include_identities",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "include_attachment_metadata",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "page_budget",
+          "type": "integer",
+          "required": false,
+          "default": 20
+        },
+        {
+          "name": "resume_directory",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "check_enrollment",
       "category": "educator",
       "description": "Check whether a specific campus login ID is enrolled in a course.\n\nAnswers a roster-membership question about an externally-supplied person\n(NOT the caller). Returns only a yes/no plus minimal enrollment metadata —\nnever the roster, names, or grades. Requires a Canvas token with\nroster-admin rights; without them the answer is INDETERMINATE, never \"no\".\n\nTo ask about YOURSELF, use get_my_enrollments instead — it needs no\nroster permission and cannot return an indeterminate answer.\n\nNote that `role` defaults to \"student\". A NO answer is scoped to that\nrole and will name any other role the person holds; pass role=\"any\" when\nyou just want to know whether they are in the course at all.",
@@ -571,6 +649,31 @@
       "roles": [
         "student",
         "all"
+      ]
+    },
+    {
+      "name": "compare_record_snapshots",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Compare verified matching snapshots; return observation counts only.\n\nAdded/removed counts are unknown for incompletely observed families.\nChanged counts compare records observed in both archives, not an atomic\nCanvas transaction. Only record archives are compared; attachment\ndownload bundles can be verified separately. No Canvas request or\nlocal write is made.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "before_directory",
+          "type": "string",
+          "required": true,
+          "description": "Earlier existing private snapshot directory."
+        },
+        {
+          "name": "after_directory",
+          "type": "string",
+          "required": true,
+          "description": "Later existing private snapshot directory."
+        }
       ]
     },
     {
@@ -2449,13 +2552,20 @@
     {
       "name": "create_student_anonymization_map",
       "category": "educator",
-      "description": "Create a local CSV file mapping real student data to anonymous IDs for a course.",
+      "description": "Create a private local identity-map bundle without overwriting prior maps.",
       "parameters": [
         {
           "name": "course_identifier",
           "type": "string | integer",
           "required": true,
           "description": "Course code or Canvas ID"
+        },
+        {
+          "name": "save_directory",
+          "type": "string",
+          "required": false,
+          "default": "local_maps",
+          "description": "Local destination; existing directories require mode 0700.\nEach call creates a new bundle with raw JSON, spreadsheet-safe CSV,\nand a completion manifest. Available only through local stdio."
         }
       ],
       "returns": "Path to the CSV mapping file plus a summary of mapped students",
@@ -3504,6 +3614,53 @@
       ]
     },
     {
+      "name": "download_snapshot_attachments",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Preview then download up to twenty selected snapshot attachments privately.\n\nLocal stdio only; educator grading permission and snapshot origin/course/\ncaller are rechecked. The parent must include attachment metadata. Files\nare read using Canvas GETs and bounded HTTPS downloads, never Canvas writes.\nKnown sizes and streamed bytes enforce per-file and total limits. Supported\ndestinations are the configured public Canvas origin and public S3 hosts.\nPartial results preserve completed files with hashes; no automatic retries.\nStored numeric references and file contents remain identifying local data.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "snapshot_directory",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "selected_files",
+          "type": "array",
+          "required": true
+        },
+        {
+          "name": "save_directory",
+          "type": "string",
+          "required": false,
+          "default": "local_snapshots"
+        },
+        {
+          "name": "max_file_bytes",
+          "type": "integer",
+          "required": false,
+          "default": 10485760
+        },
+        {
+          "name": "max_total_bytes",
+          "type": "integer",
+          "required": false,
+          "default": 20971520
+        },
+        {
+          "name": "confirmation_token",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    {
       "name": "duplicate_page",
       "category": "educator",
       "returns": "Tool result; Canvas-authored content is marked as untrusted data",
@@ -3620,7 +3777,7 @@
           "type": "string",
           "required": false,
           "default": "csv",
-          "description": "Output format (csv, json, xlsx)"
+          "description": "Output format (csv, json)"
         },
         {
           "name": "include_analytics",
@@ -3648,7 +3805,7 @@
           "type": "string | null",
           "required": false,
           "default": null,
-          "description": "Custom filename"
+          "description": "Requested dataset path; a private unique bundle is created in its parent"
         }
       ],
       "returns": "Peer review dataset in the requested format (json, csv, or summary)",
@@ -3867,7 +4024,7 @@
           "type": "string | null",
           "required": false,
           "default": null,
-          "description": "Custom filename for saved report"
+          "description": "Requested report path; a private unique bundle is created in its parent"
         }
       ],
       "returns": "Completion report with summary statistics, per-student status, and follow-up recommendations",
@@ -6985,6 +7142,51 @@
       "roles": [
         "educator",
         "all"
+      ]
+    },
+    {
+      "name": "lookup_student_identities",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Save at most fifty selected identities privately without returning them.\n\nThis local write makes no Canvas calls. Existing map origin, numeric\ncourse ID, declared algorithm, age, private files and integrity must\nvalidate. Returns only selected count and newly created bundle path.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "map_directory",
+          "type": "string",
+          "required": true,
+          "description": "Existing private identity-map bundle directory."
+        },
+        {
+          "name": "anonymous_ids",
+          "type": "array",
+          "required": true,
+          "description": "One to fifty unique Student_<eight lowercase hex> IDs."
+        },
+        {
+          "name": "course_identifier",
+          "type": "string | integer",
+          "required": true,
+          "description": "Numeric Canvas course ID; course codes/SIS IDs are refused."
+        },
+        {
+          "name": "save_directory",
+          "type": "string",
+          "required": false,
+          "default": "local_maps",
+          "description": "Private local destination for a new selection bundle."
+        },
+        {
+          "name": "max_age_days",
+          "type": "integer",
+          "required": false,
+          "default": 7,
+          "description": "Maximum accepted map age, one to 365 days (default seven)."
+        }
       ]
     },
     {
@@ -10598,6 +10800,25 @@
           "name": "file_path",
           "type": "string",
           "required": true
+        }
+      ]
+    },
+    {
+      "name": "verify_record_snapshot",
+      "category": "educator",
+      "returns": "Tool result; Canvas-authored content is marked as untrusted data",
+      "examples": [],
+      "description": "Verify a private local record or attachment archive and return safe counts.",
+      "roles": [
+        "educator",
+        "all"
+      ],
+      "parameters": [
+        {
+          "name": "snapshot_directory",
+          "type": "string",
+          "required": true,
+          "description": "Existing private snapshot directory, local stdio only."
         }
       ]
     }

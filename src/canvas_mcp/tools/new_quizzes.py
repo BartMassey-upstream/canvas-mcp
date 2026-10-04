@@ -1,7 +1,9 @@
 """Student-data-free authoring tools for Canvas New Quizzes."""
 
 import json
+import math
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit, urlunsplit
@@ -28,10 +30,9 @@ from ..core.write_confirmation import (
     preview_with_token,
     redeem_confirmation,
 )
+from ..core.write_outcome import RequestFailure, WriteOutcome
 
-_DELETE_NEW_QUIZ_GUARD = ConfirmationGuard(
-    nothing_done="The New Quiz was not deleted."
-)
+_DELETE_NEW_QUIZ_GUARD = ConfirmationGuard(nothing_done="The New Quiz was not deleted.")
 _DELETE_NEW_QUIZ_ITEM_GUARD = ConfirmationGuard(
     nothing_done="The New Quiz item was not deleted."
 )
@@ -89,7 +90,7 @@ _RESULT_VIEW_KEYS = {
     "show_item_responses_at",
     "hide_item_responses_at",
     "display_item_response_correctness",
-    "display_item_response_" "correctness_qualifier",
+    "display_item_response_correctness_qualifier",
     "show_item_response_correctness_at",
     "hide_item_response_correctness_at",
     "display_item_correct_answer",
@@ -108,13 +109,18 @@ def _unsigned_media_url(value: object) -> str | None:
         url = urlsplit(value)
         canvas = urlsplit(get_config().canvas_api_url)
         if (
-            url.scheme != "https" or url.port not in {None, 443}
-            or url.username is not None or url.password is not None
-            or url.fragment or not url.hostname or not url.path.strip("/")
+            url.scheme != "https"
+            or url.port not in {None, 443}
+            or url.username is not None
+            or url.password is not None
+            or url.fragment
+            or not url.hostname
+            or not url.path.strip("/")
         ):
             return None
         same_canvas = (
-            canvas.scheme == "https" and canvas.port in {None, 443}
+            canvas.scheme == "https"
+            and canvas.port in {None, 443}
             and url.hostname == canvas.hostname
         )
         if not same_canvas and not _S3_MEDIA_HOST.fullmatch(url.hostname):
@@ -131,7 +137,9 @@ def _format_new_quiz(quiz: dict[str, Any], *, include_instructions: bool) -> str
     lines = [
         f"Backing Assignment ID: {quiz.get('id')}",
         "Title: "
-        + fence_untrusted_inline(quiz.get("title") or "Untitled quiz", "New Quiz title"),
+        + fence_untrusted_inline(
+            quiz.get("title") or "Untitled quiz", "New Quiz title"
+        ),
         f"Assignment Group ID: {quiz.get('assignment_group_id', 'N/A')}",
         f"Points: {quiz.get('points_possible', 'N/A')}",
         f"Grading Type: {quiz.get('grading_type', 'N/A')}",
@@ -225,9 +233,15 @@ def _validate_new_quiz_settings(settings: dict[str, Any] | None) -> str | None:
             value = attempts.get(key)
             if value is not None and (not isinstance(value, int) or value <= 0):
                 return f"Invalid {key}: use a positive integer or null."
-        if attempts.get("attempt_limit") is True and attempts.get("multiple_attempts_enabled") is False:
+        if (
+            attempts.get("attempt_limit") is True
+            and attempts.get("multiple_attempts_enabled") is False
+        ):
             return "Invalid attempt_limit: multiple_attempts_enabled cannot be false."
-        if attempts.get("cooling_period") is True and attempts.get("multiple_attempts_enabled") is False:
+        if (
+            attempts.get("cooling_period") is True
+            and attempts.get("multiple_attempts_enabled") is False
+        ):
             return "Invalid cooling_period: multiple_attempts_enabled cannot be false."
 
     result_view = settings.get("result_view_settings")
@@ -249,7 +263,7 @@ def _validate_new_quiz_settings(settings: dict[str, Any] | None) -> str | None:
                 "once_per_attempt, after_last_attempt, or once_after_last_attempt."
             )
         correctness_qualifier = result_view.get(
-            "display_item_response_" "correctness_qualifier"
+            "display_item_response_correctness_qualifier"
         )
         if correctness_qualifier is not None and correctness_qualifier not in {
             "always",
@@ -280,7 +294,11 @@ def _new_quiz_payload(
         if value is not None
     ):
         return FENCE_LEAK_ERROR
-    if points_possible is not None and points_possible <= 0:
+    if points_possible is not None and (
+        isinstance(points_possible, bool)
+        or not math.isfinite(points_possible)
+        or points_possible <= 0
+    ):
         return "Invalid points_possible: use a positive number."
     if grading_type is not None and grading_type not in _GRADING_TYPES:
         return (
@@ -338,7 +356,10 @@ def _question_item_payload(
         return "Invalid item_body: a question stem is required."
     if creating and not interaction_type_slug:
         return "Invalid interaction_type_slug: a question type is required."
-    if interaction_type_slug is not None and interaction_type_slug not in _QUESTION_TYPES:
+    if (
+        interaction_type_slug is not None
+        and interaction_type_slug not in _QUESTION_TYPES
+    ):
         return "Invalid interaction_type_slug. Use a documented New Quiz question type."
     if creating and not scoring_algorithm:
         return "Invalid scoring_algorithm: a scoring algorithm is required."
@@ -346,9 +367,15 @@ def _question_item_payload(
         return "Invalid scoring_data: scoring data is required."
     if creating and interaction_data is None:
         interaction_data = {}
-    if points_possible is not None and points_possible <= 0:
+    if points_possible is not None and (
+        isinstance(points_possible, bool)
+        or not math.isfinite(points_possible)
+        or points_possible <= 0
+    ):
         return "Invalid points_possible: use a positive number."
-    if position is not None and position <= 0:
+    if position is not None and (
+        isinstance(position, bool) or not isinstance(position, int) or position <= 0
+    ):
         return "Invalid position: use a positive integer."
     if calculator_type is not None and calculator_type not in _CALCULATOR_TYPES:
         return "Invalid calculator_type. Use none, basic, or scientific."
@@ -374,6 +401,108 @@ def _question_item_payload(
     if entry:
         item["entry"] = entry
     return item
+
+
+def _definition_id(value: object) -> str | None:
+    if isinstance(value, bool) or not isinstance(value, str | int):
+        return None
+    text = str(value)
+    return text if text.isascii() and text.isdigit() and int(text) > 0 else None
+
+
+def _definition_matches(expected: object, actual: object, key: str = "") -> bool:
+    if isinstance(expected, dict):
+        return isinstance(actual, dict) and all(
+            field in actual and _definition_matches(value, actual[field], field)
+            for field, value in expected.items()
+        )
+    if isinstance(expected, list):
+        return (
+            isinstance(actual, list)
+            and len(expected) == len(actual)
+            and all(
+                _definition_matches(left, right)
+                for left, right in zip(expected, actual, strict=True)
+            )
+        )
+    if key.endswith("_at") and isinstance(expected, str) and isinstance(actual, str):
+        try:
+            return datetime.fromisoformat(
+                expected.replace("Z", "+00:00")
+            ) == datetime.fromisoformat(actual.replace("Z", "+00:00"))
+        except ValueError:
+            return expected == actual
+    if key == "assignment_group_id":
+        return _definition_id(expected) is not None and _definition_id(
+            expected
+        ) == _definition_id(actual)
+    if isinstance(expected, bool) or isinstance(actual, bool):
+        return type(expected) is type(actual) and expected == actual
+    return expected == actual
+
+
+def _definition_write_failure(response: dict[str, Any]) -> str:
+    if isinstance(response, RequestFailure) and response.outcome in {
+        WriteOutcome.REJECTED,
+        WriteOutcome.NOT_DISPATCHED,
+    }:
+        return "Error: Canvas rejected the definition write or the request was not dispatched. No successful change was confirmed."
+    return "Error: Write outcome unknown. Inspect the quiz before retrying; no automatic retry was made."
+
+
+async def _verify_definition_write(
+    response: object,
+    payload: dict[str, Any],
+    path: str,
+    *,
+    expected_id: str | int | None = None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    recovery = " Inspect the quiz before retrying; no automatic retry was made."
+    response_id = (
+        _definition_id(response.get("id")) if isinstance(response, dict) else None
+    )
+    if response_id is None or (
+        expected_id is not None and response_id != _definition_id(expected_id)
+    ):
+        return (
+            None,
+            "Error: Write outcome unknown: Canvas returned a missing, malformed, or different definition ID."
+            + recovery,
+        )
+    if not isinstance(response, dict):
+        return (
+            None,
+            "Error: Write outcome unknown: Canvas returned an invalid definition."
+            + recovery,
+        )
+    if "entry_type" in payload and (
+        response.get("entry_type") != "Item"
+        or not isinstance(response.get("entry"), dict)
+    ):
+        return (
+            None,
+            "Error: Write outcome unknown: Canvas returned an invalid question definition."
+            + recovery,
+        )
+    read_path = path if expected_id is not None else f"{path}/{response_id}"
+    persisted = await make_canvas_request("get", read_path, api_root="quiz")
+    if (
+        not isinstance(persisted, dict)
+        or "error" in persisted
+        or _definition_id(persisted.get("id")) != response_id
+    ):
+        return (
+            None,
+            "Error: Write outcome unknown: an independent definition readback was unavailable or had a different ID."
+            + recovery,
+        )
+    if not _definition_matches(payload, persisted):
+        return (
+            None,
+            "Error: Write not verified: the persisted definition did not match all requested fields. Some changes may have been applied."
+            + recovery,
+        )
+    return persisted, None
 
 
 async def _assignment_work_state(
@@ -407,7 +536,9 @@ def _student_work_error(what: str) -> str:
 def register_new_quiz_tools(mcp: FastMCP) -> None:
     """Register New Quiz definition and QuestionItem authoring tools."""
 
-    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @mcp.tool(
+        annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False)
+    )
     @validate_params
     async def upload_new_quiz_media(
         course_identifier: str | int,
@@ -424,7 +555,8 @@ def register_new_quiz_tools(mcp: FastMCP) -> None:
             return {"error": "Local media uploads are only available over stdio."}
         file_path = str(Path(file_path).expanduser())
         validation = validate_file_for_upload(
-            file_path, max_size_bytes=_MEDIA_MAX_BYTES,
+            file_path,
+            max_size_bytes=_MEDIA_MAX_BYTES,
             allowed_extensions={".png", ".jpg", ".jpeg", ".gif", ".webp"},
         )
         if not validation.valid:
@@ -438,7 +570,15 @@ def register_new_quiz_tools(mcp: FastMCP) -> None:
             return {"error": "Media must contain between 1 byte and 20 MiB."}
         course_id = await get_course_id(course_identifier)
         slot = await make_canvas_request(
-            "get", canvas_path("courses", course_id, "quizzes", assignment_id, "items", "media_upload_url"),
+            "get",
+            canvas_path(
+                "courses",
+                course_id,
+                "quizzes",
+                assignment_id,
+                "items",
+                "media_upload_url",
+            ),
             api_root="quiz",
         )
         if isinstance(slot, dict) and "error" in slot:
@@ -446,22 +586,35 @@ def register_new_quiz_tools(mcp: FastMCP) -> None:
         upload_url = slot.get("url") if isinstance(slot, dict) else None
         image_url = _unsigned_media_url(upload_url)
         if image_url is None or not isinstance(upload_url, str):
-            return {"error": "Canvas returned an unsupported or invalid media upload destination. No file was sent."}
+            return {
+                "error": "Canvas returned an unsupported or invalid media upload destination. No file was sent."
+            }
         try:
             async with httpx.AsyncClient(
-                timeout=get_config().api_timeout, follow_redirects=False, trust_env=False,
+                timeout=get_config().api_timeout,
+                follow_redirects=False,
+                trust_env=False,
             ) as storage:
                 response = await storage.put(
-                    upload_url, content=content,
+                    upload_url,
+                    content=content,
                     headers={"Content-Type": validation.mime_type},
                 )
         except httpx.HTTPError:
-            return {"error": "Media upload outcome is unknown. Inspect the quiz before retrying; no automatic retry was made."}
+            return {
+                "error": "Media upload outcome is unknown. Inspect the quiz before retrying; no automatic retry was made."
+            }
         if response.status_code not in {200, 201, 204}:
-            return {"error": f"Media upload was not confirmed (HTTP {response.status_code}); redirects are not followed. No automatic retry was made."}
-        return {"course_id": str(course_id), "assignment_id": str(assignment_id),
-                "image_url": image_url, "size_bytes": len(content),
-                "content_type": validation.mime_type}
+            return {
+                "error": f"Media upload was not confirmed (HTTP {response.status_code}); redirects are not followed. No automatic retry was made."
+            }
+        return {
+            "course_id": str(course_id),
+            "assignment_id": str(assignment_id),
+            "image_url": image_url,
+            "size_bytes": len(content),
+            "content_type": validation.mime_type,
+        }
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params
@@ -500,7 +653,9 @@ def register_new_quiz_tools(mcp: FastMCP) -> None:
             return "Error fetching New Quiz: invalid Canvas response"
         return _format_new_quiz(quiz, include_instructions=True)
 
-    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @mcp.tool(
+        annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False)
+    )
     @validate_params
     async def create_new_quiz(
         course_identifier: str | int,
@@ -543,9 +698,15 @@ def register_new_quiz_tools(mcp: FastMCP) -> None:
             api_root="quiz",
         )
         if isinstance(quiz, dict) and "error" in quiz:
-            return f"Error creating New Quiz: {quiz['error']}"
-        if not isinstance(quiz, dict):
-            return "Error creating New Quiz: invalid Canvas response"
+            return _definition_write_failure(quiz)
+        quiz, verification_error = await _verify_definition_write(
+            quiz,
+            payload,
+            canvas_path("courses", course_id, "quizzes"),
+        )
+        if verification_error:
+            return verification_error
+        assert quiz is not None
         return "New Quiz created:\n\n" + _format_new_quiz(
             quiz, include_instructions=False
         )
@@ -614,9 +775,16 @@ def register_new_quiz_tools(mcp: FastMCP) -> None:
             api_root="quiz",
         )
         if isinstance(quiz, dict) and "error" in quiz:
-            return f"Error updating New Quiz: {quiz['error']}"
-        if not isinstance(quiz, dict):
-            return "Error updating New Quiz: invalid Canvas response"
+            return _definition_write_failure(quiz)
+        quiz, verification_error = await _verify_definition_write(
+            quiz,
+            payload,
+            canvas_path("courses", course_id, "quizzes", assignment_id),
+            expected_id=assignment_id,
+        )
+        if verification_error:
+            return verification_error
+        assert quiz is not None
         return "New Quiz updated:\n\n" + _format_new_quiz(
             quiz, include_instructions=False
         )
@@ -732,7 +900,9 @@ def register_new_quiz_tools(mcp: FastMCP) -> None:
             return "Error fetching New Quiz item: invalid Canvas response"
         return _format_new_quiz_item(item)
 
-    @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+    @mcp.tool(
+        annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False)
+    )
     @validate_params
     async def create_new_quiz_question(
         course_identifier: str | int,
@@ -784,9 +954,15 @@ def register_new_quiz_tools(mcp: FastMCP) -> None:
             api_root="quiz",
         )
         if isinstance(item, dict) and "error" in item:
-            return f"Error creating New Quiz question: {item['error']}"
-        if not isinstance(item, dict):
-            return "Error creating New Quiz question: invalid Canvas response"
+            return _definition_write_failure(item)
+        item, verification_error = await _verify_definition_write(
+            item,
+            payload,
+            canvas_path("courses", course_id, "quizzes", assignment_id, "items"),
+        )
+        if verification_error:
+            return verification_error
+        assert item is not None
         return "New Quiz question created:\n\n" + _format_new_quiz_item(item)
 
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
@@ -837,9 +1013,18 @@ def register_new_quiz_tools(mcp: FastMCP) -> None:
             api_root="quiz",
         )
         if isinstance(item, dict) and "error" in item:
-            return f"Error updating New Quiz question: {item['error']}"
-        if not isinstance(item, dict):
-            return "Error updating New Quiz question: invalid Canvas response"
+            return _definition_write_failure(item)
+        item, verification_error = await _verify_definition_write(
+            item,
+            payload,
+            canvas_path(
+                "courses", course_id, "quizzes", assignment_id, "items", item_id
+            ),
+            expected_id=item_id,
+        )
+        if verification_error:
+            return verification_error
+        assert item is not None
         return "New Quiz question updated:\n\n" + _format_new_quiz_item(item)
 
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))

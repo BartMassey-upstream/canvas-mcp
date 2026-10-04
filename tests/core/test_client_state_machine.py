@@ -241,3 +241,67 @@ async def test_retry_reselects_client_after_cleanup_during_backoff():
         result = await cm.make_canvas_request("get", "/courses")
     await new.aclose()
     assert result == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('method', ['post', 'put', 'patch', 'delete'])
+async def test_rate_limited_write_is_not_repeated(method):
+    from canvas_mcp.core.write_outcome import RequestFailure, WriteOutcome
+
+    calls = []
+
+    async def transport(request):
+        calls.append(request)
+        return httpx.Response(429, json={'error': 'synthetic rate limit'}, headers={'Retry-After': '1'})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+        with (patch.object(cm, '_get_http_client', return_value=client),
+              patch.object(cm.asyncio, 'sleep', new_callable=AsyncMock) as sleep):
+            result = await cm.make_canvas_request(method, '/courses/42/assignments', data={'name': 'Synthetic'})
+    assert isinstance(result, RequestFailure)
+    assert result.outcome is WriteOutcome.MAY_HAVE_WRITTEN
+    assert 'write outcome unknown' in result['error']
+    assert len(calls) == 1
+    sleep.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_bounded_read_closes_stream_before_consuming_oversized_body():
+    class Payload(httpx.AsyncByteStream):
+        def __init__(self):
+            self.chunks = 0
+            self.closed = False
+
+        async def __aiter__(self):
+            for value in (b'{"id":', b'1234567890}', b'UNCONSUMED'):
+                self.chunks += 1
+                yield value
+
+        async def aclose(self):
+            self.closed = True
+
+    payload = Payload()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, stream=payload)
+    )) as client:
+        with patch.object(cm, '_get_http_client', return_value=client):
+            result = await cm.make_canvas_request('get', '/courses/42', _max_response_bytes=10)
+    assert 'byte bound' in result['error']
+    assert payload.closed and payload.chunks == 2
+    assert 'UNCONSUMED' not in result['error']
+
+
+@pytest.mark.asyncio
+async def test_bounded_read_retains_status_and_pagination():
+    from canvas_mcp.core.write_outcome import RequestFailure
+
+    responses = [httpx.Response(200, json=[{'id': 1}], headers={'Link': '<https://canvas.example/api/v1/courses?page=2>; rel="next"'}),
+                 httpx.Response(403, json={'error': 'denied'})]
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request: responses.pop(0))) as client:
+        with patch.object(cm, '_get_http_client', return_value=client):
+            pagination = {}
+            result = await cm.make_canvas_request('get', '/courses', _max_response_bytes=100, _pagination=pagination)
+            rejected = await cm.make_canvas_request('get', '/courses', _max_response_bytes=100)
+    assert result == [{'id': 1}]
+    assert pagination['next'].endswith('page=2')
+    assert isinstance(rejected, RequestFailure) and rejected.status_code == 403

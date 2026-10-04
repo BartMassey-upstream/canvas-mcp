@@ -71,6 +71,7 @@ from .tools import (
     register_peer_review_comment_tools,
     register_peer_review_tools,
     register_quiz_tools,
+    register_record_snapshot_tools,
     register_rubric_tools,
     register_self_identity_tools,
     register_shared_assignment_tools,
@@ -80,6 +81,8 @@ from .tools import (
     register_shared_file_tools,
     register_shared_messaging_tools,
     register_shared_module_tools,
+    register_snapshot_attachment_tools,
+    register_snapshot_review_tools,
     register_student_communication_tools,
     register_student_planning_tools,
     register_student_planning_write_tools,
@@ -548,6 +551,9 @@ def register_all_tools(mcp: FastMCP, role: str = "all") -> None:
             if get_config().execute_typescript_enabled:
                 register_code_execution_tools(mcp)
             register_admin_tools(mcp)
+            register_record_snapshot_tools(mcp)
+            register_snapshot_review_tools(mcp)
+            register_snapshot_attachment_tools(mcp)
 
     # Resources and prompts — always registered
     register_resources_and_prompts(mcp)

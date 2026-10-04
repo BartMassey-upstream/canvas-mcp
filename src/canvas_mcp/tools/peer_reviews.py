@@ -1,7 +1,7 @@
 """Peer review analytics MCP tools for Canvas API."""
 
 import json
-from datetime import datetime
+import re
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -9,7 +9,7 @@ from mcp.types import ToolAnnotations
 
 from ..core.cache import get_course_id
 from ..core.credentials import is_http_request_active
-from ..core.file_validation import sanitize_filename
+from ..core.local_artifacts import write_private_bundle
 from ..core.peer_reviews import PeerReviewAnalyzer
 from ..core.untrusted_content import fence_untrusted, fence_untrusted_fields
 from ..core.validation import validate_params
@@ -29,8 +29,13 @@ def _fence_peer_review_names(result: object) -> None:
     fence_untrusted_fields(result, _PEER_REVIEW_NAME_FIELDS)
     if isinstance(result, dict):
         info = result.get("assignment_info")
-        if isinstance(info, dict) and isinstance(info.get("name"), str) and info["name"]:
+        if (
+            isinstance(info, dict)
+            and isinstance(info.get("name"), str)
+            and info["name"]
+        ):
             from ..core.untrusted_content import fence_untrusted_inline
+
             info["name"] = fence_untrusted_inline(info["name"], "assignment name")
 
 
@@ -43,7 +48,7 @@ def register_peer_review_tools(mcp: FastMCP) -> None:
         course_identifier: str | int,
         assignment_id: str | int,
         include_names: bool = True,
-        include_submission_details: bool = False
+        include_submission_details: bool = False,
     ) -> str:
         """Get peer review assignment mapping showing who reviews whom with completion status.
 
@@ -61,7 +66,7 @@ def register_peer_review_tools(mcp: FastMCP) -> None:
                 course_id=course_id,
                 assignment_id=int(assignment_id),
                 include_names=include_names,
-                include_submission_details=include_submission_details
+                include_submission_details=include_submission_details,
             )
 
             if "error" in result:
@@ -79,7 +84,7 @@ def register_peer_review_tools(mcp: FastMCP) -> None:
         course_identifier: str | int,
         assignment_id: str | int,
         include_student_details: bool = True,
-        group_by_status: bool = True
+        group_by_status: bool = True,
     ) -> str:
         """Get peer review completion analytics with student-level breakdown and summary stats.
 
@@ -97,11 +102,13 @@ def register_peer_review_tools(mcp: FastMCP) -> None:
                 course_id=course_id,
                 assignment_id=int(assignment_id),
                 include_student_details=include_student_details,
-                group_by_status=group_by_status
+                group_by_status=group_by_status,
             )
 
             if "error" in result:
-                return f"Error getting peer review completion analytics: {result['error']}"
+                return (
+                    f"Error getting peer review completion analytics: {result['error']}"
+                )
 
             _fence_peer_review_names(result)
             return json.dumps(result, indent=2)
@@ -109,7 +116,9 @@ def register_peer_review_tools(mcp: FastMCP) -> None:
         except Exception as e:
             return f"Error in get_peer_review_completion_analytics: {str(e)}"
 
-    @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=False))
+    @mcp.tool(
+        annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False)
+    )
     @validate_params
     async def generate_peer_review_report(
         course_identifier: str | int,
@@ -120,7 +129,7 @@ def register_peer_review_tools(mcp: FastMCP) -> None:
         include_action_items: bool = True,
         include_timeline_analysis: bool = True,
         save_to_file: bool = False,
-        filename: str | None = None
+        filename: str | None = None,
     ) -> str:
         """Generate peer review completion report with summary, analytics, and follow-up recommendations.
 
@@ -133,7 +142,7 @@ def register_peer_review_tools(mcp: FastMCP) -> None:
             include_action_items: Include action items
             include_timeline_analysis: Include timeline analysis
             save_to_file: Save report to local file
-            filename: Custom filename for saved report
+            filename: Requested report path; a private unique bundle is created in its parent
         """
         if save_to_file and is_http_request_active():
             return (
@@ -151,34 +160,55 @@ def register_peer_review_tools(mcp: FastMCP) -> None:
                 include_executive_summary=include_executive_summary,
                 include_student_details=include_student_details,
                 include_action_items=include_action_items,
-                include_timeline_analysis=include_timeline_analysis
+                include_timeline_analysis=include_timeline_analysis,
             )
 
             if "error" in result:
-                return f"Error generating peer review report: {result['error']}"
+                return (
+                    "Error: Could not generate the local peer review report."
+                    if save_to_file
+                    else f"Error generating peer review report: {result['error']}"
+                )
 
-            # Handle file saving if requested
-            if save_to_file and "report" in result:
-                reports_dir = Path("./reports").resolve()
-                reports_dir.mkdir(parents=True, exist_ok=True)
-
-                if not filename:
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"peer_review_report_{assignment_id}_{timestamp}.{report_format}"
-
-                # Sanitize filename: strip directory components, clean special
-                # characters, then resolve against reports dir to prevent traversal.
-                safe_name = sanitize_filename(Path(filename).name)
-                resolved = (reports_dir / safe_name).resolve()
-                if not resolved.is_relative_to(reports_dir):
-                    result["save_error"] = "Invalid filename: path outside allowed directory"
-                else:
-                    try:
-                        with open(resolved, 'w', encoding='utf-8') as f:
-                            f.write(result["report"])
-                        result["saved_to"] = str(resolved)
-                    except Exception as save_error:
-                        result["save_error"] = f"Failed to save file: {str(save_error)}"
+            if save_to_file:
+                extension = {"markdown": "md", "csv": "csv", "json": "json"}.get(
+                    report_format
+                )
+                if extension is None:
+                    return "Error: Local report format must be markdown, csv, or json."
+                target = (
+                    Path(filename).expanduser()
+                    if filename
+                    else Path("reports/report.md")
+                )
+                if not re.fullmatch(
+                    r"[A-Za-z0-9_-]+(?:\.(?:md|markdown|csv|json))?", target.name
+                ):
+                    return "Error: Local report filename must have a safe basename and report extension."
+                report = (
+                    json.dumps(result, indent=2, ensure_ascii=False)
+                    if report_format == "json"
+                    else result.get("report")
+                )
+                if not isinstance(report, str):
+                    return (
+                        "Error: Local report content is unavailable; nothing was saved."
+                    )
+                artifact_name = f"report.{extension}"
+                bundle = write_private_bundle(
+                    str(target.parent),
+                    "peer-review-report",
+                    {artifact_name: report.encode("utf-8")},
+                    {
+                        "kind": "peer_review_report",
+                        "course_id": str(course_id),
+                        "assignment_id": str(assignment_id),
+                        "format": report_format,
+                    },
+                )
+                return json.dumps(
+                    {"saved_to": str(bundle / artifact_name), "status": "saved"}
+                )
 
             if report_format == "markdown":
                 # The markdown report embeds Canvas-authored student names as a
@@ -186,20 +216,28 @@ def register_peer_review_tools(mcp: FastMCP) -> None:
                 # the fact. Wrap the whole MODEL-FACING copy in one provenance
                 # fence (the raw on-disk file written above is untouched).
                 report_md: str = result.get("report", json.dumps(result, indent=2))
-                return fence_untrusted(report_md, "peer review report (contains student names)")
+                return fence_untrusted(
+                    report_md, "peer review report (contains student names)"
+                )
             if report_format == "csv":
                 # The CSV embeds raw student names + comments; csv_safe_cell
                 # stops spreadsheet formulas, not prompt injection. The saved
                 # file above is raw (a data artifact); the MODEL-FACING return
                 # is wrapped in one provenance fence (issue 239).
                 report_csv: str = result.get("report", json.dumps(result, indent=2))
-                return fence_untrusted(report_csv, "peer review report CSV (contains student names)")
+                return fence_untrusted(
+                    report_csv, "peer review report CSV (contains student names)"
+                )
             else:
                 _fence_peer_review_names(result)
                 return json.dumps(result, indent=2)
 
         except Exception as e:
-            return f"Error in generate_peer_review_report: {str(e)}"
+            return (
+                "Error: Could not save the private peer review report; inspect the destination before retrying."
+                if save_to_file
+                else f"Error in generate_peer_review_report: {str(e)}"
+            )
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params
@@ -208,7 +246,7 @@ def register_peer_review_tools(mcp: FastMCP) -> None:
         assignment_id: str | int,
         priority_filter: str = "all",
         include_contact_info: bool = False,
-        days_threshold: int = 3
+        days_threshold: int = 3,
     ) -> str:
         """Get prioritized list of students needing follow-up on peer review completion.
 
@@ -233,7 +271,7 @@ def register_peer_review_tools(mcp: FastMCP) -> None:
                 assignment_id=int(assignment_id),
                 priority_filter=priority_filter,
                 include_contact_info=include_contact_info,
-                days_threshold=days_threshold
+                days_threshold=days_threshold,
             )
 
             if "error" in result:
