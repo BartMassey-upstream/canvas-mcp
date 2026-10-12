@@ -605,8 +605,11 @@ async def test_attachment_metadata_scope_compares_hashes_without_returning_metad
 
 @pytest.mark.asyncio
 async def test_attachment_metadata_unavailable_is_preserved_in_safe_summary(
-    tools, tmp_path
+    tools, tmp_path, monkeypatch
 ):
+    # A timestamp may contain the student's ID digits without disclosing it.
+    observed_at = "2026-10-11T15:44:09.599101+00:00"
+    monkeypatch.setattr("canvas_mcp.core.record_snapshots.now", lambda: observed_at)
     archive = snapshot(
         tmp_path / "archive",
         [{"id": 34}],
@@ -621,11 +624,33 @@ async def test_attachment_metadata_unavailable_is_preserved_in_safe_summary(
         ],
     )
     result = await tools["verify_record_snapshot"](str(archive))
-    assert result["status"] == "verified"
-    assert result["families"]["submissions"]["unavailable_fields"] == {
-        "attachments": 1
+    assert result == {
+        "status": "verified",
+        "schema_version": 1,
+        "state": "complete",
+        "families": {
+            family: {
+                "records": 1,
+                "states": {"complete": 1},
+                "unavailable_fields": {"attachments": 1}
+                if family == "submissions"
+                else {},
+                "coverage_complete": True,
+                "unavailable_units": 0,
+            }
+            for family in ("course", "assignments", "submissions")
+        },
+        "started_at": observed_at,
+        "observed_until": observed_at,
+        "changes_detected": False,
+        "resume_possible": False,
+        "recapture_required": False,
+        "canvas_writes": 0,
+        "consistency": (
+            "Scoped nontransactional observations; a verified archive is not "
+            "whole-course proof."
+        ),
     }
-    assert "101" not in json.dumps(result)
 
 
 @pytest.mark.asyncio
