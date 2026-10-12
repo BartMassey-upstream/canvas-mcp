@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "path": "tests/code_api/pagination-control-plane.test.ts",
+      "detector": "URI",
+      "fingerprint": "a5059dbf252cf8510b03f8ef047144e183a4645753f26e8975867a22e810647b",
+      "reason": "Deliberate dummy credentials in URL rejection/redaction tests or their saved execution output."
+    },
+    {
+      "path": "tests/security/test_pii_sanitization.py",
+      "detector": "URI",
+      "fingerprint": "9c237a3b7c21ec94fdb1c0dee8cca9ee03adf3e2edfae4ef187f0eb13fc1b594",
+      "reason": "Deliberate dummy credentials in URL rejection/redaction tests or their saved execution output."
+    },
+    {
+      "path": "tests/tools/test_content_imports.py",
+      "detector": "URI",
+      "fingerprint": "92b6b84c0bc6b70c209536fb1d8d5ac4dd277c8e90897b8547e66fe1a76c7d04",
+      "reason": "Deliberate dummy credentials in URL rejection/redaction tests or their saved execution output."
+    },
+    {
+      "path": "tests/tools/test_new_quiz_media.py",
+      "detector": "URI",
+      "fingerprint": "2153772a35d44cadd15ae4410b591ac46bd5beed7350bf65d2e1bae4eb4515eb",
+      "reason": "Deliberate dummy credentials in URL rejection/redaction tests or their saved execution output."
+    },
+    {
+      "path": "tests/tools/test_stage1_assignment_authoring.py",
+      "detector": "URI",
+      "fingerprint": "a87e4db1e7788e51f79b9050be25bc956ee9f6890ffb2f46f5cbf951eaee50a4",
+      "reason": "Deliberate dummy credentials in URL rejection/redaction tests or their saved execution output."
+    },
+    {
+      "path": "verify/evidence/ts-pagination-after.txt",
+      "detector": "URI",
+      "fingerprint": "a5059dbf252cf8510b03f8ef047144e183a4645753f26e8975867a22e810647b",
+      "reason": "Deliberate dummy credentials in URL rejection/redaction tests or their saved execution output."
+    },
+    {
+      "path": "verify/evidence/ts-pagination-before.txt",
+      "detector": "URI",
+      "fingerprint": "a5059dbf252cf8510b03f8ef047144e183a4645753f26e8975867a22e810647b",
+      "reason": "Deliberate dummy credentials in URL rejection/redaction tests or their saved execution output."
+    }
+  ]
+}
