@@ -14,7 +14,7 @@ from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.dates import format_date, parse_date
 from ..core.path import canvas_path
-from ..core.untrusted_content import fence_untrusted_inline
+from ..core.untrusted_content import fence_untrusted_inline, format_canvas_error
 from ..core.validation import validate_params
 
 
@@ -94,7 +94,7 @@ async def _fetch_planner_peer_reviews(
     items = await fetch_all_paginated_results("/planner/items", params=params)
 
     if isinstance(items, dict) and "error" in items:
-        return [], str(items["error"])
+        return [], format_canvas_error(items["error"])
     if not isinstance(items, list):
         return [], None
 
@@ -157,7 +157,7 @@ def register_student_tools(mcp: FastMCP) -> None:
         )
 
         if isinstance(items, dict) and "error" in items:
-            return f"Error fetching upcoming assignments: {items['error']}"
+            return f"Error fetching upcoming assignments: {format_canvas_error(items['error'])}"
 
         assignments = []
         for item in items if isinstance(items, list) else []:
@@ -234,7 +234,7 @@ def register_student_tools(mcp: FastMCP) -> None:
             )
 
             if isinstance(assignments, dict) and "error" in assignments:
-                return f"Error fetching assignments: {assignments['error']}"
+                return f"Error fetching assignments: {format_canvas_error(assignments['error'])}"
 
             course_display = await get_course_code(course_id) or course_identifier
             output_lines = [f"Submission Status for {course_display}:\n"]
@@ -247,7 +247,7 @@ def register_student_tools(mcp: FastMCP) -> None:
             )
 
             if isinstance(courses, dict) and "error" in courses:
-                return f"Error fetching courses: {courses['error']}"
+                return f"Error fetching courses: {format_canvas_error(courses['error'])}"
 
             output_lines = ["Submission Status (All Courses):\n"]
             all_assignments = []
@@ -279,31 +279,29 @@ def register_student_tools(mcp: FastMCP) -> None:
         submitted = []
         missing = []
         external_tools = []
+        other_statuses = []
 
         for assignment in assignments:
-            submission = assignment.get("submission")
-            is_submitted = submission and submission.get("submitted_at") is not None
-            is_external_tool = "external_tool" in assignment.get("submission_types", [])
-
-            if is_submitted:
+            submission = assignment.get("submission") or {}
+            submission_types = assignment.get("submission_types", [])
+            if submission.get("excused"):
+                other_statuses.append((assignment, "EXCUSED"))
+            elif submission.get("submitted_at") is not None:
                 submitted.append(assignment)
-            elif is_external_tool:
+            elif submission.get("workflow_state") == "graded":
+                other_statuses.append((assignment, "GRADED"))
+            elif "external_tool" in submission_types:
                 external_tools.append(assignment)
+            elif submission_types and set(submission_types) <= {"on_paper", "none"}:
+                other_statuses.append((assignment, "NO ONLINE SUBMISSION REQUIRED"))
+            elif submission.get("missing") is True:
+                missing.append((assignment, "OVERDUE"))
             else:
-                # Check if past due (use timezone-aware datetime)
-                due_at = assignment.get("due_at")
-                if due_at:
-                    due_date = parse_date(due_at)
-                    if due_date and due_date < datetime.now(UTC):
-                        missing.append((assignment, "OVERDUE"))
-                    else:
-                        missing.append((assignment, "NOT SUBMITTED"))
-                else:
-                    missing.append((assignment, "NOT SUBMITTED"))
+                missing.append((assignment, "NOT SUBMITTED"))
 
         # Format output
         if missing:
-            output_lines.append(f"⚠️  Missing Submissions ({len(missing)}):\n")
+            output_lines.append(f"⚠️  Assignments Awaiting Submission ({len(missing)}):\n")
             for assignment, status in missing:
                 name = assignment.get("name", "Unnamed")
                 due_at = format_date(assignment.get("due_at")) if assignment.get("due_at") else "No due date"
@@ -313,6 +311,17 @@ def register_student_tools(mcp: FastMCP) -> None:
                     f"• {fence_untrusted_inline(name, 'assignment name')}\n"
                     f"  {f'Course: {course_name}' if course_name else ''}\n"
                     f"  Due: {due_at}\n"
+                    f"  Status: {status}\n"
+                )
+
+        if other_statuses:
+            output_lines.append(f"\nℹ️  Other Assignment Statuses ({len(other_statuses)}):\n")
+            for assignment, status in other_statuses:
+                name = assignment.get("name", "Unnamed")
+                course_name = assignment.get("_course_name", "")
+                output_lines.append(
+                    f"• {fence_untrusted_inline(name, 'assignment name')}\n"
+                    f"  {f'Course: {course_name}' if course_name else ''}\n"
                     f"  Status: {status}\n"
                 )
 
@@ -359,7 +368,7 @@ def register_student_tools(mcp: FastMCP) -> None:
         )
 
         if isinstance(courses, dict) and "error" in courses:
-            return f"Error fetching courses: {courses['error']}"
+            return f"Error fetching courses: {format_canvas_error(courses['error'])}"
 
         if not courses:
             return "No active course enrollments found."
@@ -409,7 +418,7 @@ def register_student_tools(mcp: FastMCP) -> None:
         )
 
         if isinstance(todos, dict) and "error" in todos:
-            return f"Error fetching TODO items: {todos['error']}"
+            return f"Error fetching TODO items: {format_canvas_error(todos['error'])}"
 
         if not todos:
             return "Your TODO list is empty! 🎉"
@@ -481,7 +490,7 @@ def register_student_tools(mcp: FastMCP) -> None:
                 params={"include[]": ["user"], "per_page": 100}
             )
             if isinstance(peer_reviews, dict) and "error" in peer_reviews:
-                return f"Error fetching peer reviews: {peer_reviews['error']}"
+                return f"Error fetching peer reviews: {format_canvas_error(peer_reviews['error'])}"
 
             assignment_name = assignment.get("name", f"assignment {assignment_identifier}")
             course_display = await get_course_code(course_id)
@@ -517,7 +526,7 @@ def register_student_tools(mcp: FastMCP) -> None:
                 params={"enrollment_state": "active", "per_page": 100}
             )
             if isinstance(courses, dict) and "error" in courses:
-                return f"Error fetching courses: {courses['error']}"
+                return f"Error fetching courses: {format_canvas_error(courses['error'])}"
 
             course_ids = [course.get("id") for course in courses if course.get("id")]
 
@@ -536,7 +545,7 @@ def register_student_tools(mcp: FastMCP) -> None:
             )
 
             if isinstance(assignments, dict) and "error" in assignments:
-                unchecked.append(f"course {course_id}: {assignments['error']}")
+                unchecked.append(f"course {course_id}: {format_canvas_error(assignments['error'])}")
                 continue
 
             # Check each assignment for peer reviews
@@ -554,7 +563,7 @@ def register_student_tools(mcp: FastMCP) -> None:
                         name = assignment.get("name", f"assignment {assignment_id}")
                         unchecked.append(
                             f"{fence_untrusted_inline(name, 'assignment name')} "
-                            f"(course {course_id}): {peer_reviews['error']}"
+                            f"(course {course_id}): {format_canvas_error(peer_reviews['error'])}"
                         )
                         continue
 

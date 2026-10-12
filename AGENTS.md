@@ -1,5 +1,17 @@
 # Canvas MCP - AI Agent Guide
 
+## Bart fork development handoff
+
+For work on this fork, start with the
+[current session handoff in PLAN.md](PLAN.md#current-session-handoff-2026-10-12-utc).
+It records the latest green CI runs, completed work, deferred
+acceptance, local tooling, and the separate release-drill repo.
+Older plan snapshots are historical, not current task lists.
+Local development does not authorize Canvas writes. Commits and
+pushes require separate explicit requests; Bart normally pushes.
+Agent commit messages start with a lowercase past-tense verb and
+include an attribution footer, e.g. `Generated-With: Codex`.
+
 This guide helps AI agents (Claude, Cursor, Zed, Windsurf, and other MCP clients) effectively use the Canvas MCP server.
 
 ## Quick Start

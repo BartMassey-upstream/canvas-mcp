@@ -15,6 +15,7 @@ from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.dates import format_date, truncate_text
 from ..core.path import canvas_path
+from ..core.tool_results import FULL_CONTENT_TOOL_META
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
@@ -886,12 +887,14 @@ async def _ensure_course_bookmark(response: Any, course_id: str | int) -> str:
 def register_rubric_tools(mcp: FastMCP) -> None:
     """Register all rubric-related MCP tools."""
 
-    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @mcp.tool(
+        annotations=ToolAnnotations(read_only_hint=True), meta=FULL_CONTENT_TOOL_META
+    )
     @validate_params
     async def get_rubric(course_identifier: str | int,
                          rubric_id: str | int | None = None,
                          assignment_id: str | int | None = None) -> str:
-        """Get detailed rubric criteria, ratings, and points.
+        """Get complete rubric criteria and rating descriptions, and points.
 
         Accepts either rubric_id or assignment_id (at least one required).
         If both provided, uses rubric_id (more specific).
@@ -983,7 +986,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
                     result += f"  Points: {points}\n"
 
                     if long_description and long_description != description:
-                        result += f"  Description: {fence_untrusted_inline(truncate_text(long_description, 200), 'rubric criterion description')}\n"
+                        result += f"  Description:\n{fence_untrusted(long_description, 'rubric criterion description')}\n"
 
                     if ratings:
                         sorted_ratings = sorted(ratings, key=lambda x: x.get("points", 0), reverse=True)
@@ -995,7 +998,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
 
                             rating_long_desc = rating.get("long_description", "")
                             if rating_long_desc and rating_long_desc != rating_desc:
-                                result += f"    {fence_untrusted_inline(truncate_text(rating_long_desc, 100), 'rubric rating description')}\n"
+                                result += f"{fence_untrusted(rating_long_desc, 'rubric rating description')}\n"
 
                     result += "\n"
             else:
@@ -1058,7 +1061,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
             result += f"  Points: {points}\n"
 
             if long_description and long_description != description:
-                result += f"  Description: {fence_untrusted_inline(truncate_text(long_description, 200), 'rubric criterion description')}\n"
+                result += f"  Description:\n{fence_untrusted(long_description, 'rubric criterion description')}\n"
 
             if ratings:
                 sorted_ratings = sorted(ratings, key=lambda x: x.get("points", 0), reverse=True)
@@ -1070,7 +1073,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
 
                     rating_long_desc = rating.get("long_description", "")
                     if rating_long_desc and rating_long_desc != rating_desc:
-                        result += f"    {fence_untrusted_inline(truncate_text(rating_long_desc, 100), 'rubric rating description')}\n"
+                        result += f"{fence_untrusted(rating_long_desc, 'rubric rating description')}\n"
 
             total_points += points
             result += "\n"
@@ -1079,7 +1082,9 @@ def register_rubric_tools(mcp: FastMCP) -> None:
 
         return result
 
-    @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+    @mcp.tool(
+        annotations=ToolAnnotations(read_only_hint=True), meta=FULL_CONTENT_TOOL_META
+    )
     @validate_params
     async def get_rubric_assessment(course_identifier: str | int,
                                              assignment_id: str | int,
@@ -1320,7 +1325,8 @@ def register_rubric_tools(mcp: FastMCP) -> None:
 
         Args:
             course_identifier: Course code or Canvas ID
-            include_criteria: Include detailed criteria and ratings (default: True)
+            include_criteria: Include criteria and rating previews (default: True).
+                Use get_rubric for complete descriptions.
         """
         course_id = await get_course_id(course_identifier)
 
@@ -1338,6 +1344,8 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         course_display = await get_course_code(course_id) or course_identifier
 
         result = f"All Rubrics for Course {course_display}:\n\n"
+        if include_criteria:
+            result += "Descriptions below are previews. Use get_rubric for complete text.\n\n"
 
         for i, rubric in enumerate(rubrics, 1):
             rubric_id = rubric.get("id", "N/A")

@@ -59,6 +59,7 @@ from ..core.untrusted_content import (
     contains_fence_markers,
     fence_untrusted,
     fence_untrusted_inline,
+    format_canvas_error,
 )
 from ..core.validation import coerce_canvas_id, validate_params
 from ..core.write_confirmation import ConfirmationGuard, unconfirmed_write_warning
@@ -522,7 +523,7 @@ async def _upload_one(
         use_form_data=True,
     )
     if isinstance(slot, dict) and "error" in slot:
-        return None, f"❌ Failed to request an upload slot for '{prepared.name}': {slot['error']}"
+        return None, f"❌ Failed to request an upload slot for '{prepared.name}': {format_canvas_error(slot['error'])}"
 
     upload_url = slot.get("upload_url")
     if not upload_url:
@@ -547,7 +548,7 @@ async def _upload_one(
         os.unlink(temp_path)
 
     if isinstance(stored, dict) and "error" in stored:
-        return None, f"❌ Upload failed for '{prepared.name}': {stored['error']}"
+        return None, f"❌ Upload failed for '{prepared.name}': {format_canvas_error(stored['error'])}"
 
     # Canvas storage answers in more than one shape. A 200/201 whose body is
     # empty or non-JSON yields {"success": true} with no id, and a redirect
@@ -605,7 +606,7 @@ def register_student_write_tools(mcp: FastMCP) -> None:
             params={"include[]": ["submission_comments", "assignment"]},
         )
         if isinstance(submission, dict) and "error" in submission:
-            return f"Error fetching submission: {submission['error']}"
+            return f"Error fetching submission: {format_canvas_error(submission['error'])}"
 
         assignment = submission.get("assignment") or {}
         lines = [
@@ -718,7 +719,7 @@ def register_student_write_tools(mcp: FastMCP) -> None:
                 "get", canvas_path('courses', course_id, 'assignments', assignment_id)
             )
             if isinstance(assignment, dict) and "error" in assignment:
-                return f"Error fetching assignment: {assignment['error']}"
+                return f"Error fetching assignment: {format_canvas_error(assignment['error'])}"
 
             # A group submission becomes the whole group's submission and
             # consumes a shared attempt, affecting students who never consented.
@@ -888,7 +889,7 @@ def register_student_write_tools(mcp: FastMCP) -> None:
                 )
                 if isinstance(response, dict) and "error" in response:
                     return (
-                        f"❌ Submission failed: {response['error']}\n"
+                        f"❌ Submission failed: {format_canvas_error(response['error'])}\n"
                         "Check get_my_submission before retrying — if Canvas accepted "
                         "it and only the reply was lost, retrying would spend another "
                         "attempt."
@@ -953,7 +954,7 @@ def register_student_write_tools(mcp: FastMCP) -> None:
                 use_form_data=True,
             )
             if isinstance(response, dict) and "error" in response:
-                return f"❌ Comment failed: {response['error']}"
+                return f"❌ Comment failed: {format_canvas_error(response['error'])}"
 
             return "✅ Comment added to your submission."
 
@@ -1020,7 +1021,7 @@ def register_student_write_tools(mcp: FastMCP) -> None:
                 ),
             )
             if isinstance(response, dict) and "error" in response:
-                return f"❌ Could not mark item done: {response['error']}"
+                return f"❌ Could not mark item done: {format_canvas_error(response['error'])}"
 
             # Confirm the write actually landed before claiming success.
             after = await make_canvas_request("get", item_endpoint)

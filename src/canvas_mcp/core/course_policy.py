@@ -42,6 +42,7 @@ from typing import Any, NamedTuple
 
 from .client import make_canvas_request
 from .config import get_config
+from .credentials import is_http_request_active
 from .logging import log_warning
 from .path import canvas_path
 
@@ -252,7 +253,9 @@ async def get_course_policy(course_id: str | int) -> CoursePolicy:
     config = get_config()
     key = str(course_id)
 
-    cached = _policy_cache.get(key)
+    # Policy visibility belongs to this caller. HTTP must re-read it even
+    # when another caller already populated the process-wide stdio cache.
+    cached = None if is_http_request_active() else _policy_cache.get(key)
     if cached and cached[0] > time.monotonic():
         return cached[1]
 
@@ -294,7 +297,7 @@ async def get_course_policy(course_id: str | int) -> CoursePolicy:
     # for every legitimate student in that course for a full deny TTL. So it is
     # never cached; the retry cost is small and falls only on the caller who
     # actually hit the error.
-    if policy.source == "read_error":
+    if policy.source == "read_error" or is_http_request_active():
         return policy
 
     ttl = (

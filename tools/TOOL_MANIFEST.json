@@ -4769,7 +4769,7 @@
     {
       "name": "get_discussion_with_replies",
       "category": "shared",
-      "description": "Read a discussion topic's title and a preview of every entry.\n\nReturns the topic title (not its body) and each top-level entry's author,\npost time, and a text preview cut to 200 characters; with\ninclude_replies=True each entry's replies are fetched too, also as\npreviews. For full entry text use list_discussion_entries with\ninclude_full_content=True, and get_discussion_entry_details for a single\nentry.",
+      "description": "Read every discussion entry in full, optionally with all replies.\n\nReturns the topic title and each top-level entry's author, post time,\nand complete text. Replies are complete when include_replies=True.\nUse get_discussion_topic_details for the topic body and\nget_discussion_entry_details for one entry.",
       "parameters": [
         {
           "name": "course_identifier",
@@ -5652,7 +5652,7 @@
     {
       "name": "get_rubric",
       "category": "educator",
-      "description": "Get detailed rubric criteria, ratings, and points.\n\nAccepts either rubric_id or assignment_id (at least one required).\nIf both provided, uses rubric_id (more specific).",
+      "description": "Get complete rubric criteria and rating descriptions, and points.\n\nAccepts either rubric_id or assignment_id (at least one required).\nIf both provided, uses rubric_id (more specific).",
       "parameters": [
         {
           "name": "course_identifier",
@@ -6506,7 +6506,7 @@
           "type": "boolean",
           "required": false,
           "default": false,
-          "description": "Fetch full content for each entry (default: False)"
+          "description": "Return complete entry and reply text (default:\nFalse, which shows short previews)"
         },
         {
           "name": "include_replies",
@@ -7082,7 +7082,7 @@
           "type": "boolean",
           "required": false,
           "default": true,
-          "description": "Include detailed criteria and ratings (default: True)"
+          "description": "Include criteria and rating previews (default: True).\nUse get_rubric for complete descriptions."
         }
       ],
       "returns": "All rubrics in the course, optionally with full criteria",

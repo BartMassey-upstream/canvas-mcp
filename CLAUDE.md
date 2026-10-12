@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+For Bart's fork, read the
+[current PLAN.md handoff](PLAN.md#current-session-handoff-2026-10-12-utc)
+first. It contains the current status, CI evidence, and working
+agreements. The upstream workflow conventions below do not
+override Bart's authorization for autonomous local work. Commits,
+pushes, releases, and live Canvas writes need their own explicit
+authorization; documentation work does not authorize a push.
+
 > **Note**: This guide is for developers working ON the Canvas MCP codebase. If you're an AI agent USING the MCP server, see [AGENTS.md](./AGENTS.md) instead.
 
 # Canvas MCP Development Guide
@@ -24,11 +32,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 canvas-mcp/
 ├── src/canvas_mcp/        # Main application code
 │   ├── core/             # Core utilities (client, config, validation)
-│   ├── tools/            # MCP tool implementations (up to 103 tools across 20 files)
+│   ├── tools/            # MCP tool implementations; see tools/TOOL_MANIFEST.json
 │   ├── resources/        # MCP resources and prompts
 │   └── server.py         # FastMCP server entry point
-├── skills/               # Agent skills for skills.sh (8 skills)
-├── tests/                # 900+ tests (pytest + pytest-asyncio)
+├── skills/               # Agent workflow skills
+├── tests/                # Python and TypeScript tests
 ├── docs/                 # GitHub Pages site + guides
 ├── tools/                # Tool documentation (README.md, TOOL_MANIFEST.json)
 ├── archive/              # Legacy code (git-ignored)

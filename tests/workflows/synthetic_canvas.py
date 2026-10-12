@@ -34,7 +34,7 @@ class SyntheticCanvas:
             "submission_types": ["online_text_entry"],
             "peer_reviews": True,
             "html_url": "https://canvas.invalid/courses/42/assignments/34",
-            "submission": {"submitted_at": None, "workflow_state": "unsubmitted"},
+            "submission": {"submitted_at": None, "workflow_state": "unsubmitted", "missing": True},
         }
         self.objects = {
             "/courses": [

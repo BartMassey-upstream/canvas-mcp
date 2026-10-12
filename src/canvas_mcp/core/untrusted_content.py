@@ -27,6 +27,26 @@ from dataclasses import dataclass
 from typing import Literal
 
 
+def format_canvas_error(error: object) -> str:
+    """Bound diagnostics and mark unknown error text as untrusted data.
+
+    Canvas HTTP failures expose only their status. The client's static
+    uncertain-write warning is retained; arbitrary response bodies are not.
+    Use this only while formatting a tool or resource output.
+    """
+    text = str(error)
+    match = re.match(r"^HTTP error: ([1-5][0-9]{2})(?=$|[,;\s])", text)
+    if match:
+        result = f"HTTP error: {match.group(1)}"
+        warning = "; write outcome unknown, not retried. Inspect the target before retrying"
+        if text[len(match.group(0)):].startswith(warning):
+            result += warning
+        return result
+    if len(text) > 500:
+        text = text[:500] + " [diagnostic truncated]"
+    return fence_untrusted(text, "Canvas error diagnostic")
+
+
 @dataclass(frozen=True)
 class ReadToolContentPolicy:
     """Reviewed trust-boundary classification for one read-only MCP tool."""

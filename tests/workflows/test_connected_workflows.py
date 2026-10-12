@@ -127,7 +127,7 @@ async def test_student_planning_reads_self_and_external_state_without_writes(
         status = result_text(
             await mcp.call_tool("get_my_submission_status", {"course_identifier": 42})
         )
-        assert "Missing Submissions (1)" in status
+        assert "Assignments Awaiting Submission (1)" in status
         assert "OVERDUE" in status
         assert "External-tool assignments (1)" in status
         assert "Canvas does not report external-tool submission state" in status

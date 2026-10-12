@@ -147,7 +147,9 @@ Check your submission status across assignments.
 "What haven't I turned in yet?"
 ```
 
-**Returns:** Submitted and missing assignments, with overdue items flagged.
+**Returns:** Submitted and pending assignments, plus graded,
+excused, and offline work. Overdue status follows Canvas's own
+`missing` flag. External-tool status is explicitly uncertain.
 
 ---
 
@@ -945,6 +947,8 @@ List all rubrics in a course.
 #### `get_rubric`
 View rubric criteria and point values. Accepts either a rubric ID or an assignment ID.
 
+Criterion and rating descriptions are returned in full.
+
 **Parameters:**
 - `course_identifier`: Course code or ID
 - `rubric_id` (optional): Rubric ID
@@ -1097,6 +1101,9 @@ Check whether a specific campus login ID is enrolled in a course. Answers a rost
 #### `list_peer_reviews`
 List all peer review assignments.
 
+Reads every review page, identifies reviewers using Canvas's
+assessor ID, and reports failed reads as incomplete results.
+
 **Parameters:**
 - `course_identifier`: Course code or ID
 - `assignment_id`: Assignment ID
@@ -1171,6 +1178,9 @@ Flag low-quality peer reviews needing attention.
 
 #### `assign_peer_review`
 Manually assign a peer review.
+
+Reads the reviewee's submission directly and refuses a missing
+or mismatched record. Never creates a student submission.
 
 **Parameters:**
 - `course_identifier`: Course code or ID
@@ -2439,6 +2449,10 @@ View posts in a discussion.
 
 #### `get_discussion_with_replies`
 Get all discussion entries with nested replies in one call.
+
+Entry text is complete. Reply text is complete when
+`include_replies=true`; the topic body is available separately
+through `get_discussion_topic_details`.
 
 **Parameters:**
 - `course_identifier`: Course code or ID

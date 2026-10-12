@@ -1464,6 +1464,58 @@ class TestRubricTools:
         assert "Missing 'Rubric Name' in some rows." in output
 
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("lookup", ["rubric_id", "assignment_id"])
+    async def test_get_rubric_preserves_complete_multiline_descriptions(
+        self, mcp, mock_canvas_request, mock_course_id, mock_course_code, lookup
+    ):
+        """Both rubric lookup paths return long criterion and rating text whole."""
+        criterion_text = "criterion " * 100 + "\nCRITERION END"
+        rating_text = "rating " * 100 + "\nRATING END"
+        criterion = {
+            "id": "_c1", "description": "Criterion", "points": 5,
+            "long_description": criterion_text,
+            "ratings": [{
+                "id": "_r1", "description": "Rating", "points": 5,
+                "long_description": rating_text,
+            }],
+        }
+        mock_canvas_request.return_value = (
+            {"id": 2, "title": "Rubric", "data": [criterion]}
+            if lookup == "rubric_id" else {"name": "Assignment", "rubric": [criterion]}
+        )
+        register_rubric_tools(mcp)
+        result = await _call_tool(mcp, "get_rubric", {"course_identifier": "12345", lookup: 2})
+        text = result.content[0].text
+        assert criterion_text in text
+        assert rating_text in text
+        assert "<<<UNTRUSTED CANVAS CONTENT (rubric criterion description)" in text
+        assert "<<<UNTRUSTED CANVAS CONTENT (rubric rating description)" in text
+
+
+    @pytest.mark.asyncio
+    async def test_full_content_read_tools_publish_large_result_metadata(self, mcp):
+        from canvas_mcp.core.tool_results import FULL_CONTENT_TOOL_META
+        from canvas_mcp.tools.discussions import (
+            register_educator_discussion_tools,
+            register_shared_discussion_tools,
+        )
+
+        register_rubric_tools(mcp)
+        register_shared_discussion_tools(mcp)
+        register_educator_discussion_tools(mcp)
+        full_names = {
+            "get_rubric", "get_rubric_assessment", "get_discussion_topic_details",
+            "get_discussion_entry_details", "get_discussion_with_replies",
+            "list_discussion_entries", "get_announcement",
+        }
+        async with Client(mcp) as client:
+            tools = {tool.name: tool for tool in await client.list_tools()}
+        for name in full_names:
+            assert tools[name].meta["anthropic/maxResultSizeChars"] == 500_000
+        assert FULL_CONTENT_TOOL_META == {"anthropic/maxResultSizeChars": 500_000}
+
+
 class TestCountCsvRubrics:
     def test_counts_distinct_rubric_names(self):
         csv_content = (

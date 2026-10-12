@@ -184,6 +184,19 @@ async def test_full_registry_suppresses_only_string_output_schemas():
 
 
 @pytest.mark.asyncio
+async def test_full_registry_requests_large_results_for_complete_reads():
+    from canvas_mcp.server import register_all_tools
+    server = FastMCP("complete-reads")
+    register_all_tools(server, role="all")
+    tools = {tool.name: tool for tool in await server.list_tools(run_middleware=False)}
+    for name in ("get_page_content", "get_syllabus", "get_front_page",
+                 "get_assignment_details", "get_conversation_details", "get_my_submission",
+                 "get_discussion_with_replies", "get_rubric"):
+        assert tools[name].meta["anthropic/maxResultSizeChars"] == 500_000
+    assert not tools["list_courses"].meta
+
+
+@pytest.mark.asyncio
 async def test_grading_recovery_is_structured_without_replacing_legacy_text():
     mcp = FastMCP('grading-result')
     install_tool_result_contract(mcp)

@@ -184,8 +184,8 @@ class TestStudentToolsDatetimeComparison:
             assert "error" not in result.lower()
 
     @pytest.mark.asyncio
-    async def test_get_my_submission_status_overdue_comparison(self):
-        """Test that overdue detection works with timezone-aware dates."""
+    async def test_get_my_submission_status_canvas_missing(self):
+        """Canvas marks unsubmitted work missing independently of due dates."""
         # Create a past date to test overdue detection
         past_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -194,7 +194,7 @@ class TestStudentToolsDatetimeComparison:
                 "id": 1,
                 "name": "Overdue Assignment",
                 "due_at": past_date,
-                "submission": {"workflow_state": "unsubmitted"}
+                "submission": {"workflow_state": "unsubmitted", "missing": True}
             }
         ]
 
@@ -210,7 +210,7 @@ class TestStudentToolsDatetimeComparison:
 
             result = await get_my_submission_status(course_identifier="TEST-101")
 
-            # Should complete without datetime comparison errors and mark as overdue
+            # Canvas explicitly reports this submission as missing
             assert "OVERDUE" in result
             assert "error" not in result.lower()
 
@@ -756,10 +756,9 @@ class TestGetMyPeerReviewsTodoPlannerDiscovery:
             result = await tool(course_identifier="505")
 
         assert "Student 11" in result
-        assert (
-            "Could not check the Planner feed for additional peer reviews: "
-            "service unavailable" in result
-        )
+        assert "Could not check the Planner feed for additional peer reviews:" in result
+        assert "service unavailable" in result
+        assert "UNTRUSTED CANVAS CONTENT (Canvas error diagnostic)" in result
 
     @pytest.mark.asyncio
     async def test_dedup_when_both_paths_find_same_review(self):

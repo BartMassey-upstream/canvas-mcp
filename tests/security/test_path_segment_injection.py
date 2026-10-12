@@ -160,7 +160,7 @@ class TestClientRefusesDelimiters:
                 "get", "/courses/1/assignments/123/submissions/self"
             )
             client.assert_called_once()
-            assert result == {"error": "Request failed: reached the network layer"}
+            assert result == {"error": "Request failed: RuntimeError"}
 
 
 class TestCoerceCanvasId:

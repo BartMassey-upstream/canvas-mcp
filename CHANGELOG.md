@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fork stabilization
+
+- Refused ambiguous course codes and isolated HTTP course
+  aliases, labels, and policy checks across credentials.
+- Removed placeholder student submissions from peer-review
+  assignment. Review listings paginate, use assessor identity,
+  and disclose incomplete reads.
+- Followed Canvas missing flags for overdue status and
+  distinguished graded, excused, and offline work.
+- Returned complete rubric descriptions and discussion text;
+  full-content tools request larger Claude results.
+- Removed response bodies from HTTP error diagnostics, fenced
+  student/peer-review diagnostics, and hid tokens in credential
+  object representations. Internal write evidence is preserved.
+- Filed the upstream review and deferred maintenance proposal
+  under `docs/` for a future student maintainer.
+
 ## [1.13.0] — 2026-09-27
 
 ### Security

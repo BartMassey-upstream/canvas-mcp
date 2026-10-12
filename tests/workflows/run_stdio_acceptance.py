@@ -213,7 +213,7 @@ async def run(python, output):
                     )
                 )
                 assert (
-                    "Missing Submissions (1)" in status
+                    "Assignments Awaiting Submission (1)" in status
                     and "External-tool assignments (1)" in status
                 )
                 calls += ["get_my_submission_status"]

@@ -766,3 +766,45 @@ class TestDiscussionToolDocstringsWarnAgainstAnnouncementFallback:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool_name", ["get_discussion_with_replies", "list_discussion_entries"])
+async def test_full_discussion_reads_preserve_long_posts_and_paginated_replies(
+    mock_canvas_api, tool_name
+):
+    """Full mode preserves tails and line breaks beyond legacy preview caps."""
+    post = "post " * 150 + "\nPOST END"
+    reply = "reply " * 150 + "\nREPLY END"
+    entry = {
+        "id": 1, "message": f"<p>{post}</p>", "user_name": "Author",
+        "recent_replies": [{"id": 2, "message": "recent preview"}],
+        "has_more_replies": True,
+    }
+    mock_canvas_api["fetch_all_paginated_results"].side_effect = [
+        [entry], [{"id": 2, "message": f"<p>{reply}</p>", "user_name": "Responder"}],
+    ]
+    mock_canvas_api["make_canvas_request"].return_value = {"title": "Topic"}
+    kwargs = {"include_replies": True}
+    if tool_name == "list_discussion_entries":
+        kwargs["include_full_content"] = True
+    result = await get_tool_function(tool_name)("60366", 42, **kwargs)
+    assert post in result
+    assert reply in result
+    assert "<<<UNTRUSTED CANVAS CONTENT" in result
+    assert mock_canvas_api["fetch_all_paginated_results"].call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_discussion_preview_mode_remains_short_and_disclosed(mock_canvas_api):
+    mock_canvas_api["fetch_all_paginated_results"].return_value = [{
+        "id": 1, "message": "post " * 100 + "POST END",
+        "recent_replies": [{"id": 2, "message": "reply " * 100 + "REPLY END"}],
+    }]
+    mock_canvas_api["make_canvas_request"].return_value = {"title": "Topic"}
+    result = await get_tool_function("list_discussion_entries")(
+        "60366", 42, include_replies=True
+    )
+    assert "POST END" not in result
+    assert "REPLY END" not in result
+    assert "Previews above are shortened" in result

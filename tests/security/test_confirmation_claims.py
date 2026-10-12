@@ -77,7 +77,7 @@ async def test_send_uses_transport_outcome_and_preserves_wire_error(status, retr
         async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
             with patch.object(cm, '_get_http_client', return_value=client):
                 first = await tool(*args, confirmation_token=preview['confirmation_token'])
-                assert json.loads(json.dumps(first)) == {'error': f"HTTP error: {status}, Details: {{'error': 'rejected'}}"}
+                assert json.loads(json.dumps(first)) == {'error': f"HTTP error: {status}"}
                 second = await tool(*args, confirmation_token=preview['confirmation_token'])
         assert len(calls) == (2 if retryable else 1)
         if not retryable:

@@ -10,10 +10,9 @@ from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.cache import (
-    course_code_to_id_cache,
     get_course_code,
     get_course_id,
-    id_to_course_code_cache,
+    remember_course_labels,
 )
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.config import get_config
@@ -262,14 +261,7 @@ def register_course_tools(mcp: FastMCP) -> None:
         if not courses:
             return "No courses found."
 
-        # Refresh our caches with the course data
-        for course in courses:
-            course_id = str(course.get("id"))
-            course_code = course.get("course_code")
-
-            if course_code and course_id:
-                course_code_to_id_cache[course_code] = course_id
-                id_to_course_code_cache[course_id] = course_code
+        remember_course_labels(courses)
 
         courses_info = []
         for course in courses:
@@ -309,10 +301,7 @@ def register_course_tools(mcp: FastMCP) -> None:
         if "error" in response:
             return f"Error fetching course details: {response['error']}"
 
-        # Update our caches with the course data
-        if "id" in response and "course_code" in response:
-            course_code_to_id_cache[response["course_code"]] = str(response["id"])
-            id_to_course_code_cache[str(response["id"])] = response["course_code"]
+        remember_course_labels([response])
 
         details = [
             f"Code: {response.get('course_code', 'N/A')}",

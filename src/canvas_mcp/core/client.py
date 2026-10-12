@@ -662,12 +662,9 @@ async def make_canvas_request(
                     error_message = f"HTTP error: {e.response.status_code}"
                     if e.response.status_code == 429 and method.lower() not in {"get", "head"}:
                         error_message += "; write outcome unknown, not retried. Inspect the target before retrying"
-                    try:
-                        error_details = e.response.json()
-                        error_message += f", Details: {error_details}"
-                    except ValueError:
-                        error_details = e.response.text
-                        error_message += f", Text: {error_details}"
+                    # Error bodies can contain private records and authored
+                    # directives. Status and write-outcome metadata suffice;
+                    # do not return the body through an unfenced error path.
 
                     log_error(f"API error on {sanitize_url(endpoint)}", status_code=e.response.status_code)
 
@@ -684,7 +681,13 @@ async def make_canvas_request(
                     # Audit: log request exception (type only — message may contain PII)
                     log_data_access(method, endpoint, "error", type(e).__name__)
 
-                    return RequestFailure(f"Request failed: {str(e)}", WriteOutcome.MAY_HAVE_WRITTEN)
+                    detail = type(e).__name__
+                    if isinstance(e, ValueError) and str(e) in {
+                        "Invalid response byte bound",
+                        "Response exceeds the configured byte bound",
+                    }:
+                        detail = str(e)
+                    return RequestFailure(f"Request failed: {detail}", WriteOutcome.MAY_HAVE_WRITTEN)
 
             # Should never reach here, but just in case
             return {"error": "Max retries exceeded"}
@@ -783,10 +786,8 @@ async def upload_file_to_storage(
 
             else:
                 # Unexpected status
-                error_text = response.text
                 return {
                     "error": f"Storage upload failed with status {response.status_code}",
-                    "details": error_text
                 }
 
         except FileNotFoundError:
@@ -796,7 +797,7 @@ async def upload_file_to_storage(
         except httpx.TimeoutException:
             return {"error": "Upload timed out"}
         except Exception as e:
-            return {"error": f"Upload failed: {str(e)}"}
+            return {"error": f"Upload failed: {type(e).__name__}"}
 
 
 async def fetch_all_paginated_results(

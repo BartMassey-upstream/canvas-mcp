@@ -4,6 +4,197 @@ This tracked plan records the agreed scope, completed work, and
 remaining acceptance checks. Bart authorized adding it to version
 control after the Stage 1 and Stage 1b implementation commits.
 
+## Current session handoff (2026-10-12 UTC)
+
+Read this section first. Older snapshots and validation notes
+below are historical; this section supersedes their branch/CI
+status. Bart is changing models and starting a new session.
+There is no unfinished implementation task to resume silently.
+
+### Latest decision and upstream stabilization followup
+
+Bart considers the fork adequate for current needs, and a
+colleague is experimenting with it. The larger maintenance
+proposal is deferred while Bart seeks a student maintainer.
+Only stage 1 of the new upstream maintenance proposal was
+authorized; it is separate from the historical stages below.
+
+- Filed the [upstream review][stabilization-review] and saved
+  the [maintenance plan and student handoff][maintenance-plan].
+- Completed peer-review safety, attribution, and pagination
+  fixes; ambiguous course-code rejection; HTTP course metadata
+  and policy isolation; full rubric/discussion content reads;
+  student status corrections; and diagnostic-output protection.
+  Credential representations also omit API tokens.
+- Python 3.11, 3.12, and 3.13 each passed 3,028 tests with
+  22 skips. Ruff, mypy, manifest validation, distribution
+  inspection, and all four installed-wheel synthetic MCP
+  workflows passed. These workflows issued no Canvas writes.
+- Evidence is in ignored `_stage3/upstream-review/`. These
+  checks cover local synthetic behavior, not live Canvas or
+  colleague acceptance. The subsequent full local CI run is
+  recorded below.
+- Bart subsequently requested a commit and local CI. Existing
+  AGENTS.md, CLAUDE.md, and handoff edits were preserved and
+  included with the stabilization documentation. The pushed
+  CI results below apply to
+  `567bd31`, before this new stabilization work.
+- The active installation, releases, and remote branches were
+  unchanged. Commits and pushes still need explicit requests.
+- Next upstream review starts at `7c4229c`. Bart suggested
+  looking next week; no recurring automation or broader
+  implementation commitment was created.
+
+[stabilization-review]: docs/upstream-review-2026-10-12.md
+[maintenance-plan]: docs/fork-maintenance-plan.md
+
+### Local CI for the requested stabilization commit
+
+Read the current workflow definitions and used uv 0.12.18.
+Fresh isolated Python environments matched the CI matrix with
+`FASTMCP_MCP_CAMELCASE_COMPAT=false` and no developer Canvas
+credentials. Local results:
+
+- Python 3.11.16, 3.12.14, and 3.13.5: each passed 3,028 tests
+  with 22 skips. Dedicated security suite: 738 passed, 20 skips.
+- Locked Ruff and mypy passed; manifest and diff checks passed.
+- TypeScript build and all 98 tests passed. Pinned Lean 4.19.0
+  and TLC 1.7.4 proofs and counterexample controls passed.
+- Rebuilt wheel/sdist passed the distribution audit. All four
+  Python 3.11 installed-wheel synthetic MCP workflows passed
+  with no Canvas writes.
+- Locked dependency audit passed with the existing diskcache
+  CVE exception. Pinned TruffleHog found zero blocking findings:
+  11 reviewed historical fixtures and seven pending-file
+  fixtures. Detect-secrets ran on the clean project snapshot
+  to exclude ignored local environments and research artifacts.
+- Advisory scans retained the previous findings: Bandit has
+  12 low and two medium findings, with no new categories;
+  Semgrep has its existing directory-permission finding.
+- Native macOS/Windows jobs, CodeQL, and GitHub Scorecard were
+  not run locally; they require their platform/GitHub runners.
+
+Logs, private scanner reports, and package evidence are under
+ignored `_stage3/upstream-review/local-ci/`. This is local CI
+evidence, not a new GitHub Actions result. The commit does not
+authorize pushing, releases, installation changes, or Canvas
+writes.
+
+### Repository and remote state
+
+- Working checkout: `/usr/local/src/old/canvas-mcp`.
+- `origin/main` remains at `567bd31`; local `main` includes the
+  subsequent stabilization commit requested by Bart.
+- Earlier completed branch work was merged and pushed by Bart.
+  The tree was clean before the original handoff-doc update.
+- Recent fixes: `4884688` upgraded multidict; `8ca394a` fixed
+  the flaky snapshot test; `7a18f1c` repaired security scanning.
+  Merge commits are `c5d97d3`, `797d25b`, and `567bd31`.
+- The handoff documentation is included with the subsequent
+  stabilization commit. There is no unfinished scanner work.
+
+### CI is green on the pushed main
+
+All four push workflows passed on `567bd31`, for the push at
+2026-10-12 05:02 UTC:
+
+- [Enhancement Testing][handoff-tests]: all Python versions,
+  native macOS/Windows configuration tests, lint/types,
+  TypeScript, formal proofs, package checks, and aggregator.
+- [Security Testing][handoff-security]: dependency audit,
+  security tests, CodeQL, SAST, and secret scanning. Both the
+  pinned TruffleHog installation and mandatory scan passed.
+- [OSSF Scorecard][handoff-scorecard].
+- [Closing Keyword Guard][handoff-keywords].
+
+Run `38152397494` remains a historical failure against `c5d97d3`.
+Its only underlying test failure was a privacy assertion looking
+for `101` anywhere in JSON, including timestamp microseconds.
+The replacement checks the exact safe response with a fixed
+timestamp containing those digits. The newer successful run
+above verifies the fix; do not rerun the old commit expecting it
+to contain later fixes.
+
+[handoff-tests]: https://github.com/BartMassey-upstream/canvas-mcp/actions/runs/38206218071
+[handoff-security]: https://github.com/BartMassey-upstream/canvas-mcp/actions/runs/38206218135
+[handoff-scorecard]: https://github.com/BartMassey-upstream/canvas-mcp/actions/runs/38206217973
+[handoff-keywords]: https://github.com/BartMassey-upstream/canvas-mcp/actions/runs/38206217965
+
+### Security scanner decisions and validation
+
+- `uv.lock` pins multidict 6.9.1, fixing GHSA-54p9-h82j-f925.
+  Only that package changed in the security upgrade.
+- `pip-audit` remains mandatory and audits all locked extras.
+  The existing diskcache CVE-2025-69872 exception was unchanged.
+- Removed the broken optional Safety step: its command was
+  obsolete; adopting its supported replacement would require
+  separate authentication/service configuration.
+- Replaced the broken TruffleHog `main` versus `HEAD` comparison
+  with a pinned, checksum-verified 3.99.2 CLI full-history scan.
+  Scan errors and findings outside reviewed exceptions fail CI.
+- `.github/trufflehog-allowlist.json` contains seven reviewed
+  dummy-credential exceptions. Each matches exact file path,
+  detector, and SHA-256 of compact JSON `[Raw, RawV2]`.
+  `scripts/check_trufflehog.py` checks the private JSON report
+  and scanner exit code. Verified findings always fail.
+  No file or detector is excluded; inline ignores are disabled.
+- Real local scans passed the gate: 11 historical findings and
+  seven current-file findings matched those exceptions, with
+  zero blocking findings. An injected synthetic credential in
+  an allowlisted file correctly failed the gate.
+- Python 3.11.16, 3.12.14, and 3.13.5 each passed 2,973 tests
+  with 22 skips on the final implementation. Ruff and mypy
+  passed. Earlier full local CI also passed all 98 TypeScript
+  tests, Lean/TLA proofs, distribution inspection, and four
+  synthetic installed-wheel MCP workflows.
+- Local evidence is under `_stage3/trufflehog-gate-check/` and
+  `_stage3/main-ci-797d25b/`. These are ignored scratch paths,
+  not portable artifacts. Prefer the linked GitHub runs when
+  working from another checkout.
+
+### Working conventions for the next session
+
+- User priority remains complete, usable code for Bart and
+  colleagues; upstream preparation is secondary. Initial target
+  is Linux with both Claude and Codex.
+- Stage 1, Stage 1b, and the authorized Stage 3 repository-local
+  work are complete. Live sandbox acceptance, actual client and
+  colleague acceptance, recovery/import drills, and active
+  installation changes remain separate, deferred work.
+- No live Canvas writes were authorized for this development
+  work, including test setup, cleanup, and course exports.
+  Canvas reads are permitted; use synthetic services for tests.
+- An earlier course-agent task targeted course `117989`, Rust
+  Programming, code `CS-423/523-001 Fall 2026`. Treat that as
+  historical context, not a fresh permission check. Rediscover
+  tools and verify the course with reads if coursework resumes;
+  do not assume previous session agents survive a restart.
+- Commits and pushes each need an explicit request. Bart has
+  been pushing himself. Start agent commit messages with a
+  lowercase past-tense verb and include `Generated-With: Codex`
+  (or the actual new agent's attribution). Do not publish a PR,
+  release, tag, or deployment as a side effect of local work.
+- Run applicable CI checks locally before requested integration;
+  inspect current workflows rather than relying on old commands.
+  Python matrix jobs resolve fresh dependencies; quality tools
+  use the frozen dev group. Isolate Canvas configuration and use
+  `FASTMCP_MCP_CAMELCASE_COMPAT=false` for the Python matrix.
+- `uv` is `/home/bart/.local/bin/uv` if absent from PATH. Keep
+  temporary environments and caches in ignored project paths.
+  A usable cache is `_stage1/cache/uv`.
+- Always specify `--repo BartMassey-upstream/canvas-mcp` for
+  `gh`: its inferred default can select upstream instead.
+  SSH may need an unavailable passphrase. Read-only HTTPS fetch
+  worked with `git -c url.https://github.com/.insteadOf=ssh://git@github.com/ fetch origin --prune`.
+- The release-drill skill now lives in its own repository at
+  `/local/src/release-drill`. The ignored project skill path
+  `.codex/skills/canvas-mcp-release-drill` is a symlink there.
+  Do not add the skill back to this repository. Read its current
+  `SKILL.md` when a commit/merge/release task invokes it.
+- No active installation or release tag was changed during
+  these CI fixes. Historical installation notes below are not
+  proof of the currently running client/server version.
+
 ## Goal and priorities
 
 Make the integrated fork as complete and dependable as possible
