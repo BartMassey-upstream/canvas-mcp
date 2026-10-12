@@ -114,6 +114,39 @@ extras, and fails on known vulnerabilities. It remains enabled
 on forks. Review the `dependency-scan-reports` artifact for the
 affected packages and fixed versions.
 
+`pip-audit` is the dependency gate. The obsolete optional Safety
+step was removed; adopting its replacement would require Safety
+authentication and separate service configuration.
+
+TruffleHog is pinned with an archive checksum and scans full Git
+history on every run. New findings and scan errors fail CI.
+`.github/trufflehog-allowlist.json` exempts only reviewed dummy
+credentials by exact filename, detector, and a fingerprint of
+both scanner credential representations. These exceptions cover
+historical copies without skipping files, tests, or detectors.
+Verified findings always fail, even if their fingerprint matches.
+Inline ignore comments are disabled so exceptions stay reviewable
+in one place. The raw report stays private in the runner's
+temporary directory; CI prints counts, not credential values.
+
+After installing the pinned scanner, run the same gate locally:
+
+```bash
+mkdir -p _secret-ci
+umask 077
+scan_status=0
+trufflehog git "file://$PWD/" --json --fail \
+  --fail-on-scan-errors --no-ignore-tag --no-update \
+  > _secret-ci/results.jsonl || scan_status=$?
+python scripts/check_trufflehog.py _secret-ci/results.jsonl \
+  --scan-exit-code "$scan_status"
+```
+
+Review each finding before editing the allowlist. The fingerprint
+is SHA-256 of compact JSON `[Raw, RawV2]`, using Python's default
+ASCII escaping. Neither credential representation is stored in
+the allowlist. Any scanner upgrade needs a fresh validation run.
+
 Dependabot checks the root `uv` project daily and includes
 transitive dependencies. Its pull requests still need review
 and merging; scheduled scans can find newly disclosed issues

@@ -200,3 +200,26 @@ class TestDependencyMaintenance:
         assert "if" not in audit
         assert not audit.get("continue-on-error", False)
         assert "||" not in audit["run"]
+
+
+class TestSecretScanCoverage:
+    def test_trufflehog_gates_full_history_without_broad_exclusions(self):
+        """Every event must scan history and enforce reviewed exceptions."""
+        workflow = _load(WORKFLOWS / "security-testing.yml")
+        steps = workflow["jobs"]["secret-scan"]["steps"]
+        checkout = next(
+            step for step in steps
+            if step.get("uses", "").startswith("actions/checkout@")
+        )
+        assert checkout["with"]["fetch-depth"] == 0
+        scanner = next(
+            step for step in steps
+            if "scripts/check_trufflehog.py" in step.get("run", "")
+        )
+        assert not scanner.get("continue-on-error", False)
+        assert "if" not in scanner
+        command = scanner["run"]
+        for required in ("--fail-on-scan-errors", "--no-ignore-tag", "--scan-exit-code"):
+            assert required in command
+        for forbidden in ("--exclude", "--results", "--since-commit", "--branch", "|| true"):
+            assert forbidden not in command
