@@ -3849,34 +3849,34 @@
     {
       "name": "fix_accessibility_issues",
       "category": "educator",
-      "description": "Auto-fix accessibility issues in Canvas course content.\n\nApplies automated fixes for issues flagged as auto_fixable by the scanner.\nRun scan_course_content_accessibility first to see what will be fixed.\nDefault is dry_run=True (preview only). Set dry_run=False to apply changes.",
+      "description": "Preview or apply accessibility fixes to pages and assignments.",
       "parameters": [
         {
           "name": "course_identifier",
           "type": "string | integer",
           "required": true,
-          "description": "Course code or Canvas ID"
+          "description": "Course code or Canvas ID."
         },
         {
           "name": "fix_types",
           "type": "string",
           "required": false,
           "default": "th_scope,low_contrast,legacy_designplus,redundant_alt_prefix",
-          "description": "Comma-separated fix types to apply:\nth_scope - Add scope=\"col\" to <th> without scope\nlow_contrast - Fix white text on #ff5f05 orange backgrounds\nlegacy_designplus - Migrate kl_ classes to dp- equivalents\nredundant_alt_prefix - Remove \"image of\" prefix from alt text"
+          "description": "Comma-separated th_scope, low_contrast,\nlegacy_designplus, and redundant_alt_prefix."
         },
         {
           "name": "content_types",
           "type": "string",
           "required": false,
           "default": "pages",
-          "description": "Comma-separated types to fix: pages, assignments"
+          "description": "Comma-separated pages and/or assignments."
         },
         {
           "name": "dry_run",
           "type": "boolean",
           "required": false,
           "default": true,
-          "description": "If True, preview changes without applying. Set False to apply."
+          "description": "Preview only by default; set False to apply changes."
         }
       ],
       "returns": "Preview of fixes (dry run) or per-item results of applied accessibility fixes",
@@ -7549,20 +7549,20 @@
     {
       "name": "scan_course_content_accessibility",
       "category": "educator",
-      "description": "Scan Canvas course content for basic accessibility issues.",
+      "description": "Scan pages and assignments for basic accessibility issues.\n\nThis heuristic scan is not a complete WCAG audit. Unreadable content\nis an error, never a clean scan. Other content types are unsupported.",
       "parameters": [
         {
           "name": "course_identifier",
           "type": "string | integer",
           "required": true,
-          "description": "Course code or Canvas ID"
+          "description": "Course code or Canvas ID."
         },
         {
           "name": "content_types",
           "type": "string",
           "required": false,
           "default": "pages,assignments",
-          "description": "Comma-separated types to scan: pages, assignments, discussions, syllabus"
+          "description": "Comma-separated pages and/or assignments."
         }
       ],
       "returns": "Accessibility issues found, grouped by page/item, with auto-fixable flags",

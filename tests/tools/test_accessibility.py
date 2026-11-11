@@ -257,11 +257,11 @@ class TestScanCourseContentAccessibility:
     async def test_scan_returns_json(self, mock_canvas_api):
         """Test that scan returns valid JSON with expected keys."""
         mock_canvas_api['fetch_all_paginated_results'].return_value = [
-            {"page_id": 1, "title": "Home", "body": "<p>Clean content</p>"}
+            {"page_id": 1, "url": "home", "title": "Home", "body": "<p>Clean content</p>"}
         ]
 
         fn = get_tool_function('scan_course_content_accessibility')
-        result = await fn("badm_350_120251")
+        result = await fn("badm_350_120251", content_types="pages")
         data = json.loads(result)
 
         assert "summary" in data
@@ -283,7 +283,7 @@ class TestScanCourseContentAccessibility:
     async def test_scan_pages_and_assignments(self, mock_canvas_api):
         """Test scan with multiple content types."""
         mock_canvas_api['fetch_all_paginated_results'].side_effect = [
-            [{"page_id": 1, "title": "Home", "body": ""}],   # pages call
+            [{"page_id": 1, "url": "home", "title": "Home", "body": ""}],   # pages call
             [{"id": 10, "name": "HW1", "description": ""}],  # assignments call
         ]
 
@@ -306,9 +306,10 @@ class TestFixAccessibilityIssues:
     async def test_fix_dry_run_pages(self, mock_canvas_api):
         """Test dry_run mode returns preview without modifying Canvas."""
         mock_canvas_api['fetch_all_paginated_results'].return_value = [
-            {"url": "home", "title": "Home", "body": "<th>Header</th>"}
+            {"page_id": 1, "url": "home", "title": "Home", "body": "<th>Header</th>"}
         ]
         mock_canvas_api['make_canvas_request'].return_value = {
+            "page_id": 1,
             "title": "Home",
             "url": "home",
             "body": "<th>Header</th>"

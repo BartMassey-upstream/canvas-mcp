@@ -1666,11 +1666,17 @@ Two workflows: a built-in scanner (`scan_course_content_accessibility` → `fix_
 The UFIXIT pipeline requires the UDOIT/UFIXIT add-on on your Canvas instance. Set `ACCESSIBILITY_CHECKERS=none` to leave those three tools unregistered (default: `ufixit`; `udoit` is an alias). The built-in scanner needs no add-on and is always available.
 
 #### `scan_course_content_accessibility`
-Scan course content for basic accessibility issues.
+Scan pages and assignments for basic accessibility issues.
+
+This is a heuristic review, not a complete WCAG audit. Page
+bodies are requested explicitly. An unreadable or malformed
+source returns an error; it is never counted as a clean scan.
+Only `pages` and `assignments` are supported.
 
 **Parameters:**
 - `course_identifier`: Course code or ID
-- `content_types` (optional): Comma-separated types to scan: `pages`, `assignments`, `discussions`, `syllabus` (default: "pages,assignments")
+- `content_types` (optional): `pages` and/or `assignments`,
+  separated by commas (default: "pages,assignments")
 
 **Example:**
 ```
@@ -1683,6 +1689,13 @@ Scan course content for basic accessibility issues.
 
 #### `fix_accessibility_issues`
 Auto-fix accessibility issues flagged as `auto_fixable` by the scanner. Run `scan_course_content_accessibility` first to see what will be fixed.
+
+Dry runs never write. Apply mode rechecks each source before
+writing and refuses a concurrent content change. A fresh read
+must verify the target and stored HTML before `applied` becomes
+true. Failed or mismatched verification leaves it false and
+reports an unconfirmed result without retrying the write.
+Canvas may normalize HTML; a mismatch requires inspection.
 
 **Parameters:**
 - `course_identifier`: Course code or ID

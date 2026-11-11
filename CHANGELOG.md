@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Accessibility reliability
+
+- Requested complete page bodies and refused unreadable or
+  malformed sources instead of reporting a clean scan.
+  Supported content types are pages and assignments.
+- Preserved comments, script/style content, quoted attributes,
+  and unrelated text during automated HTML changes. Scanning
+  and fixes use real tags, attributes, and CSS declarations.
+- Kept dry runs free of writes, refused concurrent changes,
+  and verified the stored body before reporting a fix applied.
+  Failed or unverifiable writes report an unconfirmed outcome
+  without automatic retries.
+- Fenced content-derived result text without putting those
+  markers into stored course HTML.
+
 ### November upstream safety fixes
 
 - Raised the FastMCP and MCP security minimums and refreshed

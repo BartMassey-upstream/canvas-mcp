@@ -19,8 +19,49 @@ On November 10, Bart authorized a second bounded safety pass:
 security dependencies, file-transfer credential scoping and
 content fencing, and rubric/announcement guards. The
 [current handoff](../PLAN.md) records that pass and its checks.
-The next upstream comparison starts at `61f43d9`; the broader
-stages below remain deferred.
+The safety pass was committed as `ef5a2fa` and installed. Bart
+then authorized the accessibility fixes, their commit, and their
+installation. The next upstream comparison starts at `61f43d9`;
+the broader stages below remain deferred.
+
+## Possible followups, deliberately deferred
+
+These are options for future demand, not an implementation queue.
+Prefer a small repair to a workflow Bart or a colleague uses.
+
+- Peer-review reminders: bind composition, confirmation, and
+  delivery to one resolved numeric course ID. This is a small
+  correctness fix if followup campaigns are used.
+- Other read summaries: preserve Canvas's explicit missing flag
+  even before a due date, disclose inbox pagination and sampled
+  course overviews, and reuse the validated HTML tokenizer in
+  older syllabus/text readers when needed.
+- Guarded content edits: expected timestamps or hashes and
+  readback for pages, assignments, discussions, and syllabus.
+  Accessibility edits now have their own conservative checks.
+- Practical acceptance: colleague/client feedback and an
+  authorized sandbox backup/restore drill for relied-on flows.
+  Synthetic validation does not establish live recovery.
+- Windows use: private downloaded-file DACLs and timezone data
+  if the colleague uses Windows. A warning alone is not an ACL.
+- Hosted use: fail closed on an empty Entra allowlist and isolate
+  anonymization statistics across callers if HTTP deployment is
+  actually needed. These do not affect today's local workflow.
+- TypeScript execution: keep it disabled unless needed. Before
+  enabling it, adopt the Node permission-model changes; they
+  still do not enforce the normal write-confirmation boundary.
+- Optional course workflows: bounded bulk submission text or
+  CSV group provisioning if a concrete course task needs them.
+  Existing individual submission and group tools remain usable.
+- Optional student features: activity feeds, grade scenarios,
+  own-group discussions, quiz-attempt awareness, student Inbox
+  writes, and aggregated calendars. Select by actual need.
+- Usability options: exact full course-name matching with
+  suggestions, anonymous-discussion reads, or lazy package
+  imports if those limitations become relevant.
+- Maintenance ownership: a student could keep a bounded review
+  ledger and prepare small upstream contributions. A broad merge,
+  rewrite, recurring service, and feature parity are not goals.
 
 ## Stage 1 Stabilize existing workflows
 

@@ -11,6 +11,37 @@ below are historical; this section supersedes their branch/CI
 status. Bart is changing models and starting a new session.
 There is no unfinished implementation task to resume silently.
 
+### Accessibility followup and current local installation
+
+Bart requested commit and installation of the safety pass, then
+accessibility fixes with their own commit and installation.
+Other proposed changes remain deferred. The safety commit is
+`ef5a2fa`; its active editable tool installation was verified
+with FastMCP 4.1.8, MCP 2.3.0, and 234 registered tools.
+
+The accessibility pass requests page bodies explicitly, refuses
+unreadable sources and unsupported content types, and uses a
+bounded HTML tokenizer for the scanner and fixers. It preserves
+comments, script/style text, quoted attributes, and unrelated
+CSS/text. Dry runs never write. Apply mode validates the target,
+refuses changed sources, and requires a matching fresh readback
+before reporting success. Canvas normalization can produce a
+conservative unconfirmed result; actual Canvas sanitizer/live
+acceptance remains untested. No writes are retried automatically.
+
+Validation passed 3,239 tests with 22 skips on each of Python
+3.11, 3.12, and 3.13. Ruff, mypy, manifest/diff checks, package
+inspection, and all four installed-wheel synthetic workflows
+passed. Evidence is in `_stage3/accessibility-20261110/`.
+The safety pass's TypeScript/proof and locked dependency audit
+results remain applicable: those sources and the lock did not
+change during this pass. Native macOS/Windows and GitHub-only
+jobs were not run locally.
+
+The [deferred followup list][maintenance-plan] records optional
+work for a future maintainer. No push, release tag, recurring
+automation, or live Canvas write was authorized.
+
 ### November 10 upstream safety followup
 
 Bart authorized recommendations 1 through 3 from the November
