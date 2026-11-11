@@ -11,6 +11,57 @@ below are historical; this section supersedes their branch/CI
 status. Bart is changing models and starting a new session.
 There is no unfinished implementation task to resume silently.
 
+### November 10 upstream safety followup
+
+Bart authorized recommendations 1 through 3 from the November
+upstream review: security dependencies, file-transfer credential
+scoping and content fencing, and rubric/announcement guards.
+The broader maintenance project remains deferred.
+
+- Reviewed upstream `7c4229c..61f43d9`: 286 commits, including
+  72 merges and 128 documentation/triage commits. The remaining
+  86 also include tests, dependencies, builds, and releases.
+  Activity comes in bursts; new runtime fixes landed November
+  5 through 9, so there is no reliable slowdown yet.
+- Raised fresh-install floors to FastMCP 4.1.2 and MCP 2.2.
+  Selectively refreshed affected packages in this fork's lock;
+  the tested set includes FastMCP 4.1.8 and MCP 2.3.0.
+  Dependency CI now rejects stale project metadata.
+- File downloads scope the bearer to the exact Canvas origin
+  on every redirect. Upload confirmation rejects off-origin
+  targets and does not follow redirects. File content is fenced
+  and remote diagnostics omit signed URLs.
+- Rubric creation checks the assignment before posting and
+  refuses any existing rubric metadata. Announcement deletion
+  verifies the target type and invalidates stale tokens.
+- Bart subsequently authorized committing and installing this
+  safety pass, followed by accessibility fixes with their own
+  commit and installation. No push, release, or live Canvas
+  writes were authorized. The installed tool is editable, so
+  source edits will be visible to newly started processes.
+- Keep TypeScript sandbox, hosted Entra, and optional workflow
+  improvements deferred. Next upstream comparison starts at
+  `61f43d9`.
+
+Validation for this followup:
+
+- The full suite passed 3,092 tests with 22 skips on each of
+  Python 3.11, 3.12, and 3.13. Ten additional announcement edge
+  cases were added during those runs; the final 81-test
+  announcement suite then passed on all three versions.
+- Ruff, mypy, manifest synchronization, and diff checks passed.
+  The exact locked all-extras dependency audit passed with the
+  existing diskcache exception; no new exception was added.
+- A deliberately stale project/lock pair was rejected by
+  `uv export --locked`.
+- The final wheel and source archive passed distribution
+  inspection. Four installed-wheel synthetic MCP workflows
+  passed without Canvas writes.
+- Evidence is under ignored
+  `_stage3/upstream-fixes-20261110/`. Tests and network request
+  assertions are synthetic; no live Canvas acceptance was run.
+  Native platform jobs and GitHub-only checks were not run.
+
 ### Latest decision and upstream stabilization followup
 
 Bart considers the fork adequate for current needs, and a

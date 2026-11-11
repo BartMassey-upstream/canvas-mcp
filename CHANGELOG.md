@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### November upstream safety fixes
+
+- Raised the FastMCP and MCP security minimums and refreshed
+  affected locked dependencies. Dependency CI rejects stale
+  project metadata before auditing the locked package set.
+- Limited file-transfer credentials to the Canvas origin and
+  refused off-origin upload confirmation URLs. Returned file
+  content is marked as untrusted; download errors omit URLs.
+- Announcement deletion refuses ordinary discussions and
+  invalidates stale confirmation tokens when targets change.
+- Rubric creation refuses assignments with existing rubric
+  associations instead of replacing the attached rubric.
+
 ### Fork stabilization
 
 - Refused ambiguous course codes and isolated HTTP course

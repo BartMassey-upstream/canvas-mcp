@@ -33,6 +33,12 @@ _DELETE_ANNOUNCEMENT_GUARD = ConfirmationGuard(nothing_done="Nothing was deleted
 _BULK_DELETE_GUARD = ConfirmationGuard(nothing_done="Nothing was deleted.")
 _CRITERIA_DELETE_GUARD = ConfirmationGuard(nothing_done="Nothing was deleted.")
 
+def _invalidate_delete_token(guard: ConfirmationGuard, token: str | None) -> None:
+    """Burn a supplied token when the target cannot be safely verified."""
+    if token:
+        redeem_confirmation(guard, token, guard.fingerprint("unverifiable target"))
+
+
 # Issue #283: a permission error on create_announcement is not license to
 # post the same content as a discussion instead. Client models were doing
 # exactly that — a silent, unconfirmed write the user never asked for. This
@@ -1413,17 +1419,26 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         """
         course_id = await get_course_id(course_identifier)
 
-        announcement = await make_canvas_request(
-            "get", canvas_path('courses', course_id, 'discussion_topics', announcement_id)
-        )
-        if "error" in announcement:
-            return f"Error fetching announcement details: {announcement['error']}"
+        try:
+            announcement = await make_canvas_request(
+                "get", canvas_path('courses', course_id, 'discussion_topics', announcement_id)
+            )
+        except Exception:  # noqa: BLE001 - fail closed on a failed lookup
+            _invalidate_delete_token(_DELETE_ANNOUNCEMENT_GUARD, confirmation_token)
+            return "Error fetching announcement. Nothing was deleted."
+        if (not isinstance(announcement, dict) or "error" in announcement
+                or announcement.get("is_announcement") is not True
+                or str(announcement.get("id")) != str(announcement_id)
+                or not isinstance(announcement.get("title"), str)):
+            _invalidate_delete_token(_DELETE_ANNOUNCEMENT_GUARD, confirmation_token)
+            return "Error: target could not be verified as an announcement. Nothing was deleted."
 
         # actual_title stays raw for the comparison and the fingerprint;
         # fenced only at the display boundary (issue 239).
         actual_title = announcement.get("title", "Unknown Title")
         shown_title = fence_untrusted(actual_title, "announcement title")
         if require_title_match is not None and actual_title != require_title_match:
+            _invalidate_delete_token(_DELETE_ANNOUNCEMENT_GUARD, confirmation_token)
             return (
                 f"Title mismatch - Expected: '{require_title_match}', Actual:\n"
                 f"{shown_title}\nDeletion aborted for safety."
@@ -1495,11 +1510,18 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         found: list[dict[str, str]] = []
         unreachable: list[dict[str, str]] = []
         for announcement_id in announcement_ids:
-            announcement = await make_canvas_request(
-                "get", canvas_path('courses', course_id, 'discussion_topics', announcement_id)
-            )
-            if "error" in announcement:
-                unreachable.append({"id": str(announcement_id), "error": announcement["error"]})
+            try:
+                announcement = await make_canvas_request(
+                    "get", canvas_path('courses', course_id, 'discussion_topics', announcement_id)
+                )
+            except Exception:  # noqa: BLE001 - isolate failed lookups
+                unreachable.append({"id": str(announcement_id), "error": "Fetch failed"})
+                continue
+            if (not isinstance(announcement, dict) or "error" in announcement
+                    or announcement.get("is_announcement") is not True
+                    or str(announcement.get("id")) != str(announcement_id)
+                    or not isinstance(announcement.get("title"), str)):
+                unreachable.append({"id": str(announcement_id), "error": "Could not verify announcement"})
                 continue
             found.append({
                 "id": str(announcement_id),
@@ -1615,14 +1637,31 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             "only_announcements": True,
             "per_page": 100
         }
-        announcements = await fetch_all_paginated_results(canvas_path('courses', course_id, 'discussion_topics'), params)
-        if isinstance(announcements, dict) and "error" in announcements:
-            return f"Error fetching announcements: {announcements['error']}"
+        try:
+            announcements = await fetch_all_paginated_results(canvas_path('courses', course_id, 'discussion_topics'), params)
+        except Exception:  # noqa: BLE001 - fail closed on a failed lookup
+            _invalidate_delete_token(_CRITERIA_DELETE_GUARD, confirmation_token)
+            return "Error fetching announcements. Nothing was deleted."
+        if not isinstance(announcements, list):
+            _invalidate_delete_token(_CRITERIA_DELETE_GUARD, confirmation_token)
+            return "Error fetching announcements. Nothing was deleted."
         if not announcements:
+            _invalidate_delete_token(_CRITERIA_DELETE_GUARD, confirmation_token)
             return f"No announcements found for course {course_identifier}."
 
         matched = []
         for announcement in announcements:
+            if (not isinstance(announcement, dict)
+                    or not isinstance(announcement.get("id"), (str, int))
+                    or isinstance(announcement.get("id"), bool)
+                    or not isinstance(announcement.get("title"), str)):
+                _invalidate_delete_token(_CRITERIA_DELETE_GUARD, confirmation_token)
+                return "Error: malformed announcement listing. Nothing was deleted."
+            if announcement.get("is_announcement") is False:
+                continue
+            if announcement.get("is_announcement") is not True:
+                _invalidate_delete_token(_CRITERIA_DELETE_GUARD, confirmation_token)
+                return "Error: malformed announcement listing. Nothing was deleted."
             match = True
             announcement_title = announcement.get("title", "")
             posted_at_str = announcement.get("posted_at")
@@ -1676,7 +1715,24 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         header += "\n\n"
 
         if not matched:
+            _invalidate_delete_token(_CRITERIA_DELETE_GUARD, confirmation_token)
             return header + "No announcements matched the specified criteria."
+
+        # The list filter is not proof of type; verify every selected target.
+        for announcement in matched:
+            try:
+                detail = await make_canvas_request(
+                    "get", canvas_path('courses', course_id, 'discussion_topics', announcement['id'])
+                )
+            except Exception:  # noqa: BLE001 - fail closed on a failed lookup
+                _invalidate_delete_token(_CRITERIA_DELETE_GUARD, confirmation_token)
+                return "Error fetching announcement. Nothing was deleted."
+            if (not isinstance(detail, dict) or "error" in detail
+                    or detail.get("is_announcement") is not True
+                    or str(detail.get("id")) != str(announcement['id'])
+                    or detail.get("title") != announcement.get("title")):
+                _invalidate_delete_token(_CRITERIA_DELETE_GUARD, confirmation_token)
+                return "Error: target could not be verified as an announcement. Nothing was deleted."
 
         listing = "Matched announcements:\n"
         for announcement in matched:
@@ -1706,7 +1762,7 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         deleted = []
         failed = []
         for announcement in matched:
-            announcement_id = announcement.get("id")
+            announcement_id = announcement["id"]
             shown = fence_untrusted(announcement.get("title", "Unknown Title"), "announcement title")
             try:
                 response = await make_canvas_request(

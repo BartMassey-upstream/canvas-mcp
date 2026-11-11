@@ -23,8 +23,8 @@ from mcp.types import ToolAnnotations
 
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import (
-    canvas_authenticated_client,
     fetch_all_paginated_results,
+    file_download_client,
     make_canvas_request,
     upload_file_to_storage,
 )
@@ -41,6 +41,7 @@ from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
     contains_fence_markers,
+    fence_untrusted,
     fence_untrusted_inline,
 )
 from ..core.validation import validate_params
@@ -339,7 +340,7 @@ def register_shared_file_tools(mcp: FastMCP) -> None:
         try:
             total_bytes = 0
             with os.fdopen(fd, 'wb') as f:
-                async with canvas_authenticated_client() as client:
+                async with file_download_client(download_url) as client:
                     async with client.stream(
                         "GET", download_url, follow_redirects=True
                     ) as response:
@@ -355,7 +356,7 @@ def register_shared_file_tools(mcp: FastMCP) -> None:
                 os.unlink(save_path)
             except OSError:
                 pass
-            return f"Error downloading file: {str(e)}"
+            return f"Error downloading file: {type(e).__name__}"
 
         size_str = format_file_size(total_bytes)
         course_display = await get_course_code(course_id) or course_identifier
@@ -432,7 +433,7 @@ def register_shared_file_tools(mcp: FastMCP) -> None:
         # Download the file content into memory
         try:
             buffer = bytearray()
-            async with canvas_authenticated_client() as client:
+            async with file_download_client(download_url) as client:
                 async with client.stream("GET", download_url, follow_redirects=True) as response:
                     response.raise_for_status()
 
@@ -454,11 +455,11 @@ def register_shared_file_tools(mcp: FastMCP) -> None:
             result += f"  Type: {content_type}\n"
             result += f"  Course: {course_display}\n"
             result += "  Encoding: base64\n"
-            result += f"  Content:\n{base64_content}\n"
+            result += f"  Content:\n{fence_untrusted(base64_content, 'file content (base64)')}\n"
             return result
 
         except Exception as e:
-            return f"Error reading file: {str(e)}"
+            return f"Error reading file: {type(e).__name__}"
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
     @validate_params

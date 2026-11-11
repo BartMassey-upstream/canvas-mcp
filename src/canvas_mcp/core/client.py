@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from typing import Any, Final, Literal, cast
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urljoin, urlsplit
 
 import httpx
 
@@ -419,6 +419,65 @@ async def canvas_authenticated_client() -> AsyncIterator[httpx.AsyncClient]:
     yield _get_http_client()
 
 
+def is_canvas_origin(url: str, canvas_url: str) -> bool:
+    """Check an absolute URL against the configured Canvas origin."""
+    try:
+        def origin(value: str) -> tuple[str, str, int] | None:
+            if any(ord(char) < 32 or ord(char) == 127 for char in value):
+                return None
+            parsed = urlsplit(value)
+            if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname:
+                return None
+            if parsed.username is not None or parsed.password is not None:
+                return None
+            if parsed.netloc.endswith(":"):
+                return None
+            port = parsed.port
+            if port is None:
+                port = 443 if parsed.scheme.lower() == "https" else 80
+            return parsed.scheme.lower(), parsed.hostname.lower(), port
+        target, configured = origin(url), origin(canvas_url)
+        return target is not None and target == configured
+    except (TypeError, ValueError):
+        return False
+
+
+@asynccontextmanager
+async def file_download_client(url: str) -> AsyncIterator[httpx.AsyncClient]:
+    """Use Canvas credentials only for downloads at the Canvas origin."""
+    from .config import get_config
+
+    if is_http_request_active() and not get_request_credentials():
+        raise PermissionError("Canvas token required for HTTP request")
+    config = get_config()
+    try:
+        parsed = urlsplit(url)
+        if (parsed.scheme.lower() not in ("http", "https") or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or any(ord(char) < 32 or ord(char) == 127 for char in url)):
+            raise ValueError("Invalid file download URL")
+        _ = parsed.port
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Invalid file download URL") from exc
+    credentials = get_request_credentials()
+    if credentials and not is_canvas_origin(credentials.api_url, config.canvas_api_url):
+        raise PermissionError("Canvas credential origin does not match configuration")
+    token = credentials.api_token if credentials else config.canvas_api_token
+
+    async def scope_authorization(request: httpx.Request) -> None:
+        # HTTPX preserves auth on some HTTP-to-HTTPS redirects; our boundary
+        # is the exact configured origin, so check every outbound hop.
+        if not is_canvas_origin(str(request.url), config.canvas_api_url):
+            request.headers.pop("Authorization", None)
+
+    headers = _canvas_auth_headers(token) if is_canvas_origin(url, config.canvas_api_url) else {}
+    async with httpx.AsyncClient(
+        headers=headers, timeout=config.api_timeout,
+        event_hooks={"request": [scope_authorization]},
+    ) as client:
+        yield client
+
+
 async def make_canvas_request(
     method: str,
     endpoint: str,
@@ -773,9 +832,15 @@ async def upload_file_to_storage(
                     # Canvas API and needs auth; route through the shared
                     # fail-closed resolver so HTTP mode never uses the server's
                     # own token.
+                    confirm_url = urljoin(str(response.url), redirect_url)
+                    if not is_canvas_origin(confirm_url, config.canvas_api_url):
+                        return {"error": "Storage confirmation URL is not on the Canvas origin"}
+                    credentials = get_request_credentials()
+                    if credentials and not is_canvas_origin(credentials.api_url, config.canvas_api_url):
+                        return {"error": "Canvas credential origin does not match configuration"}
                     try:
                         async with canvas_authenticated_client() as canvas_client:
-                            confirm_response = await canvas_client.get(redirect_url)
+                            confirm_response = await canvas_client.get(confirm_url, follow_redirects=False)
                             confirm_response.raise_for_status()
                             confirmed: dict[str, Any] = confirm_response.json()
                             return confirmed

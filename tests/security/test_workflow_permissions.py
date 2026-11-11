@@ -171,6 +171,18 @@ class TestWorkflowPermissions:
 
 
 class TestDependencyMaintenance:
+    def test_dependency_audit_rejects_stale_project_metadata(self):
+        """The audited lock must still describe the declared dependencies."""
+        job = _load(WORKFLOWS / "security-testing.yml")["jobs"]["dependency-scan"]
+        exports = [
+            step["run"] for step in job["steps"]
+            if "uv export" in step.get("run", "")
+        ]
+        assert len(exports) == 1
+        assert "--locked" in exports[0]
+        assert "--frozen" not in exports[0]
+        assert "--all-extras" in exports[0]
+
     def test_dependabot_updates_locked_transitive_dependencies(self):
         config = _load(WORKFLOWS.parent / "dependabot.yml")
         python_updates = [

@@ -700,7 +700,7 @@ class TestDownloadCourseFile:
         with patch('canvas_mcp.tools.files.get_course_id') as mock_get_id, \
              patch('canvas_mcp.tools.files.get_course_code') as mock_get_code, \
              patch('canvas_mcp.tools.files.make_canvas_request') as mock_request, \
-             patch('canvas_mcp.tools.files.canvas_authenticated_client') as mock_client:
+             patch('canvas_mcp.tools.files.file_download_client') as mock_client:
 
             mock_get_id.return_value = "60366"
             mock_get_code.return_value = "badm_350_120251"
@@ -900,7 +900,7 @@ class TestReadCourseFile:
         with patch('canvas_mcp.tools.files.get_course_id') as mock_get_id, \
              patch('canvas_mcp.tools.files.get_course_code') as mock_get_code, \
              patch('canvas_mcp.tools.files.make_canvas_request') as mock_request, \
-             patch('canvas_mcp.tools.files.canvas_authenticated_client') as mock_client:
+             patch('canvas_mcp.tools.files.file_download_client') as mock_client:
 
             mock_get_id.return_value = "60366"
             mock_get_code.return_value = "badm_350_120251"
@@ -964,6 +964,8 @@ class TestReadCourseFile:
         assert "badm_350_120251" in result
         assert "base64" in result
         assert expected_b64 in result
+        assert "<<<UNTRUSTED CANVAS CONTENT (file content (base64))" in result
+        assert "<<<END UNTRUSTED CANVAS CONTENT>>>" in result
 
     @pytest.mark.asyncio
     async def test_read_api_error(self, mock_read_api):

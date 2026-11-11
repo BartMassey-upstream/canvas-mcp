@@ -12,9 +12,13 @@ Test Coverage:
 
 import json
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
+from packaging.version import Version
 
 
 class TestDependencyVulnerabilities:
@@ -125,6 +129,63 @@ class TestOutdatedDependencies:
 
 class TestDependencyPinning:
     """Test that dependencies are properly pinned."""
+
+    @pytest.mark.parametrize(
+        ("package", "minimum", "vulnerable"),
+        [
+            ("fastmcp", "4.1.2", ["4.0.0a1", "4.0.3", "4.1.0", "4.1.1", "4.1.2rc1"]),
+            ("mcp", "2.2.0", ["2.0.0", "2.1.1", "2.2.0rc1"]),
+        ],
+    )
+    def test_fresh_installs_require_patched_releases(self, package, minimum, vulnerable):
+        """A fresh resolver must not select an affected dependency release.
+
+        Parse version bounds rather than matching their textual spelling, so
+        raising the security floor or pinning a later release remains valid.
+        Wildcard equality begins at .dev0 and can admit affected prereleases.
+        """
+        project = tomllib.loads(Path("pyproject.toml").read_text())
+        requirements = [Requirement(value) for value in project["project"]["dependencies"]]
+        matching = [
+            req for req in requirements if canonicalize_name(req.name) == package
+        ]
+        assert len(matching) == 1
+        requirement = matching[0]
+        assert requirement.url is None and requirement.marker is None
+        assert any(
+            bound.operator in {">=", ">", "~=", "==", "==="}
+            and Version(bound.version.replace(".*", ".dev0")) >= Version(minimum)
+            for bound in requirement.specifier
+        ), f"{package} must require at least {minimum}"
+        for version in vulnerable:
+            assert not requirement.specifier.contains(version, prereleases=True), (
+                f"{package} still permits affected release {version}"
+            )
+
+    @pytest.mark.parametrize(
+        ("package", "minimum"),
+        [
+            ("fastmcp", "4.1.2"),
+            ("fastmcp-slim", "4.1.2"),
+            ("mcp", "2.2.0"),
+            ("certifi", "2026.10.19"),
+            ("authlib", "1.9.1"),
+            ("dnspython", "2.9.0"),
+            ("joserfc", "1.7.6"),
+            ("opentelemetry-api", "1.45.1"),
+            ("black", "26.10.1"),
+        ],
+    )
+    def test_locked_releases_clear_reviewed_security_floors(self, package, minimum):
+        """Protect the reviewed lockfile for runtime, hosted, and dev packages.
+
+        This regression covers the known affected versions; the mandatory
+        dependency audit checks advisories published after this review.
+        """
+        lock = tomllib.loads(Path("uv.lock").read_text())
+        versions = [p["version"] for p in lock["package"] if p["name"] == package]
+        assert versions, f"Expected locked dependency {package}"
+        assert all(Version(version) >= Version(minimum) for version in versions)
 
     def test_dependencies_pinned_in_pyproject(self):
         """Verify dependencies have version constraints."""

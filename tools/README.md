@@ -810,7 +810,14 @@ details are provenance-fenced as untrusted data in the tool output.
 ### Grading & Rubrics
 
 #### `create_rubric`
-Create a new rubric in a course, optionally associating it with an assignment.
+
+Create a new rubric in a course, optionally associating it with
+an assignment.
+
+When `assignment_id` is supplied, the tool first checks the
+assignment and refuses an existing rubric association. Edit an
+attached rubric with `update_rubric`; creating another rubric
+must not silently replace it.
 
 Uses bracket-notation form-data encoding required by the Canvas rubric API.
 
@@ -1476,7 +1483,13 @@ Deletion is **permanent** — Canvas may retain a recycle-bin copy depending on 
 **Every delete tool is two-step.** Call it without `confirmation_token` and it returns a preview of exactly what would be deleted plus a single-use token; nothing is deleted. Call it again with the token and identical arguments to delete. The token expires in 5 minutes and stops matching if the target changed in between (retitled, different match set), so the preview the user saw is the deletion they get.
 
 #### `delete_announcement_with_confirmation`
+
 Delete a single announcement.
+
+All announcement deletion tools require Canvas to identify each
+target as an announcement. Ordinary discussions and responses
+whose type cannot be verified are refused. A confirmation token
+cannot authorize a target whose type changed after preview.
 
 **Parameters:**
 - `course_identifier`: Course code or ID
@@ -2308,7 +2321,16 @@ if the destination already exists rather than overwriting it.
 ---
 
 #### `read_course_file`
-Read a course file and return its content directly in the response as base64. Unlike `download_course_file`, nothing is written to the server's filesystem, so this works when the MCP server runs on a different machine than the client.
+
+Read a course file and return its content as base64. Nothing is
+written to the server's filesystem, so this works when the
+server runs on another machine.
+
+File content is enclosed in untrusted-content markers, including
+base64 output. File transfers send the Canvas bearer token only
+to the configured Canvas origin. Off-origin downloads use their
+signed URLs without that token; off-origin upload confirmation
+URLs are refused.
 
 **Parameters:**
 - `course_identifier`: Course code or ID

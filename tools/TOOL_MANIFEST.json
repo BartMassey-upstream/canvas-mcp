@@ -279,7 +279,7 @@
     {
       "name": "associate_rubric",
       "category": "educator",
-      "description": "Associate an existing rubric with an assignment.",
+      "description": "Associate a rubric with an assignment, replacing its current association.\n\nUse only for an explicitly requested association change. Use\nupdate_rubric for edits to the currently attached rubric.",
       "parameters": [
         {
           "name": "course_identifier",
@@ -2460,7 +2460,7 @@
     {
       "name": "create_rubric",
       "category": "educator",
-      "description": "Create a new rubric in a course, optionally associating it with an assignment.\n\nEncodes indexed criteria and ratings using bracket-notation form data.\n\nThe ``criteria`` parameter is a JSON string mapping arbitrary criterion keys to\nobjects with the following fields:\n\n- ``description`` (required): Short criterion label shown in the rubric grid\n- ``points`` (required): Maximum points for this criterion (non-negative number)\n- ``long_description`` (optional): Detailed criterion description\n- ``ratings`` (optional): List (or object) of rating levels, each with:\n    - ``description`` (required): Rating label (e.g. \"Excellent\")\n    - ``points`` (required): Points for this rating (non-negative number)\n    - ``long_description`` (optional): Detailed rating description\n\nExample ``criteria`` JSON::\n\n    {\n      \"c1\": {\n        \"description\": \"Content Quality\",\n        \"points\": 10,\n        \"ratings\": [\n          {\"description\": \"Excellent\", \"points\": 10},\n          {\"description\": \"Satisfactory\", \"points\": 7},\n          {\"description\": \"Needs Work\", \"points\": 3}\n        ]\n      },\n      \"c2\": {\n        \"description\": \"Grammar\",\n        \"points\": 5,\n        \"ratings\": [\n          {\"description\": \"No errors\", \"points\": 5},\n          {\"description\": \"Minor errors\", \"points\": 3}\n        ]\n      }\n    }",
+      "description": "Create a new rubric, optionally attaching it to an assignment with no rubric.\n\nRefuses assignments with existing rubric metadata before writing.\nUse update_rubric to edit an attached rubric after preview and\nconfirmation; do not use creation or reassociation as an edit fallback.\n\nEncodes indexed criteria and ratings using bracket-notation form data.\n\nThe ``criteria`` parameter is a JSON string mapping arbitrary criterion keys to\nobjects with the following fields:\n\n- ``description`` (required): Short criterion label shown in the rubric grid\n- ``points`` (required): Maximum points for this criterion (non-negative number)\n- ``long_description`` (optional): Detailed criterion description\n- ``ratings`` (optional): List (or object) of rating levels, each with:\n    - ``description`` (required): Rating label (e.g. \"Excellent\")\n    - ``points`` (required): Points for this rating (non-negative number)\n    - ``long_description`` (optional): Detailed rating description\n\nExample ``criteria`` JSON::\n\n    {\n      \"c1\": {\n        \"description\": \"Content Quality\",\n        \"points\": 10,\n        \"ratings\": [\n          {\"description\": \"Excellent\", \"points\": 10},\n          {\"description\": \"Satisfactory\", \"points\": 7},\n          {\"description\": \"Needs Work\", \"points\": 3}\n        ]\n      },\n      \"c2\": {\n        \"description\": \"Grammar\",\n        \"points\": 5,\n        \"ratings\": [\n          {\"description\": \"No errors\", \"points\": 5},\n          {\"description\": \"Minor errors\", \"points\": 3}\n        ]\n      }\n    }",
       "parameters": [
         {
           "name": "course_identifier",
@@ -2485,7 +2485,7 @@
           "type": "string | integer | null",
           "required": false,
           "default": null,
-          "description": "Optional assignment ID to immediately associate the rubric with"
+          "description": "Optional numeric ID of an assignment with no rubric"
         },
         {
           "name": "use_for_grading",

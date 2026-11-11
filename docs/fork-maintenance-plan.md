@@ -15,6 +15,13 @@ deferred proposals, not tasks to resume automatically. There is
 no commitment to a weekly service, feature parity, a broad merge,
 or publishing contributions. No scheduled automation is set up.
 
+On November 10, Bart authorized a second bounded safety pass:
+security dependencies, file-transfer credential scoping and
+content fencing, and rubric/announcement guards. The
+[current handoff](../PLAN.md) records that pass and its checks.
+The next upstream comparison starts at `61f43d9`; the broader
+stages below remain deferred.
+
 ## Stage 1 Stabilize existing workflows
 
 Completed locally in the October 12 stabilization pass. The
@@ -70,7 +77,7 @@ upstream commits, applicability, fork resolution, and checks.
 - Leave unrelated features upstream.
 - Evaluate infrastructure and dependency redesign separately.
 
-Start the next comparison at `7c4229c`, rather than repeating
+Start the next comparison at `61f43d9`, rather than repeating
 the entire divergence review. Keep the prior review's open-PR
 states as historical evidence and verify their current state.
 Guarded content edits would be a useful first feature proposal;

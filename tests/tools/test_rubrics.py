@@ -1123,9 +1123,12 @@ class TestRubricTools:
         assert "403" in output
 
     @pytest.mark.asyncio
-    async def test_create_rubric_with_assignment(self, mcp, mock_canvas_request, mock_course_id, mock_course_code):
+    @pytest.mark.parametrize("assignment_id", [999, "999", "00999", " 999 "])
+    async def test_create_rubric_with_assignment(
+        self, mcp, mock_canvas_request, mock_course_id, mock_course_code, assignment_id,
+    ):
         """create_rubric passes association fields when assignment_id is provided."""
-        mock_canvas_request.return_value = {
+        created = {
             "rubric": {
                 "id": 7372,
                 "title": "Graded Rubric",
@@ -1143,6 +1146,7 @@ class TestRubricTools:
                 "purpose": "grading",
             },
         }
+        mock_canvas_request.side_effect = [{"id": 999, "name": "Essay"}, created]
 
         criteria = json.dumps({
             "c1": {
@@ -1157,7 +1161,7 @@ class TestRubricTools:
             "course_identifier": "TEST101",
             "title": "Graded Rubric",
             "criteria": criteria,
-            "assignment_id": 999,
+            "assignment_id": assignment_id,
             "use_for_grading": True,
         })
 
@@ -1170,6 +1174,69 @@ class TestRubricTools:
         assert "rubric_association[association_id]" in sent_data
         assert sent_data["rubric_association[association_type]"] == "Assignment"
         assert sent_data["rubric_association[use_for_grading]"] == "1"
+        assert mock_canvas_request.call_args_list[0].args == (
+            "get", "/courses/12345/assignments/999",
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("metadata", [
+        {"rubric": [{"id": "criterion", "points": 10}]},
+        {"rubric": []},
+        {"rubric": None},
+        {"rubric_settings": {"id": 7372}},
+        {"rubric_settings": {}},
+        {"use_rubric_for_grading": True},
+        {"use_rubric_for_grading": False},
+    ])
+    async def test_create_refuses_existing_assignment_rubric(
+        self, mcp, mock_canvas_request, mock_course_id, metadata,
+    ):
+        """Advisory and empty rubric associations must not be replaced."""
+        mock_canvas_request.return_value = {"id": 999, **metadata}
+        register_rubric_tools(mcp)
+        result = await _call_tool(mcp, "create_rubric", {
+            "course_identifier": "TEST101", "title": "New rubric",
+            "criteria": json.dumps({"c1": {"description": "Quality", "points": 10}}),
+            "assignment_id": 999,
+        })
+        assert "already has rubric metadata" in result.content[0].text
+        assert "update_rubric" in result.content[0].text
+        mock_canvas_request.assert_awaited_once_with(
+            "get", "/courses/12345/assignments/999",
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("assignment", [
+        {"error": "HTTP error: 403"}, None, [], "not an assignment", {},
+        {"id": 998}, {"id": None}, {"id": True}, {"id": "999/other"},
+    ])
+    async def test_create_refuses_unverified_assignment(
+        self, mcp, mock_canvas_request, mock_course_id, assignment,
+    ):
+        """An unreadable or mismatched preflight cannot authorize creation."""
+        mock_canvas_request.return_value = assignment
+        register_rubric_tools(mcp)
+        result = await _call_tool(mcp, "create_rubric", {
+            "course_identifier": "TEST101", "title": "New rubric",
+            "criteria": json.dumps({"c1": {"description": "Quality", "points": 10}}),
+            "assignment_id": 999,
+        })
+        assert "Could not verify" in result.content[0].text
+        assert all(call.args[0] == "get" for call in mock_canvas_request.call_args_list)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("assignment_id", ["not-an-id", "999/other", "-1", "９９９"])
+    async def test_create_refuses_non_numeric_assignment_id(
+        self, mcp, mock_canvas_request, mock_course_id, assignment_id,
+    ):
+        register_rubric_tools(mcp)
+        result = await _call_tool(mcp, "create_rubric", {
+            "course_identifier": "TEST101", "title": "New rubric",
+            "criteria": json.dumps({"c1": {"description": "Quality", "points": 10}}),
+            "assignment_id": assignment_id,
+        })
+        assert "numeric Canvas ID" in result.content[0].text
+        mock_canvas_request.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_create_rubric_invalid_criteria(self, mcp, mock_canvas_request, mock_course_id, mock_course_code):

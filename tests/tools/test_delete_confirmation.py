@@ -56,6 +56,10 @@ def discussions():
         gid.return_value = "60366"
         gcode.return_value = "BADM_554"
         tools = _capture(mod.register_shared_discussion_tools, mod.register_educator_discussion_tools)
+        req.side_effect = _by_method(lambda endpoint: next(
+            (a for a in fetch.return_value if str(a["id"]) == endpoint.rsplit("/", 1)[-1]),
+            {"error": "Not found"},
+        ))
         yield {"tools": tools, "fetch": fetch, "req": req}
 
 
@@ -123,7 +127,7 @@ def test_untokened_delete_announcement_is_retired(discussions):
 SINGLE_TARGET = [
     # (fixture name, tool name, positional args, GET payload, title shown, rename payload)
     ("discussions", "delete_announcement_with_confirmation", ("60366", 555),
-     {"id": 555, "title": "Old Exam Info"}, "Old Exam Info", {"id": 555, "title": "Renamed"}),
+     {"id": 555, "title": "Old Exam Info", "is_announcement": True}, "Old Exam Info", {"id": 555, "title": "Renamed", "is_announcement": True}),
     ("modules", "delete_module", ("60366", 12345),
      {"id": 12345, "name": "Week 9", "items_count": 3}, "Week 9", {"id": 12345, "name": "Week 10", "items_count": 3}),
     ("modules", "delete_module_item", ("60366", 12345, 55001),
@@ -208,7 +212,7 @@ async def test_fetch_error_reports_and_issues_no_token(request, fixture_name, to
 
 @pytest.mark.asyncio
 async def test_announcement_title_mismatch_issues_no_token(discussions):
-    discussions["req"].side_effect = _by_method({"id": 555, "title": "Old Exam Info"})
+    discussions["req"].side_effect = _by_method({"id": 555, "title": "Old Exam Info", "is_announcement": True})
     result = await discussions["tools"]["delete_announcement_with_confirmation"](
         "60366", 555, require_title_match="Something else"
     )
@@ -280,7 +284,7 @@ def _announcements(ids_to_titles):
     def get(endpoint):
         aid = int(endpoint.rsplit("/", 1)[1])
         if aid in ids_to_titles:
-            return {"id": aid, "title": ids_to_titles[aid]}
+            return {"id": aid, "title": ids_to_titles[aid], "is_announcement": True}
         return {"error": "Not found"}
     return get
 
@@ -332,9 +336,9 @@ async def test_bulk_limit_refuses_before_issuing_token(discussions):
 # ---------------------------------------------------------------------------
 
 LISTING = [
-    {"id": 10, "title": "Week 1 Recap", "posted_at": "2026-01-05T12:00:00Z"},
-    {"id": 11, "title": "Week 2 Recap", "posted_at": "2026-01-12T12:00:00Z"},
-    {"id": 12, "title": "Exam Info", "posted_at": "2026-03-01T12:00:00Z"},
+    {"id": 10, "title": "Week 1 Recap", "posted_at": "2026-01-05T12:00:00Z", "is_announcement": True},
+    {"id": 11, "title": "Week 2 Recap", "posted_at": "2026-01-12T12:00:00Z", "is_announcement": True},
+    {"id": 12, "title": "Exam Info", "posted_at": "2026-03-01T12:00:00Z", "is_announcement": True},
 ]
 
 
@@ -352,7 +356,6 @@ async def test_criteria_preview_shows_matches_and_token(discussions):
 @pytest.mark.asyncio
 async def test_criteria_confirm_deletes_previewed_matches(discussions):
     discussions["fetch"].return_value = LISTING
-    discussions["req"].return_value = {"id": 1}
     tool = discussions["tools"]["delete_announcements_by_criteria"]
     token = token_from(await tool("60366", {"title_contains": "recap"}))
     result = await tool("60366", {"title_contains": "recap"}, confirmation_token=token)
@@ -367,7 +370,7 @@ async def test_criteria_match_set_changed_refuses(discussions):
     tool = discussions["tools"]["delete_announcements_by_criteria"]
     token = token_from(await tool("60366", {"title_contains": "recap"}))
     discussions["fetch"].return_value = LISTING + [
-        {"id": 13, "title": "Week 3 Recap", "posted_at": "2026-01-19T12:00:00Z"}
+        {"id": 13, "title": "Week 3 Recap", "posted_at": "2026-01-19T12:00:00Z", "is_announcement": True}
     ]
     result = await tool("60366", {"title_contains": "recap"}, confirmation_token=token)
     assert "does not match" in result
@@ -507,7 +510,7 @@ async def test_delete_plan_cannot_be_reentered_mid_batch(discussions, criteria):
 
     async def responder(method, endpoint, **kwargs):
         if method == 'get':
-            return _announcements({1: 'A', 2: 'B'})(endpoint)
+            return _announcements({1: 'A', 2: 'B', 10: 'Week 1 Recap', 11: 'Week 2 Recap'})(endpoint)
         deletes.append(endpoint.rsplit('/', 1)[-1])
         if len(deletes) == 1:
             entered.set()
@@ -545,3 +548,66 @@ async def test_delete_token_cannot_move_to_an_identically_named_target(
     env['req'].side_effect = _by_method(other)
     assert 'does not match' in await tool(*other_args, confirmation_token=token)
     assert not _calls(env['req'], 'delete')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args", [
+    ("delete_announcement_with_confirmation", ("60366", 1)),
+    ("bulk_delete_announcements", ("60366", [1])),
+    ("delete_announcements_by_criteria", ("60366", {"title_contains": "A"})),
+])
+@pytest.mark.parametrize("bad", [False, None, "true"])
+async def test_type_change_burns_token(discussions, name, args, bad):
+    row = {"id": 1, "title": "A", "is_announcement": True}
+    discussions["fetch"].return_value = [row]
+    discussions["req"].side_effect = _by_method(row)
+    tool = discussions["tools"][name]
+    token = token_from(await tool(*args))
+    discussions["req"].side_effect = _by_method({**row, "is_announcement": bad})
+    await tool(*args, confirmation_token=token)
+    discussions["req"].side_effect = _by_method(row)
+    assert "already used" in await tool(*args, confirmation_token=token)
+    assert not _calls(discussions["req"], "delete")
+
+
+@pytest.mark.asyncio
+async def test_criteria_skips_discussions_in_mixed_listing(discussions):
+    discussions["fetch"].return_value = [
+        {"id": 1, "title": "A", "is_announcement": True},
+        {"id": 2, "title": "A", "is_announcement": False},
+    ]
+    tool = discussions["tools"]["delete_announcements_by_criteria"]
+    token = token_from(await tool("60366", {"title_contains": "A"}))
+    result = await tool("60366", {"title_contains": "A"}, confirmation_token=token)
+    assert "1 successful" in result
+    assert [c.args[1].rsplit("/", 1)[1] for c in _calls(discussions["req"], "delete")] == ["1"]
+
+
+@pytest.mark.asyncio
+async def test_bulk_confirm_skips_same_unreachable_target(discussions):
+    discussions["req"].side_effect = _by_method(_announcements({1: "A"}))
+    tool = discussions["tools"]["bulk_delete_announcements"]
+    token = token_from(await tool("60366", [1, 2]))
+    result = await tool("60366", [1, 2], confirmation_token=token)
+    assert "1 successful" in result
+    assert len(_calls(discussions["req"], "delete")) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args", [
+    ("delete_announcement_with_confirmation", ("60366", 1)),
+    ("bulk_delete_announcements", ("60366", [1])),
+    ("delete_announcements_by_criteria", ("60366", {"title_contains": "A"})),
+])
+@pytest.mark.parametrize("bad", [{"error": "missing"}, None, {"id": 1, "title": None, "is_announcement": True}])
+async def test_malformed_fetch_burns_token(discussions, name, args, bad):
+    row = {"id": 1, "title": "A", "is_announcement": True}
+    discussions["fetch"].return_value = [row]
+    discussions["req"].side_effect = _by_method(row)
+    tool = discussions["tools"][name]
+    token = token_from(await tool(*args))
+    discussions["req"].side_effect = _by_method(bad)
+    await tool(*args, confirmation_token=token)
+    discussions["req"].side_effect = _by_method(row)
+    assert "already used" in await tool(*args, confirmation_token=token)
+    assert not _calls(discussions["req"], "delete")
