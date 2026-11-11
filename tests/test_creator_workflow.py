@@ -45,6 +45,8 @@ async def test_creator_builds_draft_assignment_group_and_module_over_mcp(monkeyp
             assert json.loads(request.content) == {"assignment": {"due_at": None}}
             assignment["due_at"] = None
             return httpx.Response(200, json=assignment)
+        if (method, path) == ("GET", "/courses/42/assignments/34"):
+            return httpx.Response(200, json=assignment)
         if (method, path) == ("POST", "/courses/42/modules"):
             assert parse_qs(request.content.decode()) == {
                 "module[name]": ["Week 1"], "module[published]": ["false"]

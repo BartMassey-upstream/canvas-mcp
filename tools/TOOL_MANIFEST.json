@@ -3687,7 +3687,7 @@
     {
       "name": "edit_page_content",
       "category": "educator",
-      "description": "Replace the entire HTML body of a page (and optionally its title).\n\nnew_content becomes the whole body: it is not merged or appended, so\npass the complete page, not a fragment. To change one section, read the\ncurrent body with get_page_content, edit it, and send the full result.\nPublishing state, editing roles, and front-page status\nare unchanged; use update_page_settings for those.",
+      "description": "Edit a page's complete HTML body, one fragment, or its title.\n\nEvery edit reads the current page and verifies the stored result.\nOptional timestamp/hash expectations refuse stale edits. Fragment edits\nrequire exactly one literal match; no HTML normalization is performed.",
       "parameters": [
         {
           "name": "course_identifier",
@@ -3703,16 +3703,52 @@
         },
         {
           "name": "new_content",
-          "type": "string",
-          "required": true,
-          "description": "Complete new HTML body for the page (replaces the old body)"
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Complete replacement HTML; omit for fragment/title edits"
         },
         {
           "name": "title",
           "type": "string | null",
           "required": false,
           "default": null,
-          "description": "Optional new title for the page"
+          "description": "Optional replacement title"
+        },
+        {
+          "name": "expect_updated_at",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Raw updated_at from the last read"
+        },
+        {
+          "name": "expect_body_sha256",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "SHA-256 of the exact raw body from the last read"
+        },
+        {
+          "name": "find",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Exact HTML fragment that must occur once"
+        },
+        {
+          "name": "replace",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Replacement fragment, including an empty string"
+        },
+        {
+          "name": "require",
+          "type": "array | null",
+          "required": false,
+          "default": null,
+          "description": "Strings that must occur in the current body"
         }
       ],
       "returns": "Updated page details confirming the new content was saved",
@@ -8110,7 +8146,7 @@
     {
       "name": "update_announcement",
       "category": "educator",
-      "description": "Update a verified announcement, never an ordinary discussion.\n\nSet clear_delayed_post_at or clear_lock_at to remove the corresponding\nscheduled time. A date cannot be set and cleared in the same request.",
+      "description": "Update a verified announcement, never an ordinary discussion.\n\nSet clear_delayed_post_at or clear_lock_at to remove the corresponding\nscheduled time. A date cannot be set and cleared in the same request.\nUse expect_body_sha256 to guard the exact raw HTML snapshot, find and\nreplace for one literal fragment, and require for mandatory current\nstrings. Fragment edits cannot accompany message. Every update checks\nthe announcement identity and reads back the requested state.",
       "parameters": [
         {
           "name": "course_identifier",
@@ -8163,6 +8199,30 @@
           "type": "boolean",
           "required": false,
           "default": false
+        },
+        {
+          "name": "expect_body_sha256",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "find",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "replace",
+          "type": "string | null",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "require",
+          "type": "array | null",
+          "required": false,
+          "default": null
         }
       ],
       "returns": "The updated announcement",
@@ -8359,6 +8419,41 @@
           "required": false,
           "default": false,
           "description": "Remove the existing lock date"
+        },
+        {
+          "name": "expect_updated_at",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Raw updated_at from the last read"
+        },
+        {
+          "name": "expect_body_sha256",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "SHA-256 of the exact raw description"
+        },
+        {
+          "name": "find",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Exact description fragment that must occur once"
+        },
+        {
+          "name": "replace",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Replacement fragment, including an empty string"
+        },
+        {
+          "name": "require",
+          "type": "array | null",
+          "required": false,
+          "default": null,
+          "description": "Strings that must occur in the current description"
         }
       ],
       "returns": "Updated assignment details confirming the changes",
@@ -9486,6 +9581,34 @@
           "required": false,
           "default": false,
           "description": "Remove the automatic lock time"
+        },
+        {
+          "name": "expect_body_sha256",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Require this hash of the current raw HTML body"
+        },
+        {
+          "name": "find",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Exact literal fragment occurring once in the current body"
+        },
+        {
+          "name": "replace",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Replacement for find; cannot accompany message"
+        },
+        {
+          "name": "require",
+          "type": "array | null",
+          "required": false,
+          "default": null,
+          "description": "Literal strings that must occur in the current body"
         }
       ],
       "returns": "Confirmation with updated fields and topic type",
@@ -10683,33 +10806,62 @@
     {
       "name": "update_syllabus",
       "category": "educator",
-      "description": "Set the Canvas Syllabus tab content for a course.\n\nCanvas keeps no revision history for the syllabus, so replacing a\nsyllabus that already has content is a two-step call: call without\nconfirmation_token to get a preview plus a single-use token, show the\npreview to the educator, and only after they approve it call again with\nthe token and identical arguments. Writing into an empty syllabus, or appending/prepending,\ndestroys nothing and takes a single call.",
+      "description": "Edit the syllabus with preflight checks and exact readback.\n\nReplacing existing content, including a fragment edit, still requires\npreview and confirmation. Append/prepend and an empty syllabus need\nno token, but any supplied token is always checked. Canvas keeps no\nsyllabus revision history. A fresh readback must match all stored HTML;\ntheme or sanitizer rewrites are unconfirmed rather than guessed safe.",
       "parameters": [
         {
           "name": "course_identifier",
           "type": "string | integer",
           "required": true,
-          "description": "Course code or Canvas ID"
+          "description": "Course code or Canvas ID."
         },
         {
           "name": "syllabus_body",
-          "type": "string",
-          "required": true,
-          "description": "HTML for the syllabus. Canvas stores this as HTML;\nplain text is accepted but renders without formatting."
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Complete replacement, or text to append/prepend.\nOmit only when using find and replace."
         },
         {
           "name": "mode",
           "type": "string",
           "required": false,
           "default": "replace",
-          "description": "\"replace\" (default) swaps the whole body, \"append\" adds to\nthe end of the existing body, \"prepend\" adds to the start."
+          "description": "replace, append, or prepend."
         },
         {
           "name": "confirmation_token",
           "type": "string | null",
           "required": false,
           "default": null,
-          "description": "Token from the preview call. Only needed when\nreplacing a syllabus that already has content; a token that is\nsupplied is always checked, in every mode."
+          "description": "Preview token with identical edit arguments."
+        },
+        {
+          "name": "expect_body_sha256",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Raw Body SHA-256 returned by get_syllabus."
+        },
+        {
+          "name": "find",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "A literal fragment that must occur exactly once."
+        },
+        {
+          "name": "replace",
+          "type": "string | null",
+          "required": false,
+          "default": null,
+          "description": "Replacement for find; may be empty."
+        },
+        {
+          "name": "require",
+          "type": "array | null",
+          "required": false,
+          "default": null,
+          "description": "Literal strings that must exist in the current body."
         }
       ],
       "returns": "Confirmation that the syllabus was written, verified by reading it back from Canvas. Replacing existing content first returns a preview plus a single-use token and writes nothing.",

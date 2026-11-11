@@ -696,7 +696,7 @@ class TestUpdateSyllabus:
             body = existing if "body" not in sent else (
                 sent["body"] if stored is None else stored
             )
-            return {"course_code": "CS101", "syllabus_body": body}
+            return {"id": 60366, "course_code": "CS101", "syllabus_body": body}
 
         return fake, sent
 
@@ -885,14 +885,8 @@ class TestUpdateSyllabus:
         assert "Could not confirm" in result
 
     @pytest.mark.asyncio
-    async def test_theme_injected_html_still_counts_as_success(self, mock_api):
-        """Canvas rewrites the body server-side; that is not a failed write.
-
-        Observed live: an institutional DesignPlus theme injects <link> and
-        <script> tags into every syllabus body, so the stored HTML never
-        matches the bytes sent. Byte equality reported "could not confirm" on
-        writes that had in fact succeeded.
-        """
+    async def test_theme_injected_html_is_reported_as_unconfirmed(self, mock_api):
+        """A changed full body is unconfirmed even when visible text matches."""
         injected = (
             '<link rel="stylesheet" href="https://example.com/dp_app.css">'
             "<p>New syllabus</p>"
@@ -904,9 +898,9 @@ class TestUpdateSyllabus:
         update_syllabus = get_tool_function('update_syllabus')
         result = await update_syllabus("CS101", "<p>New syllabus</p>")
 
-        assert "✅" in result, result
-        assert "Could not confirm" not in result
-        assert "rewritten copy" in result  # the rewrite is disclosed, not hidden
+        assert "✅" not in result, result
+        assert "Could not confirm" in result
+        assert "complete stored HTML" in result
         assert sent["body"] == "<p>New syllabus</p>"
 
     @pytest.mark.asyncio
@@ -950,12 +944,8 @@ class TestUpdateSyllabus:
         mock_api['make_canvas_request'].assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_does_not_claim_verification_it_could_not_run(self, mock_api):
-        """A body with no visible text gives the containment check nothing.
-
-        Claiming "verified" there would be exactly the unearned success the
-        read-back exists to prevent.
-        """
+    async def test_verifies_exact_html_even_without_visible_text(self, mock_api):
+        """An image-only body is verified by its complete markup, not text."""
         fake, _ = self._canvas(existing="")
         mock_api['make_canvas_request'].side_effect = fake
 
@@ -963,8 +953,8 @@ class TestUpdateSyllabus:
         result = await update_syllabus("CS101", '<p><img src="/files/1/preview"></p>')
 
         assert "✅" in result, result
-        assert "Verified by reading" not in result
-        assert "Not verified" in result
+        assert "Verified by reading" in result
+        assert "Body SHA-256:" in result
 
 
 class TestCourseSettings:

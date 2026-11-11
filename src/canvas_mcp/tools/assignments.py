@@ -16,6 +16,13 @@ from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.config import get_config
 from ..core.dates import format_date, parse_date
+from ..core.guarded_edit import (
+    BodyGuard,
+    body_sha256,
+    parse_timestamp,
+    run_guarded_write,
+    validate_guard,
+)
 from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
@@ -419,6 +426,12 @@ def register_shared_assignment_tools(mcp: FastMCP) -> None:
             f"Published: {response.get('published', False)}",
             f"Locked: {response.get('locked_for_user', False)}",
         ]
+
+        raw_description = response.get("description")
+        if "description" in response and (raw_description is None or isinstance(raw_description, str)):
+            details.insert(0, f"Body SHA-256: {body_sha256(raw_description)}")
+        if parse_timestamp(response.get("updated_at")) is not None:
+            details.insert(0, f"Updated (raw): {response['updated_at']}")
 
         # Try to get the course code for display
         course_display = await get_course_code(course_id) or course_identifier
@@ -1380,6 +1393,11 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         clear_due_at: bool = False,
         clear_unlock_at: bool = False,
         clear_lock_at: bool = False,
+        expect_updated_at: str | None = None,
+        expect_body_sha256: str | None = None,
+        find: str | None = None,
+        replace: str | None = None,
+        require: list[str] | None = None,
     ) -> str:
         """Update an existing assignment in a course.
 
@@ -1410,7 +1428,20 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
             clear_due_at: Remove the existing due date
             clear_unlock_at: Remove the existing availability date
             clear_lock_at: Remove the existing lock date
+            expect_updated_at: Raw updated_at from the last read
+            expect_body_sha256: SHA-256 of the exact raw description
+            find: Exact description fragment that must occur once
+            replace: Replacement fragment, including an empty string
+            require: Strings that must occur in the current description
         """
+        guard = BodyGuard(
+            expect_updated_at=expect_updated_at,
+            expect_body_sha256=expect_body_sha256,
+            find=find, replace=replace, require=require,
+        )
+        error = validate_guard(guard, "description", description)
+        if error:
+            return error
         # Backstop for issue 239: never publish our provenance markers.
         if (name is not None and contains_fence_markers(name)) or (
             description is not None and contains_fence_markers(description)
@@ -1570,53 +1601,30 @@ def register_educator_assignment_tools(mcp: FastMCP) -> None:
         assignment_data.update(options)
 
         # Check if there's anything to update
-        if not assignment_data:
+        if not assignment_data and not guard.fragment:
             return "No fields provided to update. Specify at least one field to modify (e.g., name, description, due_at, points_possible)."
 
-        # Make the API request
-        response = await make_canvas_request(
-            "put",
-            canvas_path("courses", course_id, "assignments", assignment_id),
-            data={"assignment": assignment_data},
+        path = canvas_path("courses", course_id, "assignments", assignment_id)
+
+        async def fetch() -> Any:
+            return await make_canvas_request("get", path)
+
+        async def write(body: str | None) -> Any:
+            data = dict(assignment_data)
+            if body is not None:
+                data["description"] = body
+            return await make_canvas_request("put", path, data={"assignment": data})
+
+        async def refetch(response: Any) -> Any:
+            return await make_canvas_request("get", path)
+
+        return await run_guarded_write(
+            guard, what="assignment", body_field="description",
+            full_body=description, fetch=fetch, write=write, refetch=refetch,
+            requested={k: v for k, v in assignment_data.items() if k != "description"},
+            facts={"Course ID": course_id, "Assignment ID": assignment_id},
+            identity={"id": assignment_id},
         )
-
-        if "error" in response:
-            return f"Error updating assignment: {response['error']}"
-
-        # Format success response
-        updated_name = response.get("name", "")
-        updated_points = response.get("points_possible")
-        updated_published = response.get("published", False)
-        updated_due = response.get("due_at")
-        updated_types = response.get("submission_types", [])
-        html_url = response.get("html_url", "")
-
-        course_display = await get_course_code(course_id) or course_identifier
-
-        result = "✅ Assignment updated successfully!\n\n"
-        result += f"**{updated_name}**\n"
-        result += f"  Course: {course_display}\n"
-        result += f"  Assignment ID: {assignment_id}\n"
-
-        # Show what was updated
-        updated_fields = list(assignment_data.keys())
-        result += f"  Updated fields: {', '.join(updated_fields)}\n"
-
-        if updated_points is not None:
-            result += f"  Points: {updated_points}\n"
-
-        if updated_due:
-            result += f"  Due: {format_date(updated_due)}\n"
-
-        result += f"  Published: {'Yes' if updated_published else 'No'}\n"
-
-        if updated_types:
-            result += f"  Submission Types: {', '.join(updated_types)}\n"
-
-        if html_url:
-            result += f"  URL: {html_url}\n"
-
-        return result
 
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
     @validate_params

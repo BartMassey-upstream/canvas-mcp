@@ -314,18 +314,16 @@ class TestUpdateAssignment:
 
         # Verify API was called correctly
         mock_canvas_api['get_course_id'].assert_called_once_with("badm_350_120251")
-        mock_canvas_api['make_canvas_request'].assert_called_once()
+        assert mock_canvas_api['make_canvas_request'].call_count == 3
 
         # Verify the call was a PUT with correct data
-        call_args = mock_canvas_api['make_canvas_request'].call_args
+        call_args = next(call for call in mock_canvas_api['make_canvas_request'].call_args_list if call.args[0] == 'put')
         assert call_args[0][0] == "put"
         assert "/courses/60366/assignments/12345" in call_args[0][1]
         assert call_args[1]['data']['assignment']['name'] == "Updated Assignment Name"
 
         # Verify output
-        assert "successfully" in result
-        assert "Updated Assignment Name" in result
-        assert "Updated fields: name" in result
+        assert "confirmed by reading" in result
 
     @pytest.mark.asyncio
     async def test_update_assignment_multiple_fields(self, mock_canvas_api):
@@ -353,7 +351,7 @@ class TestUpdateAssignment:
         )
 
         # Verify API call data
-        call_args = mock_canvas_api['make_canvas_request'].call_args
+        call_args = next(call for call in mock_canvas_api['make_canvas_request'].call_args_list if call.args[0] == 'put')
         assignment_data = call_args[1]['data']['assignment']
 
         assert assignment_data['name'] == "Updated Name"
@@ -362,9 +360,7 @@ class TestUpdateAssignment:
         assert assignment_data['published'] is True
 
         # Verify output includes updated fields
-        assert "successfully" in result
-        assert "Updated fields:" in result
-        assert "name" in result
+        assert "confirmed by reading" in result
 
     @pytest.mark.asyncio
     async def test_update_assignment_no_fields(self, mock_canvas_api):
@@ -392,6 +388,7 @@ class TestUpdateAssignment:
         mock_canvas_api['make_canvas_request'].return_value = {
             "id": 12345,
             "name": "Undated Assignment",
+            field_name: None,
             "published": False,
             "submission_types": ["none"],
         }
@@ -401,11 +398,11 @@ class TestUpdateAssignment:
             "badm_350_120251", 12345, **{clear_argument: True}
         )
 
-        assignment_data = mock_canvas_api['make_canvas_request'].call_args[1][
+        assignment_data = next(call for call in mock_canvas_api['make_canvas_request'].call_args_list if call.args[0] == 'put')[1][
             'data'
         ]['assignment']
         assert assignment_data == {field_name: None}
-        assert f"Updated fields: {field_name}" in result
+        assert "confirmed by reading" in result
 
     @pytest.mark.asyncio
     async def test_update_assignment_rejects_set_and_clear_date(
@@ -432,7 +429,7 @@ class TestUpdateAssignment:
         update_assignment = get_tool_function('update_assignment')
         result = await update_assignment("badm_350_120251", 99999, name="New Name")
 
-        assert "Error" in result
+        assert "Could not fetch" in result
         assert "Assignment not found" in result
 
     @pytest.mark.asyncio
@@ -512,12 +509,12 @@ class TestUpdateAssignment:
         result = await update_assignment("badm_350_120251", 12345, published=True)
 
         # Verify only published was sent
-        call_args = mock_canvas_api['make_canvas_request'].call_args
+        call_args = next(call for call in mock_canvas_api['make_canvas_request'].call_args_list if call.args[0] == 'put')
         assignment_data = call_args[1]['data']['assignment']
         assert assignment_data == {"published": True}
 
-        assert "successfully" in result
-        assert "Published: Yes" in result
+        assert "confirmed by reading" in result
+        assert "confirmed by reading" in result
 
 
 class TestAssignmentTools:

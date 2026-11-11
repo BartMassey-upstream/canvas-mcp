@@ -20,6 +20,7 @@ async def test_get_announcement_uses_only_announcement_collection():
         "id": 7,
         "title": "Welcome",
         "message": "Read the syllabus",
+        "published": False,
         "is_announcement": True,
     }
     with patch(
@@ -28,7 +29,7 @@ async def test_get_announcement_uses_only_announcement_collection():
         "canvas_mcp.tools.discussions.fetch_all_paginated_results",
         new=AsyncMock(return_value=[announcement]),
     ) as fetch, patch(
-        "canvas_mcp.tools.discussions.make_canvas_request", new_callable=AsyncMock
+        "canvas_mcp.tools.discussions.make_canvas_request", new=AsyncMock(return_value=announcement)
     ) as request:
         result = await (await _tools())["get_announcement"]("ENG101", 7)
 
@@ -37,7 +38,7 @@ async def test_get_announcement_uses_only_announcement_collection():
         {"only_announcements": True, "per_page": 100},
     )
     assert result.count("UNTRUSTED CANVAS CONTENT") >= 4
-    request.assert_not_awaited()
+    request.assert_awaited_once_with("get", "/courses/42/discussion_topics/7")
 
 
 @pytest.mark.asyncio
@@ -83,6 +84,7 @@ async def test_update_announcement_verifies_before_writing():
         "id": 7,
         "title": "Start here",
         "message": "Read the syllabus",
+        "published": False,
         "is_announcement": True,
     }
     with patch(
@@ -98,15 +100,15 @@ async def test_update_announcement_verifies_before_writing():
             "ENG101", 7, title="Start here", published=False
         )
 
-    assert request.await_args.args == (
+    assert request.await_args_list[1].args == (
         "put",
         "/courses/42/discussion_topics/7",
     )
-    assert request.await_args.kwargs["data"] == {
+    assert request.await_args_list[1].kwargs["data"] == {
         "title": "Start here",
         "published": False,
     }
-    assert "updated" in result
+    assert "confirmed by reading" in result
 
 
 @pytest.mark.asyncio
@@ -117,14 +119,14 @@ async def test_update_announcement_never_writes_unverified_id():
         "canvas_mcp.tools.discussions.fetch_all_paginated_results",
         new=AsyncMock(return_value=[]),
     ), patch(
-        "canvas_mcp.tools.discussions.make_canvas_request", new_callable=AsyncMock
+        "canvas_mcp.tools.discussions.make_canvas_request", new=AsyncMock(return_value={"id": 9, "is_announcement": False})
     ) as request:
         result = await (await _tools())["update_announcement"](
             "ENG101", 9, title="Not a discussion"
         )
 
-    assert "not found" in result
-    request.assert_not_awaited()
+    assert "Nothing was written" in result
+    request.assert_awaited_once_with("get", "/courses/42/discussion_topics/9")
 
 
 @pytest.mark.asyncio
@@ -136,7 +138,7 @@ async def test_update_announcement_never_writes_unverified_id():
     ],
 )
 async def test_update_announcement_clears_date(clear_argument, field_name):
-    announcement = {"id": 7, "title": "Welcome", "is_announcement": True}
+    announcement = {"id": 7, "title": "Welcome", "message": "body", "is_announcement": True, field_name: None}
     with patch(
         "canvas_mcp.tools.discussions.get_course_id", new=AsyncMock(return_value="42")
     ), patch(
@@ -150,8 +152,8 @@ async def test_update_announcement_clears_date(clear_argument, field_name):
             "ENG101", 7, **{clear_argument: True}
         )
 
-    assert request.await_args.kwargs["data"] == {field_name: ""}
-    assert "updated" in result
+    assert request.await_args_list[1].kwargs["data"] == {field_name: ""}
+    assert "confirmed by reading" in result
 
 
 @pytest.mark.asyncio

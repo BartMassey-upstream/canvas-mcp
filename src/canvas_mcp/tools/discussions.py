@@ -10,6 +10,12 @@ from mcp.types import ToolAnnotations
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.dates import format_date, parse_date, truncate_text
+from ..core.guarded_edit import (
+    BodyGuard,
+    body_sha256,
+    run_guarded_write,
+    validate_guard,
+)
 from ..core.logging import log_warning
 from ..core.path import canvas_path
 from ..core.tool_results import FULL_CONTENT_TOOL_META
@@ -96,11 +102,31 @@ async def _find_announcement(
     return f"Announcement {announcement_id} was not found in this course."
 
 
+async def _fetch_topic_for_edit(
+    course_id: str | int, topic_id: str | int, *, announcement_only: bool = False
+) -> Any:
+    """Fetch the full raw body, retaining the announcement-only boundary."""
+    topic = await make_canvas_request(
+        "get", canvas_path("courses", course_id, "discussion_topics", topic_id)
+    )
+    if announcement_only and (
+        not isinstance(topic, dict) or "error" in topic
+        or topic.get("is_announcement") is not True
+        or str(topic.get("id")) != str(topic_id)
+    ):
+        return {"error": "Target could not be verified as an announcement."}
+    return topic
+
+
 def _format_announcement(announcement: dict[str, Any]) -> str:
     """Format instructor-authored announcement fields with provenance fences."""
     return "\n".join(
         [
             f"ID: {announcement.get('id')}",
+            f"Body SHA-256: {body_sha256(announcement['message'])}"
+            if "message" in announcement and (
+                announcement["message"] is None or isinstance(announcement["message"], str)
+            ) else "Body SHA-256: unavailable",
             "Title:\n"
             + fence_untrusted(
                 announcement.get("title") or "Untitled announcement",
@@ -295,6 +321,8 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
         # allows student topics) — fenced like the body (issue 239).
         result += f"Title:\n{fence_untrusted(title, 'discussion topic title')}\n"
         result += f"ID: {topic_id}\n"
+        if "message" in response and (message is None or isinstance(message, str)):
+            result += f"Body SHA-256: {body_sha256(message)}\n"
         result += f"Type: {topic_type}\n"
         result += f"Author: {fence_untrusted_inline(author_name, 'author name')} (ID: {author_id})\n"
         result += f"Created: {created_at}\n"
@@ -763,9 +791,6 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
         if isinstance(entries, dict) and "error" in entries:
             return f"Error fetching discussion entries: {entries['error']}"
 
-        if not entries:
-            return f"No discussion entries found for topic {topic_id}."
-
         # Get topic details for context
         topic_response = await make_canvas_request(
             "get", canvas_path('courses', course_id, 'discussion_topics', topic_id)
@@ -780,6 +805,11 @@ def register_shared_discussion_tools(mcp: FastMCP) -> None:
             f"Discussion in Course {course_display} — topic title:\n"
             f"{fence_untrusted(topic_title, 'discussion topic title')}\n\n"
         )
+
+        if "message" in topic_response and (
+            topic_response["message"] is None or isinstance(topic_response["message"], str)
+        ):
+            result += f"Body SHA-256: {body_sha256(topic_response['message'])}\n"
 
         # Process each entry
         for entry in entries:
@@ -1058,6 +1088,10 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         require_initial_post: bool | None = None,
         clear_delayed_post_at: bool = False,
         clear_lock_at: bool = False,
+        expect_body_sha256: str | None = None,
+        find: str | None = None,
+        replace: str | None = None,
+        require: list[str] | None = None,
     ) -> str:
         """Update an existing discussion topic or announcement.
 
@@ -1074,12 +1108,24 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
             require_initial_post: Students must post before seeing others
             clear_delayed_post_at: Remove the scheduled posting time
             clear_lock_at: Remove the automatic lock time
+            expect_body_sha256: Require this hash of the current raw HTML body
+            find: Exact literal fragment occurring once in the current body
+            replace: Replacement for find; cannot accompany message
+            require: Literal strings that must occur in the current body
         """
         # Backstop for issue 239: never publish our provenance fence markers.
         if (message is not None and contains_fence_markers(message)) or (
             title is not None and contains_fence_markers(title)
         ):
             return FENCE_LEAK_ERROR
+
+        guard = BodyGuard(
+            expect_body_sha256=expect_body_sha256,
+            find=find, replace=replace, require=require,
+        )
+        error = validate_guard(guard, "message", message)
+        if error:
+            return error
 
         date_updates = (
             ("delayed_post_at", delayed_post_at, clear_delayed_post_at),
@@ -1136,38 +1182,30 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
                 )
             data["lock_at"] = parsed_lock.isoformat()
 
-        if not data:
+        if not data and find is None:
             return (
                 "No fields provided to update. Specify at least one field to modify "
                 "(e.g., title, message, published, pinned, locked)."
             )
 
-        response = await make_canvas_request(
-            "put",
-            canvas_path('courses', course_id, 'discussion_topics', topic_id),
-            data=data,
+        async def fetch() -> Any:
+            return await _fetch_topic_for_edit(course_id, topic_id)
+
+        async def write(prepared_body: str | None) -> Any:
+            payload = dict(data)
+            if prepared_body is not None:
+                payload["message"] = prepared_body
+            return await make_canvas_request(
+                "put", canvas_path("courses", course_id, "discussion_topics", topic_id),
+                data=payload,
+            )
+
+        return await run_guarded_write(
+            guard, what="discussion topic", body_field="message", full_body=message,
+            fetch=fetch, write=write, refetch=lambda _: fetch(), requested=data,
+            facts={"Course ID": course_id, "Topic ID": topic_id},
+            has_updated_at=False, identity={"id": topic_id},
         )
-
-        if "error" in response:
-            return f"Error updating discussion topic: {response['error']}"
-
-        updated_title = response.get("title", "")
-        is_announcement = response.get("is_announcement", False)
-        updated_published = response.get("published", False)
-        topic_type = "Announcement" if is_announcement else "Discussion"
-
-        course_display = await get_course_code(course_id) or course_identifier
-        updated_fields = list(data.keys())
-
-        result = f"✅ {topic_type} updated successfully!\n\n"
-        result += f"**{updated_title}**\n"
-        result += f"  Course: {course_display}\n"
-        result += f"  Topic ID: {topic_id}\n"
-        result += f"  Type: {topic_type}\n"
-        result += f"  Updated fields: {', '.join(updated_fields)}\n"
-        result += f"  Published: {'Yes' if updated_published else 'No'}\n"
-
-        return result
 
     # ===== ANNOUNCEMENT TOOLS =====
 
@@ -1183,7 +1221,12 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         announcement = await _find_announcement(course_id, announcement_id)
         if isinstance(announcement, str):
             return announcement
-        return _format_announcement(announcement)
+        detail = await _fetch_topic_for_edit(
+            course_id, announcement_id, announcement_only=True
+        )
+        if "error" in detail:
+            return "Error fetching announcement: " + str(detail["error"])
+        return _format_announcement(detail)
 
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
     @validate_params
@@ -1197,16 +1240,32 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
         lock_at: str | None = None,
         clear_delayed_post_at: bool = False,
         clear_lock_at: bool = False,
+        expect_body_sha256: str | None = None,
+        find: str | None = None,
+        replace: str | None = None,
+        require: list[str] | None = None,
     ) -> str:
         """Update a verified announcement, never an ordinary discussion.
 
         Set clear_delayed_post_at or clear_lock_at to remove the corresponding
         scheduled time. A date cannot be set and cleared in the same request.
+        Use expect_body_sha256 to guard the exact raw HTML snapshot, find and
+        replace for one literal fragment, and require for mandatory current
+        strings. Fragment edits cannot accompany message. Every update checks
+        the announcement identity and reads back the requested state.
         """
         if (title is not None and contains_fence_markers(title)) or (
             message is not None and contains_fence_markers(message)
         ):
             return FENCE_LEAK_ERROR
+
+        guard = BodyGuard(
+            expect_body_sha256=expect_body_sha256,
+            find=find, replace=replace, require=require,
+        )
+        error = validate_guard(guard, "message", message)
+        if error:
+            return error
 
         date_updates = (
             ("delayed_post_at", delayed_post_at, clear_delayed_post_at),
@@ -1234,26 +1293,30 @@ def register_educator_discussion_tools(mcp: FastMCP) -> None:
                 if not parsed:
                     return f"Invalid date format for {field}: '{value}'. Use ISO 8601 format."
                 data[field] = parsed.isoformat()
-        if not data:
+        if not data and find is None:
             return "No announcement fields were provided to update."
 
         course_id = await get_course_id(course_identifier)
-        announcement = await _find_announcement(course_id, announcement_id)
-        if isinstance(announcement, str):
-            return announcement
-        response = await make_canvas_request(
-            "put",
-            canvas_path('courses', course_id, 'discussion_topics', announcement_id),
-            data=data,
-        )
-        if "error" in response:
-            return f"Error updating announcement: {response['error']}"
-        if response.get("is_announcement") is False:
-            return (
-                "Canvas returned a non-announcement after the update; the requested "
-                "announcement state could not be confirmed."
+        async def fetch() -> Any:
+            return await _fetch_topic_for_edit(
+                course_id, announcement_id, announcement_only=True
             )
-        return "Announcement updated:\n\n" + _format_announcement(response)
+
+        async def write(prepared_body: str | None) -> Any:
+            payload = dict(data)
+            if prepared_body is not None:
+                payload["message"] = prepared_body
+            return await make_canvas_request(
+                "put", canvas_path("courses", course_id, "discussion_topics", announcement_id),
+                data=payload,
+            )
+
+        return await run_guarded_write(
+            guard, what="announcement", body_field="message", full_body=message,
+            fetch=fetch, write=write, refetch=lambda _: fetch(), requested=data,
+            facts={"Course ID": course_id, "Announcement ID": announcement_id},
+            has_updated_at=False, identity={"id": announcement_id},
+        )
 
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
     @validate_params

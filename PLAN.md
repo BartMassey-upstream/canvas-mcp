@@ -11,6 +11,40 @@ below are historical; this section supersedes their branch/CI
 status. Bart is changing models and starting a new session.
 There is no unfinished implementation task to resume silently.
 
+### Safer general editing followup
+
+Bart authorized completing, committing, and installing safer
+page, assignment, discussion, announcement, and syllabus edits.
+Existing call shapes remain compatible. Optional raw timestamp
+and body-hash guards refuse stale caller snapshots; find/replace
+requires exactly one match, and required-text checks run before
+writing. Every update verifies target identity, the full stored
+body, and requested fields before reporting success.
+
+Read tools and confirmed updates expose exact raw-body hashes
+and precise timestamps where Canvas provides them. Renamed
+pages use stable IDs; metadata-only updates preserve an available
+body. Syllabus replacements still require preview/confirmation,
+and tokens bind all guard arguments. Unknown write outcomes
+are unconfirmed, never automatically retried.
+
+These checks are not atomic locks against concurrent Canvas
+saves. Pass an expected hash or timestamp to detect edits since
+the earlier read. Exact HTML verification deliberately reports
+Canvas theme/sanitizer rewrites as unconfirmed, including cases
+whose visible text matches. Live Canvas writes were not used.
+
+Validation passed 3,459 tests with 25 skips on each of Python
+3.11, 3.12, and 3.13, both with the locked dependencies and
+fresh CI-style dependency resolution. Ruff, mypy, manifest/diff
+checks, all 98 TypeScript tests, confirmation proofs, archive
+inspection, four installed-wheel synthetic MCP workflows, and
+the pending-file secret scan passed. Evidence is under ignored
+`_stage3/general-edits-20261110/`. The dependency lock is
+unchanged from the audited safety pass. Native platform and
+GitHub-only jobs were not run locally. Commit and installation
+are authorized; pushing and live Canvas writes are not.
+
 ### Accessibility followup and current local installation
 
 Bart requested commit and installation of the safety pass, then

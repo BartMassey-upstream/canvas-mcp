@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Safer general content editing
+
+- Added optional raw timestamp/hash preconditions, unique
+  find/replace, and required-text checks to page, assignment,
+  discussion, announcement, and syllabus edits.
+- Every update checks the target before writing and reads it
+  back before success. Verification covers the exact whole
+  body, requested fields, and the target identity, including
+  renamed pages, cleared dates, and metadata-only changes.
+- Read tools and confirmed edits expose raw body hashes and
+  precise timestamps where available for subsequent guards.
+- Preserved syllabus preview/confirmation; tokens also bind
+  guard arguments. Stored HTML rewrites are now unconfirmed
+  even when visible text matches. Writes are never retried.
+- These preflight checks are not atomic locks against another
+  Canvas editor saving between the check and the write.
+
 ### Accessibility reliability
 
 - Requested complete page bodies and refused unreadable or

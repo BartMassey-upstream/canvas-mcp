@@ -24,13 +24,20 @@ async def tool(register, name):
 async def test_external_tool_options_keep_false_and_unlimited(name):
     fn = await tool(register_educator_assignment_tools, name)
     args = {"name": "Launch"} if name.startswith("create") else {"assignment_id": 9}
+    state = {"id": 9}
+
+    async def respond(method, endpoint, **kwargs):
+        if method in {"post", "put"}:
+            state.update(kwargs["data"]["assignment"])
+        return dict(state)
     with patch("canvas_mcp.tools.assignments.get_course_id", AsyncMock(return_value="42")), patch(
         "canvas_mcp.tools.assignments.get_course_code", AsyncMock(return_value="COURSE")
-    ), patch("canvas_mcp.tools.assignments.make_canvas_request", AsyncMock(return_value={"id": 9})) as request:
+    ), patch("canvas_mcp.tools.assignments.make_canvas_request", AsyncMock(side_effect=respond)) as request:
         await fn("42", **args, submission_types="external_tool", external_tool_url="https://tool.example/launch",
                  external_tool_new_tab=False, allowed_attempts=-1, position=2,
                  omit_from_final_grade=False, hide_in_gradebook=False)
-    data = request.await_args.kwargs["data"]["assignment"]
+    write = next(c for c in request.await_args_list if c.args[0] in {"post", "put"})
+    data = write.kwargs["data"]["assignment"]
     assert data["external_tool_tag_attributes"] == {"url": "https://tool.example/launch", "new_tab": False}
     assert data["allowed_attempts"] == -1
     assert data["position"] == 2
@@ -187,9 +194,18 @@ async def test_annotation_file_response_requires_matching_id(name, attachment):
 async def test_matching_course_annotation_file_is_accepted(name):
     fn = await tool(register_educator_assignment_tools, name)
     args = {"name": "Annotate"} if name.startswith("create") else {"assignment_id": 9}
+    state = {"id": 9, "description": ""}
+
+    async def respond(method, endpoint, **kwargs):
+        if endpoint.endswith("/files/7"):
+            return {"id": 7}
+        if method in {"post", "put"}:
+            state.update(kwargs["data"]["assignment"])
+        return dict(state)
     with patch("canvas_mcp.tools.assignments.get_course_id", AsyncMock(return_value="42")), patch(
         "canvas_mcp.tools.assignments.get_course_code", AsyncMock(return_value="COURSE")
-    ), patch("canvas_mcp.tools.assignments.make_canvas_request", AsyncMock(side_effect=[{"id": 7}, {"id": 9}])) as request:
+    ), patch("canvas_mcp.tools.assignments.make_canvas_request", AsyncMock(side_effect=respond)) as request:
         result = await fn("42", **args, submission_types="student_annotation", annotatable_attachment_id=7)
-    assert "successfully" in result
-    assert request.await_args.kwargs["data"]["assignment"]["annotatable_attachment_id"] == 7
+    assert ("successfully" if name.startswith("create") else "confirmed by reading") in result
+    write = next(c for c in request.await_args_list if c.args[0] in {"post", "put"})
+    assert write.kwargs["data"]["assignment"]["annotatable_attachment_id"] == 7

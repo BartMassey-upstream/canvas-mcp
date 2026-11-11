@@ -14,6 +14,7 @@ from mcp.types import ToolAnnotations
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.dates import format_date, parse_date
+from ..core.guarded_edit import BodyGuard, run_guarded_write, validate_guard
 from ..core.path import canvas_path
 from ..core.untrusted_content import (
     FENCE_LEAK_ERROR,
@@ -368,57 +369,81 @@ def register_educator_page_crud_tools(mcp: FastMCP) -> None:
     @validate_params
     async def edit_page_content(course_identifier: str | int,
                                page_url_or_id: str,
-                               new_content: str,
-                               title: str | None = None) -> str:
-        """Replace the entire HTML body of a page (and optionally its title).
+                               new_content: str | None = None,
+                               title: str | None = None,
+                               expect_updated_at: str | None = None,
+                               expect_body_sha256: str | None = None,
+                               find: str | None = None,
+                               replace: str | None = None,
+                               require: list[str] | None = None) -> str:
+        """Edit a page's complete HTML body, one fragment, or its title.
 
-        new_content becomes the whole body: it is not merged or appended, so
-        pass the complete page, not a fragment. To change one section, read the
-        current body with get_page_content, edit it, and send the full result.
-        Publishing state, editing roles, and front-page status
-        are unchanged; use update_page_settings for those.
+        Every edit reads the current page and verifies the stored result.
+        Optional timestamp/hash expectations refuse stale edits. Fragment edits
+        require exactly one literal match; no HTML normalization is performed.
 
         Args:
             course_identifier: Course code or Canvas ID
             page_url_or_id: Page URL slug or page ID
-            new_content: Complete new HTML body for the page (replaces the old body)
-            title: Optional new title for the page
+            new_content: Complete replacement HTML; omit for fragment/title edits
+            title: Optional replacement title
+            expect_updated_at: Raw updated_at from the last read
+            expect_body_sha256: SHA-256 of the exact raw body from the last read
+            find: Exact HTML fragment that must occur once
+            replace: Replacement fragment, including an empty string
+            require: Strings that must occur in the current body
         """
-        # Backstop for issue 239: refuse to write our own provenance fence
-        # markers (added by read tools like get_page_content) into Canvas.
-        # Read tools fence titles too, so the title is checked like the body.
-        if contains_fence_markers(new_content) or (
+        guard = BodyGuard(
+            expect_updated_at=expect_updated_at,
+            expect_body_sha256=expect_body_sha256,
+            find=find, replace=replace, require=require,
+        )
+        error = validate_guard(guard, "new_content", new_content)
+        if error:
+            return error
+        if new_content is None and not guard.fragment and title is None:
+            return "No changes specified. Provide new_content, find/replace, or title. Nothing was written."
+        if (new_content is not None and contains_fence_markers(new_content)) or (
             title is not None and contains_fence_markers(title)
         ):
             return FENCE_LEAK_ERROR
 
         course_id = await get_course_id(course_identifier)
+        path = canvas_path("courses", course_id, "pages", page_url_or_id)
+        current_page: dict[str, Any] = {}
 
-        # Prepare the data for updating the page
-        update_data = {
-            "wiki_page": {
-                "body": new_content
-            }
-        }
+        async def fetch() -> Any:
+            response = await make_canvas_request("get", path)
+            if isinstance(response, dict):
+                current_page.update(response)
+            return response
 
-        if title:
-            update_data["wiki_page"]["title"] = title
+        async def write(body: str | None) -> Any:
+            # Address the stable page ID, not a possibly numeric URL slug.
+            target = canvas_path("courses", course_id, "pages",
+                                 f"page_id:{current_page['page_id']}")
+            data: dict[str, Any] = {}
+            if body is not None:
+                data["body"] = body
+            if title is not None:
+                data["title"] = title
+            return await make_canvas_request("put", target, data={"wiki_page": data})
 
-        # Update the page
-        response = await make_canvas_request(
-            "put",
-            canvas_path('courses', course_id, 'pages', page_url_or_id),
-            data=update_data
+        async def refetch(response: Any) -> Any:
+            slug = response.get("url") if isinstance(response, dict) else None
+            target = slug if isinstance(slug, str) and slug and not slug.isdigit() else f"page_id:{current_page['page_id']}"
+            return await make_canvas_request(
+                "get", canvas_path("courses", course_id, "pages", target)
+            )
+
+        return await run_guarded_write(
+            guard, what="page", body_field="body", full_body=new_content,
+            fetch=fetch, write=write, refetch=refetch,
+            requested={"title": title} if title is not None else {},
+            facts={"Course ID": course_id}, identity_field="page_id",
+            identity={"page_id": page_url_or_id.removeprefix("page_id:")}
+            if page_url_or_id.startswith("page_id:") else None,
         )
-
-        if "error" in response:
-            return f"Error updating page: {response['error']}"
-
-        page_title = response.get("title", "Unknown page")
-        updated_at = format_date(response.get("updated_at"))
-        course_display = await get_course_code(course_id) or course_identifier
-
-        return f"Successfully updated page '{page_title}' in course {course_display}. Last updated: {updated_at}"
 
     @mcp.tool(annotations=ToolAnnotations(destructive_hint=True, idempotent_hint=True))
     @validate_params

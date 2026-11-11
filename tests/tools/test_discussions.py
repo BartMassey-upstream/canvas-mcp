@@ -80,16 +80,14 @@ class TestUpdateDiscussionTopic:
         )
 
         mock_canvas_api['get_course_id'].assert_called_once_with("badm_350_120251")
-        mock_canvas_api['make_canvas_request'].assert_called_once()
+        assert mock_canvas_api['make_canvas_request'].call_count == 3
 
-        call_args = mock_canvas_api['make_canvas_request'].call_args
+        call_args = mock_canvas_api['make_canvas_request'].call_args_list[1]
         assert call_args[0][0] == "put"
         assert call_args[0][1] == "/courses/60366/discussion_topics/42"
         assert call_args[1]['data'] == {"message": "<p>Updated prompt text</p>"}
 
-        assert "successfully" in result
-        assert "Week 1 Discussion" in result
-        assert "Updated fields: message" in result
+        assert "confirmed by reading" in result
 
     @pytest.mark.asyncio
     async def test_update_discussion_topic_multiple_fields(self, mock_canvas_api):
@@ -111,17 +109,14 @@ class TestUpdateDiscussionTopic:
             published=True,
         )
 
-        call_args = mock_canvas_api['make_canvas_request'].call_args
+        call_args = mock_canvas_api['make_canvas_request'].call_args_list[1]
         assert call_args[1]['data'] == {
             "title": "Renamed Discussion",
             "message": "<p>New body</p>",
             "published": True,
         }
 
-        assert "successfully" in result
-        assert "title" in result
-        assert "message" in result
-        assert "published" in result
+        assert "confirmed by reading" in result
 
     @pytest.mark.asyncio
     async def test_update_discussion_topic_no_fields(self, mock_canvas_api):
@@ -144,7 +139,7 @@ class TestUpdateDiscussionTopic:
             message="New text",
         )
 
-        assert "Error updating discussion topic" in result
+        assert "Nothing was written" in result
         assert "Topic not found" in result
 
     @pytest.mark.asyncio
@@ -175,6 +170,8 @@ class TestUpdateDiscussionTopic:
         mock_canvas_api['make_canvas_request'].return_value = {
             "id": 42,
             "title": "Week 1 Discussion",
+            "message": "body",
+            field_name: None,
             "published": True,
             "is_announcement": False,
         }
@@ -184,9 +181,9 @@ class TestUpdateDiscussionTopic:
             "badm_350_120251", 42, **{clear_argument: True}
         )
 
-        data = mock_canvas_api['make_canvas_request'].call_args[1]['data']
+        data = mock_canvas_api['make_canvas_request'].call_args_list[1][1]['data']
         assert data == {field_name: ""}
-        assert f"Updated fields: {field_name}" in result
+        assert "confirmed by reading" in result
 
     @pytest.mark.asyncio
     async def test_update_discussion_topic_rejects_set_and_clear_date(
@@ -223,8 +220,7 @@ class TestUpdateDiscussionTopic:
             message="<p>Bring a pencil</p>",
         )
 
-        assert "Announcement updated successfully" in result
-        assert "Type: Announcement" in result
+        assert "confirmed by reading" in result
 
 
 class TestListDiscussionTopics:

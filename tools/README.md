@@ -553,6 +553,9 @@ Create a new assignment in a course.
 #### `update_assignment`
 Update an existing assignment in a course.
 
+Supports the [content edit guards](#safer-content-edits) below.
+Every update verifies the requested state by reading it back.
+
 **Parameters:**
 - `course_identifier`: Course code or ID (required)
 - `assignment_id`: ID of the assignment to update (required)
@@ -1437,6 +1440,11 @@ Start a new discussion forum.
 ---
 
 #### `update_discussion_topic`
+
+Supports [body hash and fragment guards](#safer-content-edits).
+Every update verifies the topic identity and stored state.
+Use the body's hash for conflict detection; discussion topics
+do not provide a usable edit timestamp.
 Edit an existing discussion topic or announcement (title, body, publish state, etc.).
 
 **Parameters:**
@@ -1566,12 +1574,22 @@ Create a new page in a course.
 ---
 
 #### `edit_page_content`
-Replace the content of an existing page.
+Replace a page's whole body, change its title, or replace one
+unique fragment. Supports the
+[content edit guards](#safer-content-edits) below. Page renames
+retain the original page identity during verification.
+
+Canvas gives a numeric URL slug precedence over a numeric ID.
+Use `page_id:7` to select page ID 7 explicitly, as documented in
+the [Canvas Pages API][page-identifier-docs].
+
+[page-identifier-docs]: https://developerdocs.instructure.com/services/canvas/resources/pages
 
 **Parameters:**
 - `course_identifier`: Course code or ID
 - `page_url_or_id`: Page URL slug or page ID
-- `new_content`: New HTML content for the page
+- `new_content` (optional): Complete new HTML body; omit for
+  find/replace or a title-only edit
 - `title` (optional): New title for the page
 
 **Example:**
@@ -1969,11 +1987,16 @@ Write the Canvas Syllabus tab for a course. Educator-only — a student token ca
 
 Canvas keeps **no revision history** for `syllabus_body`, unlike a wiki page. Replacing a syllabus that already has content is therefore two calls: the first returns a preview of what would be lost plus a single-use `Confirmation token: <token>`, and writes nothing; the second, with `confirmation_token=<token>` and identical arguments, performs the write. Writing into an empty syllabus, appending, or prepending destroys nothing and is a single call.
 
-After writing, the tool reads the syllabus back from Canvas and checks that what was sent is present. If Canvas accepted the request but the syllabus does not contain it — most often a token without `manage_course_content` — it reports a warning rather than success. The check compares visible text, not markup, because Canvas rewrites the body server-side: institutional themes inject `<link>`/`<script>` tags into every syllabus and the sanitizer drops attributes such as `rel="noopener"`. When Canvas does rewrite the HTML, the success message says so.
+The tool verifies the exact whole HTML and the course identity
+after writing. Matching visible text alone is insufficient:
+changed links, embeds, whitespace, and unrelated content matter.
+If Canvas rewrites the markup, the result is unconfirmed and
+needs inspection. No write is retried automatically.
 
 **Parameters:**
 - `course_identifier`: Course code or ID
-- `syllabus_body`: HTML for the syllabus. Canvas stores this as HTML; plain text is accepted but renders unformatted.
+- `syllabus_body`: HTML for the syllabus, or text to append or
+  prepend. Omit only when using find/replace in replace mode.
 - `mode` (optional): `replace` (default) swaps the whole body, `append` adds to the end, `prepend` adds to the start
 - `confirmation_token` (optional): Token from the preview call. Only required when replacing a syllabus that already has content.
 
@@ -1984,6 +2007,11 @@ After writing, the tool reads the syllabus back from Canvas and checks that what
 ```
 
 **Returns:** Confirmation that the syllabus was written and verified by reading it back. A replace over existing content first returns a preview plus a token.
+
+Supports [body hash and fragment guards](#safer-content-edits).
+Replacing an existing syllabus with a fragment edit still needs
+preview and confirmation. The token binds the guard arguments
+as well as the exact current and proposed bodies.
 
 ---
 
@@ -2673,6 +2701,55 @@ await bulkGrade({
 - Traditional tools still best for simple queries and small datasets
 
 ---
+
+## Safer content edits
+
+These guards apply to `edit_page_content`, `update_assignment`,
+`update_discussion_topic`, `update_announcement`, and
+`update_syllabus`. Existing calls remain valid, but all updates
+now fetch their target and verify the stored result.
+
+- `expect_updated_at`: Pages and assignments only. Copy the
+  precise `Updated (raw)` value from the last read or confirmed
+  edit. Equivalent time zones match; fractions are preserved.
+- `expect_body_sha256`: Copy `Body SHA-256` from the last read
+  or confirmed edit. It hashes the exact raw HTML, independently
+  of display formatting or truncation.
+- `find` and `replace`: Replace one exact, unique HTML fragment
+  in the freshly read body. Both are required; an empty
+  replacement is allowed. Do not also supply the full body.
+- `require`: A list of literal strings that must be present in
+  the current body before any write.
+
+For example, first read the full page, then use its hash:
+
+```python
+edit_page_content(
+    course_identifier="42",
+    page_url_or_id="policies",
+    expect_body_sha256="<Body SHA-256 from get_page_content>",
+    find="<p>Old sentence.</p>",
+    replace="<p>New sentence.</p>",
+    require=["Grading policy"],
+)
+```
+
+Do not copy provenance-fence markers into body or fragment
+arguments. For full replacement, read the complete raw HTML;
+a preview or truncated body is not a complete source.
+
+Use an expected timestamp or hash to detect changes since your
+earlier read. Without one, target and readback verification do
+not prove that your caller-side copy was current. These are
+preflight checks, not atomic locks: another Canvas editor can
+still save between the check and the write.
+
+Success requires the same target, the exact complete expected
+body, and every requested field to read back correctly. A
+same-second save can be confirmed without a timestamp advancing.
+An unreadable, rewritten, or mismatched result is unconfirmed;
+inspect Canvas before retrying. Normal write permissions,
+operator policy, and syllabus confirmation still apply.
 
 ## Tool Usage Guidelines
 

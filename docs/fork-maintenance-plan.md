@@ -38,7 +38,9 @@ Prefer a small repair to a workflow Bart or a colleague uses.
   older syllabus/text readers when needed.
 - Guarded content edits: expected timestamps or hashes and
   readback for pages, assignments, discussions, and syllabus.
-  Accessibility edits now have their own conservative checks.
+  Completed in the November 10 general-edit pass, including
+  announcement edits. The checks are deliberately conservative
+  and are not atomic locks against concurrent Canvas saves.
 - Practical acceptance: colleague/client feedback and an
   authorized sandbox backup/restore drill for relied-on flows.
   Synthetic validation does not establish live recovery.
