@@ -25,7 +25,7 @@
                 <li><a href="bulk-grading.html">Code API</a></li>
             </ul>
             <div class="nav-cta">
-                <a href="https://github.com/vishalsachdev/canvas-mcp" class="btn btn-secondary">
+                <a href="https://github.com/BartMassey-upstream/canvas-mcp" class="btn btn-secondary">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                     GitHub
                 </a>
@@ -103,30 +103,15 @@
                     </section>
 
                     <section id="installation">
-                        <h2>Installation</h2>
-
-                        <pre><code>git clone https://github.com/vishalsachdev/canvas-mcp.git
-cd canvas-mcp
-
-<span class="code-comment"># Create virtual environment</span>
-python3 -m venv .venv
-. .venv/bin/activate
-
-<span class="code-comment"># Install</span>
-pip install -e .</code></pre>
-
-                        <p>Put this setting in the platform config directory's <code>env</code> file. Put only the raw token in its sibling <code>token</code> file; use mode <code>0600</code> on POSIX or a private ACL on Windows.</p>
-                        <pre><code>CANVAS_API_URL=https://canvas.youruniversity.edu</code></pre>
-
-                        <p>Add to your MCP client config &mdash; most clients read this exact entry and differ only in where the file lives:</p>
-                        <pre><code>{
-  "mcpServers": {
-    "canvas-api": {
-      "command": "/path/to/canvas-mcp/.venv/bin/canvas-mcp-server"
-    }
-  }
-}</code></pre>
-                        <p>The <a href="https://github.com/vishalsachdev/canvas-mcp#3-mcp-client-configuration">client configuration guide</a> lists where that file lives for Claude Desktop, Cursor, Zed, Windsurf, Continue and others &mdash; check it for your client, since some use their own schema (Zed nests the server under <code>context_servers</code>).</p>
+                        <h2>Install and connect this fork</h2>
+                        <p>Follow <a href="https://github.com/BartMassey-upstream/canvas-mcp/blob/main/docs/getting-started.md">Getting started with Canvas MCP</a>
+                        for the fork installation, private credentials, client
+                        configuration, and a first read-only request.</p>
+                        <p>Set <code>CANVAS_ROLE=creator</code> to inspect and
+                        build course content without student records. Begin
+                        with writes disabled, then enable selected tools when
+                        ready to make changes. The built-in accessibility scan
+                        does not require UDOIT or UFIXIT.</p>
                     </section>
 
                     <section id="available-tools">
@@ -234,7 +219,7 @@ pip install -e .</code></pre>
 
                         <h3>Installing Skills</h3>
                         <pre><code><span class="code-comment"># Interactive picker — installs into 40+ agents (Claude Code, Cursor, Codex, Zed, …)</span>
-npx skills add vishalsachdev/canvas-mcp</code></pre>
+See the getting-started guide: Optional workflow skills</code></pre>
                     </section>
 
                     <section id="workflows">
@@ -313,7 +298,7 @@ npx skills add vishalsachdev/canvas-mcp</code></pre>
                         </ul>
 
                         <h3>Need More Help?</h3>
-                        <p><a href="https://github.com/vishalsachdev/canvas-mcp/issues">Open an issue on GitHub</a> for additional support.</p>
+                        <p><a href="https://github.com/BartMassey-upstream/canvas-mcp/issues">Open an issue on GitHub</a> for additional support.</p>
                     </section>
 
                     <div style="text-align: center; margin-top: 48px; padding: 32px; background: var(--color-bg-card); border-radius: var(--radius-lg);">
@@ -337,11 +322,11 @@ npx skills add vishalsachdev/canvas-mcp</code></pre>
                             Canvas MCP
                         </a>
                         <div class="footer-links">
-                            <a href="https://github.com/vishalsachdev/canvas-mcp">GitHub</a>
+                            <a href="https://github.com/BartMassey-upstream/canvas-mcp">GitHub</a>
                             <a href="student-guide.html">Student Guide</a>
                             <a href="educator-guide.html">Educator Guide</a>
                             <a href="learning-designer-guide.html">Designer Guide</a>
-                            <a href="https://github.com/vishalsachdev/canvas-mcp/blob/main/LICENSE">MIT License</a>
+                            <a href="https://github.com/BartMassey-upstream/canvas-mcp/blob/main/LICENSE">MIT License</a>
                         </div>
                     </div>
                     <div class="footer-right">

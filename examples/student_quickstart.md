@@ -4,10 +4,13 @@ This guide shows common tasks students can accomplish with Canvas MCP.
 
 ## Setup
 
-1. Install Canvas MCP following the [README](../README.md#installation)
-2. Put your Canvas URL in the platform config directory's `env`, and the raw
-   token in its sibling `token` (`0600` on POSIX; private ACL on Windows)
-3. Restart your MCP client (e.g., Claude Desktop, Cursor, Zed, etc.)
+Follow [Getting started](../docs/getting-started.md), including
+client configuration and the first read-only request. Set
+`CANVAS_ROLE=student` in your per-user `env` file.
+
+The guide starts with writes disabled. Read requests below work
+in that setup; for actions that change Canvas, first
+[enable the relevant tools](../docs/getting-started.md#enable-changes-when-ready).
 
 ## Common Tasks
 
@@ -96,9 +99,10 @@ Show me my final grades in all courses and any missing assignments
 **"I don't see my courses"**
 - Check the `env` and `token` files in the platform config directory
 - Verify your Canvas API token is valid
-- Try: `canvas-mcp-server --test`
+- Run your installed launcher with `--test` to check the connection
+- See [course data troubleshooting](common_issues.md#the-assistant-shows-the-wrong-or-incomplete-course-data) for permissions and course IDs
 
 **"Some assignments are missing"**
 - Canvas MCP shows what's in Canvas - check with your professor if something seems off
 
-**Need help?** Check the [main documentation](../README.md) or [open an issue](https://github.com/vishalsachdev/canvas-mcp/issues).
+**Need help?** Check the [main documentation](../README.md) or [open an issue](https://github.com/BartMassey-upstream/canvas-mcp/issues).

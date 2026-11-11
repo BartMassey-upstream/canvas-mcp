@@ -11,6 +11,32 @@ below are historical; this section supersedes their branch/CI
 status. Bart is changing models and starting a new session.
 There is no unfinished implementation task to resume silently.
 
+### Newcomer documentation followup November 11
+
+Bart requested a smoother start for readers new to this repo
+and MCP, then resumed that work after a power interruption.
+The README now introduces the fork and leads to
+[Getting started](docs/getting-started.md). That guide covers
+local stdio, fork installation, native credentials on each OS,
+role choice, three client recipes, first reads, enabling writes,
+and upgrades. Troubleshooting, role examples, HTML installation
+sections, and developer setup point to the same path.
+
+Documentation checks passed local links/anchors and JSON/TOML
+examples. An isolated uv copy installation passed launcher and
+native configuration checks, token redaction and permission
+refusal, and in-process MCP discovery for student, creator, and
+educator with all side-effect tools disabled. The documented
+frozen development sync passed a dry run. No live Canvas calls
+or writes were used. Native Windows/macOS execution remains
+unverified. Evidence is under ignored
+`_stage3/docs-onboarding-20261110/`.
+
+The Codex MCP reload operation was acknowledged before the
+power interruption. Bart subsequently authorized committing
+these documentation changes. No push was requested. The active
+installation was not replaced by the isolated onboarding check.
+
 ### Safer general editing followup
 
 Bart authorized completing, committing, and installing safer

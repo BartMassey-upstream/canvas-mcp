@@ -15,17 +15,56 @@ authorization; documentation work does not authorize a push.
 # Canvas MCP Development Guide
 
 ## Environment Setup
-- Install uv package manager: `pip install uv`
-- Install dependencies: `uv pip install -e .`
-- Put `CANVAS_API_URL` and other settings in the platform config directory's `env`
-- Put the raw Canvas token in its sibling `token`; use `0600` on POSIX
-- Server installed as CLI command: `canvas-mcp-server`
+
+To **use** the server, follow
+[Getting started](docs/getting-started.md). The commands here
+are for changing and testing its source.
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+and Git, then from a checkout of this fork:
+
+```sh
+uv sync --frozen --group dev --python 3.12
+uv run --frozen pytest tests/ -q
+uv run --frozen ruff check src/ tests/
+uv run --frozen mypy src/
+uv run --frozen python scripts/update_tool_manifest.py --check
+```
+
+The project supports Python 3.11 through 3.13. The frozen sync
+uses the committed dependency lock and creates `.venv`; it does
+not replace a separately installed uv tool. For a focused edit,
+run the relevant tests while iterating, then the required CI
+checks. Tests use mocked Canvas responses; do not introduce live
+Canvas writes into the default suite.
+
+When changing the optional TypeScript code API, also run:
+
+```sh
+npm ci
+npm test
+npm run build
+```
+
+See [verification](verify/README.md) for confirmation protocol
+proofs and [the CI workflows](.github/workflows/) for the full
+matrix. Node and proof tooling are not needed for ordinary
+Python server use.
 
 ## Commands
-- **Start server**: `canvas-mcp-server` (or `./start_canvas_server.sh` for legacy setup)
-- **Test server**: `canvas-mcp-server --test`
-- **View config**: `canvas-mcp-server --config`
-- **MCP client config**: Update your MCP client's configuration file (e.g., `~/Library/Application Support/Claude/claude_desktop_config.json` for Claude Desktop)
+
+- `uv run --frozen canvas-mcp-server --help`: local launcher check.
+- `uv run --frozen canvas-mcp-server --config`: effective settings.
+- `uv run --frozen canvas-mcp-server --test`: live read-only
+  Canvas connection check; requires your private configuration.
+- `uv run --frozen canvas-mcp-server`: stdio server, normally
+  launched by a client. Startup validates the token with Canvas.
+
+Use the native `env` and private `token` files from the
+[setup guide](docs/getting-started.md#configure-canvas-access).
+An editable tool installation is optional for development:
+`uv tool install --force --editable .`. New processes then see
+checkout edits; restart the MCP connection after runtime changes.
 
 ## Repository Structure
 ```

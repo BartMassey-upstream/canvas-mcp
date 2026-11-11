@@ -25,7 +25,7 @@
                 <li><a href="bulk-grading.html">Code API</a></li>
             </ul>
             <div class="nav-cta">
-                <a href="https://github.com/vishalsachdev/canvas-mcp" class="btn btn-secondary">
+                <a href="https://github.com/BartMassey-upstream/canvas-mcp" class="btn btn-secondary">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                     GitHub
                 </a>
@@ -97,72 +97,27 @@
                     </section>
 
                     <section id="installation">
-                        <h2>Installation</h2>
-
-                        <h3>1. Clone the Repository</h3>
-                        <pre><code>git clone https://github.com/vishalsachdev/canvas-mcp.git
-cd canvas-mcp</code></pre>
-
-                        <h3>2. Install Dependencies</h3>
-                        <pre><code><span class="code-comment"># Create and activate virtual environment</span>
-python3 -m venv .venv
-. .venv/bin/activate
-
-<span class="code-comment"># Install Canvas MCP</span>
-pip install -e .</code></pre>
-
-                        <h3>3. Get Your Canvas API Token</h3>
-                        <ol>
-                            <li>Log in to your Canvas account</li>
-                            <li>Go to <strong>Account</strong> → <strong>Settings</strong></li>
-                            <li>Scroll down to <strong>Approved Integrations</strong></li>
-                            <li>Click <strong>+ New Access Token</strong></li>
-                            <li>Give it a purpose (e.g., "Canvas MCP / AI assistant")</li>
-                            <li>Click <strong>Generate Token</strong></li>
-                            <li><strong>Copy the token immediately</strong> - you won't see it again!</li>
-                        </ol>
-
-                        <div class="info-box tip">
-                            <div class="info-box-title">💡 Note</div>
-                            <p>Some institutions restrict API token creation. If you can't create a token, contact your institution's Canvas administrator. At the <strong>University of Illinois Urbana-Champaign</strong> self-service creation is disabled for everyone — request a token via the <a href="https://help.uillinois.edu/TDClient/42/UIUC/Requests/TicketRequests/NewForm?ID=4AZBjiZfXWs_&amp;RequestorType=Service">Canvas API Token Request form</a> (NetID login), then activate it under <strong>Account → Settings → Approved Integrations</strong> and retrieve its value from the U of I Box link you are sent. Illinois tokens issued from August 2026 expire after 30 days.</p>
-                        </div>
+                        <h2>Install and connect this fork</h2>
+                        <p>Follow <a href="https://github.com/BartMassey-upstream/canvas-mcp/blob/main/docs/getting-started.md">Getting started with Canvas MCP</a>
+                        for Linux, macOS, and Windows installation, private token
+                        files, and client configuration. The guide explains MCP
+                        and starts with a read-only connection.</p>
+                        <p>These pages accompany Bart's fork. The published
+                        upstream package and desktop extension may have different
+                        capabilities.</p>
+                        <p>Choose <code>CANVAS_ROLE=student</code> for the
+                        workflows below. After connecting, ask your assistant
+                        to list your courses without changing anything.</p>
                     </section>
 
                     <section id="configuration">
                         <h2>Configuration</h2>
-
-                        <h3>4. Configure Canvas MCP</h3>
-                        <p>Create <code>env</code> and <code>token</code> in the platform config directory: <code>$XDG_CONFIG_HOME/canvas-mcp</code> or <code>~/.config/canvas-mcp</code> on Linux, <code>~/Library/Application Support/canvas-mcp</code> on macOS, and <code>%APPDATA%\canvas-mcp</code> on Windows. The token file contains only the raw token. Use mode <code>0600</code> on Linux/macOS; Canvas MCP validates its Windows ACL.</p>
-
-                        <p>Your <code>env</code> file should include:</p>
-                        <pre><code><span class="code-comment"># Canvas API Configuration</span>
-CANVAS_API_URL=https://canvas.youruniversity.edu/api/v1
-
-<span class="code-comment"># Privacy Settings (students don't need anonymization)</span>
-ENABLE_DATA_ANONYMIZATION=false</code></pre>
-
-                        <div class="info-box important">
-                            <div class="info-box-title">⚠️ Important</div>
-                            <p>Replace <code>https://canvas.youruniversity.edu/api/v1</code> with your actual Canvas URL (including the <code>/api/v1</code> suffix).</p>
-                        </div>
-
-                        <h3>5. Connect Your MCP Client</h3>
-                        <p>Add Canvas MCP to your client's MCP config. Most assistants read this exact entry and differ only in where the file lives:</p>
-                        <pre><code>{
-  "mcpServers": {
-    "canvas-api": {
-      "command": "/path/to/canvas-mcp/.venv/bin/canvas-mcp-server"
-    }
-  }
-}</code></pre>
-                        <p>The <a href="https://github.com/vishalsachdev/canvas-mcp#3-mcp-client-configuration">client configuration guide</a> lists where that file lives for Claude Desktop, Cursor, Zed, Windsurf, Continue and others &mdash; check it for your client, since some use their own schema (Zed nests the server under <code>context_servers</code>). Claude Desktop users can skip the JSON entirely and install the <a href="https://github.com/vishalsachdev/canvas-mcp/releases/latest">one-click extension</a> instead.</p>
-
-                        <h3>6. Test Your Setup</h3>
-                        <pre><code>canvas-mcp-server --test</code></pre>
-                        <p>You should see: <code>✓ API connection successful!</code></p>
-
-                        <h3>7. Restart Your Client</h3>
-                        <p>Quit and reopen your AI client. Canvas MCP's tools should show up wherever your client lists connected tools (a 🔨 hammer or plug icon in most desktop apps, <code>/mcp</code> in terminal clients).</p>
+                        <p>Use the <a href="https://github.com/BartMassey-upstream/canvas-mcp/blob/main/docs/getting-started.md#configure-canvas-access">configuration
+                        steps</a> to save the Canvas URL in <code>env</code> and
+                        the raw token in a private sibling <code>token</code>
+                        file. The client launches the server for you.</p>
+                        <p>Student write tools are disabled by default. Reading
+                        assignments and grades does not require enabling them.</p>
                     </section>
 
                     <section id="how-to-use">
@@ -363,7 +318,7 @@ ENABLE_DATA_ANONYMIZATION=false</code></pre>
                         </ul>
 
                         <h3>Need More Help?</h3>
-                        <p><a href="https://github.com/vishalsachdev/canvas-mcp/issues">Open an issue on GitHub</a> for additional support.</p>
+                        <p><a href="https://github.com/BartMassey-upstream/canvas-mcp/issues">Open an issue on GitHub</a> for additional support.</p>
                     </section>
 
                     <div style="text-align: center; margin-top: 48px; padding: 32px; background: var(--color-bg-card); border-radius: var(--radius-lg);">
@@ -384,10 +339,10 @@ ENABLE_DATA_ANONYMIZATION=false</code></pre>
                             Canvas MCP
                         </a>
                         <div class="footer-links">
-                            <a href="https://github.com/vishalsachdev/canvas-mcp">GitHub</a>
+                            <a href="https://github.com/BartMassey-upstream/canvas-mcp">GitHub</a>
                             <a href="student-guide.html">Student Guide</a>
                             <a href="educator-guide.html">Educator Guide</a>
-                            <a href="https://github.com/vishalsachdev/canvas-mcp/blob/main/LICENSE">MIT License</a>
+                            <a href="https://github.com/BartMassey-upstream/canvas-mcp/blob/main/LICENSE">MIT License</a>
                         </div>
                     </div>
                     <div class="footer-right">

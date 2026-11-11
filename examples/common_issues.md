@@ -1,337 +1,184 @@
-# Common Issues and Solutions
+# Common issues and solutions
 
-Quick fixes for the most common problems with Canvas MCP.
+Use the [getting-started guide](../docs/getting-started.md) for
+the installation and client recipes. Diagnose setup in this
+order: executable, configuration, Canvas connection, then client.
 
-## Installation Issues
+## The server command is not found
 
-### "canvas-mcp-server: command not found"
+Find the launcher directory:
 
-**Problem**: The CLI command isn't available after installation.
-
-**Solution**:
-```bash
-# Make sure you installed with the editable flag
-uv pip install -e .
-
-# Or reinstall
-pip uninstall canvas-mcp
-uv pip install -e .
-
-# Verify it worked
-canvas-mcp-server --help
+```sh
+uv tool list
+uv tool dir --bin
 ```
 
-### "No module named 'canvas_mcp'"
+Use its absolute path, ending in `canvas-mcp-server` on
+Linux/macOS or `canvas-mcp-server.exe` on Windows. Check it
+with `--help`. In PowerShell, use `&` before a quoted path.
+If the absolute path works, this is a PATH problem rather than
+a missing Python module. Run `uv tool update-shell` and open
+a new terminal to make the command available by name.
 
-**Problem**: Package not installed correctly.
+If no installation is listed, return to the fork checkout and
+follow [installation](../docs/getting-started.md#install-this-fork).
+Do not switch to the published package when diagnosing this
+fork. You do not need an editable installation for normal use.
 
-**Solution**:
-```bash
-# Navigate to the canvas-mcp directory
-cd /path/to/canvas-mcp
+## A token or configuration error stops startup
 
-# Install in editable mode
-uv pip install -e .
+Check the two files in your platform's configuration directory:
+
+- Linux: `${XDG_CONFIG_HOME:-$HOME/.config}/canvas-mcp`.
+- macOS: `~/Library/Application Support/canvas-mcp`.
+- Windows: `%APPDATA%\canvas-mcp`.
+
+`env` contains `CANVAS_API_URL` and other settings. `token`
+contains only the raw token, without a variable name or quotes.
+An empty token file, a symlink, or unsafe token permissions
+stops startup rather than falling back to another credential.
+
+On Linux/macOS, check the file mode without printing its content:
+
+```sh
+ls -l "<config-directory>/token"
+chmod 600 "<config-directory>/token"
 ```
 
-## Configuration Issues
-
-### "Authentication failed"
-
-**Problem**: Canvas API token is invalid or expired.
-
-**Solution**:
-1. Go to Canvas → Account → Settings
-2. Scroll to "Approved Integrations"
-3. Delete the old token if present
-4. Create a new access token (see below if your institution gates this)
-5. Replace the raw `token` file in the platform config directory and verify its
-   POSIX mode or Windows ACL
-6. Restart your MCP client
-
-Note that many institutions now issue short-lived tokens — Instructure pushed a 30-day
-default in 2026 — so "it worked last month" does not mean the token is still valid.
-
-### "Canvas API URL is invalid"
-
-**Problem**: Wrong URL format in the per-user `env` file.
-
-**Solution**:
-Your Canvas API URL should look like:
-```bash
-CANVAS_API_URL=https://your-institution.instructure.com/api/v1
-```
-
-**NOT**:
-- ❌ `https://your-institution.instructure.com/` (missing /api/v1)
-- ❌ `your-institution.instructure.com/api/v1` (must include https://)
-- ❌ `https://your-institution.instructure.com/api/v1/` (no trailing slash)
-
-Test with:
-```bash
-canvas-mcp-server --test
-```
-
-### "Cannot create access token"
-
-**Problem**: Your institution restricts self-service API token creation. The "New Access
-Token" button is missing or errors out. At some schools this applies to students only; at
-others it applies to everyone, instructors included.
-
-**Solution**:
-First check whether your institution has a token request form — search its IT knowledge
-base for "Canvas API token". If it does, that form is the only path; the Canvas UI will
-keep refusing.
-
-**University of Illinois Urbana-Champaign**: use the
-[Canvas API Token Request form](https://help.uillinois.edu/TDClient/42/UIUC/Requests/TicketRequests/NewForm?ID=4AZBjiZfXWs_&RequestorType=Service).
-After approval, activate the token under **Account → Settings → Approved Integrations**,
-then retrieve its value from the U of I Box link Technology Services sends you. Illinois
-tokens expire after 30 days as of August 2026
-([KB 150325](https://answers.uillinois.edu/illinois/internal/150325)).
-
-Otherwise, contact your Canvas administrator or IT help desk:
-```
-Hi, I'm trying to use the Canvas API to track my assignments
-and grades. Could you help me create an API access token or
-enable API access for my account?
-```
-
-Most institutions will enable this for legitimate educational purposes.
-
-## Runtime Issues
-
-### "Rate limit exceeded (429 errors)"
-
-**Problem**: Making too many API requests too quickly.
-
-**Good news**: Canvas MCP now automatically handles rate limiting!
-
-**What happens**:
-- Canvas MCP detects rate limit errors
-- Automatically waits and retries (up to 3 times)
-- Shows progress: "⏳ Rate limited (429). Retrying in 4s..."
-
-**If it still fails**:
-- Wait a few minutes before trying again
-- For bulk operations, the code execution API is more efficient
-
-### "Tool not showing up in Claude Desktop"
-
-**Problem**: Canvas MCP tools aren't available in Claude.
-
-**Solution**:
-
-1. **Check your MCP client's configuration file**:
-   
-   **Claude Desktop** (macOS): `~/Library/Application Support/Claude/claude_desktop_config.json`
-   **Claude Desktop** (Windows): `%APPDATA%\Claude\claude_desktop_config.json`
-   **Cursor** (macOS/Linux): `~/.cursor/mcp_config.json`
-   **Windsurf** (macOS): `~/Library/Application Support/Windsurf/mcp_config.json`
-   **Zed**: Settings → Open Settings (`settings.json`)
-   
-   Ensure it contains:
-   ```json
-   {
-     "mcpServers": {
-       "canvas-api": {
-         "command": "canvas-mcp-server"
-       }
-     }
-   }
-   ```
-   
-   Or for Zed:
-   ```json
-   {
-     "context_servers": {
-       "canvas-api": {
-         "command": {
-           "path": "/absolute/path/to/canvas-mcp-server",
-           "args": []
-         }
-       }
-     }
-   }
-   ```
-
-2. **Restart your MCP client completely**:
-   - Quit the application (not just close the window)
-   - Reopen it
-
-3. **Check for errors**:
-   - For Claude Desktop: Look in the developer console
-   - For other clients: Check client logs or developer console
-   - Or run manually: `canvas-mcp-server` and check for errors
-
-### "Data seems outdated"
-
-**Problem**: Seeing old information.
-
-**Solution**:
-Canvas MCP caches some data for performance. The cache TTL is set in the
-platform config directory's `env` file:
-
-```bash
-CACHE_TTL=300  # 5 minutes (default)
-```
-
-To see fresh data immediately:
-- Restart the MCP server (restart your MCP client)
-- Or wait for cache to expire (default: 5 minutes)
-
-## Data Issues
-
-### "Student names showing as Student_xxxxxxxx"
-
-**This is working correctly!** If you have anonymization enabled:
-
-```bash
-ENABLE_DATA_ANONYMIZATION=true
-```
-
-This supports FERPA-conscious workflows by reducing identity data before tool output reaches the AI client. It does not by itself establish compliance.
-
-**To disable** (only after reviewing your institution's privacy requirements):
-```bash
-ENABLE_DATA_ANONYMIZATION=false
-```
-
-Then restart your MCP client.
-
-### "Missing some courses or assignments"
-
-**Problem**: Not all data is showing up.
-
-**Possible causes**:
-
-1. **Canvas permissions**: Your API token might not have access to all courses
-   - Solution: Check your Canvas role and permissions
-
-2. **Archived courses**: Old courses might be archived
-   - Solution: Unarchive in Canvas if needed
-
-3. **Pagination issue**: Very large datasets might not load completely
-   - Solution: Be more specific (e.g., "Show assignments in CS 101" instead of "Show all assignments")
-
-## Performance Issues
-
-### "Bulk operations are very slow"
-
-**Problem**: Grading or analyzing large datasets takes too long.
-
-**Solution**: Use the code execution API for bulk operations:
-
-Instead of:
-```
-Show me all 90 student submissions and grade them
-```
-
-Use:
-```
-Use the bulk grading code API to grade all submissions for Assignment 5
-```
-
-This keeps per-item processing out of the model's context; actual token use depends on the workload and selected output.
-
-### "AI assistant seems to get confused with lots of data"
-
-**Problem**: Too much data in context.
-
-**Solution**:
-- Be specific about what you want
-- Use filters (course names, assignment IDs, date ranges)
-- For large operations, use code execution to keep data out of your AI assistant's context
-
-Example:
-```
-Show me students who haven't submitted Assignment 3 in CS 101
-```
-Instead of:
-```
-Show me all students and all their submissions
-```
-
-## Integration Issues
-
-### "Works in terminal but not in MCP client"
-
-**Problem**: `canvas-mcp-server` works manually but not through your MCP client.
-
-**Solution**:
-
-1. **Check the command path**:
-   ```bash
-   which canvas-mcp-server
-   ```
-
-2. **Use full path in config** if needed:
-   
-   For Claude Desktop, Cursor, Windsurf, Continue:
-   ```json
-   {
-     "mcpServers": {
-       "canvas-api": {
-         "command": "/full/path/to/canvas-mcp-server"
-       }
-     }
-   }
-   ```
-   
-   For Zed:
-   ```json
-   {
-     "context_servers": {
-       "canvas-api": {
-         "command": {
-           "path": "/full/path/to/canvas-mcp-server",
-           "args": []
-         }
-       }
-     }
-   }
-   ```
-
-3. **Check configuration**:
-   - Put general settings in the platform config directory's `env` file
-   - Put only the raw token in its sibling `token` file
-   - Use `$XDG_CONFIG_HOME/canvas-mcp` (or `~/.config/canvas-mcp`) on Linux,
-     `~/Library/Application Support/canvas-mcp` on macOS, or
-     `%APPDATA%\canvas-mcp` on Windows
-
-## Getting More Help
-
-1. **Enable debug mode** in the per-user `env` file:
-   ```bash
-   DEBUG=true
-   LOG_API_REQUESTS=true
-   ```
-
-2. **Test the connection**:
-   ```bash
-   canvas-mcp-server --test
-   ```
-
-3. **Check the logs**: Run the server manually to see error messages
-
-4. **Still stuck?**
-   - [Open an issue](https://github.com/vishalsachdev/canvas-mcp/issues)
-   - Include:
-     - Error messages (redact your API token!)
-     - Your Canvas instance URL (e.g., "your-institution.instructure.com")
-     - What you were trying to do
-     - Output from `canvas-mcp-server --test`
-
-## Quick Diagnostic Checklist
-
-Run through this list:
-
-- [ ] The platform config directory's `env` has `CANVAS_API_URL`
-- [ ] Its `token` contains only the raw token and has mode `0600` on POSIX or a private Windows ACL
-- [ ] Canvas API token is valid (test in Canvas web UI)
-- [ ] `canvas-mcp-server --test` succeeds
-- [ ] Claude Desktop config includes canvas-mcp
-- [ ] Restarted Claude Desktop after config changes
-- [ ] Canvas API URL doesn't have trailing slash or /api/v1
-
-If all these pass and it still doesn't work, [open an issue](https://github.com/vishalsachdev/canvas-mcp/issues)!
+Replace `<config-directory>` first. On Windows, inspect the
+file's Security properties or `icacls` output. Access may be
+granted only to your account, SYSTEM, and Administrators.
+See the [configuration steps](../docs/getting-started.md#configure-canvas-access).
+
+The native token file takes precedence over an environment
+token, even if the environment has a newer value. Process
+settings take precedence over `env`; a stale `CANVAS_API_URL`
+or `CANVAS_ROLE` in the client environment can explain why
+editing the file has no effect. Linux clients must use the same
+`XDG_CONFIG_HOME` as your terminal.
+
+Restart or reconnect after changing settings or the token.
+
+## Canvas authentication or connection fails
+
+Run the installed executable with `--config`, then `--test`.
+The test makes live Canvas reads and changes nothing.
+
+| Result | What to check |
+|---|---|
+| 401 | Expired, revoked, or incorrectly copied token |
+| 403 | Your account's permission for the requested operation |
+| 404 | Canvas hostname, course ID, or resource ID |
+| Timeout or TLS error | Network, VPN, proxy, and institutional certificate setup |
+
+Use the Canvas hostname where you sign in, with HTTPS and the
+`/api/v1` suffix. Do not use a course or SSO login URL. A missing
+suffix or trailing slash is normalized by the server; a wrong
+hostname still needs correcting.
+
+If the token expired, obtain a replacement and update the
+private `token` file. If **New Access Token** is unavailable,
+ask your Canvas administrator or IT help desk about API access.
+Token lifetimes and issuance rules depend on your institution.
+Do not paste the token into a chat or issue report.
+
+## The connection test works but my assistant has no tools
+
+The terminal test does not configure your client. Check its
+[local MCP entry](../docs/getting-started.md#connect-your-assistant):
+
+1. Use the absolute executable path, not `~` or a path to the
+   repository directory. Windows launchers end in `.exe`.
+2. Choose local stdio, not an HTTP server URL.
+3. Use the configuration schema for your client. Codex uses
+   TOML; Claude Desktop uses an `mcpServers` JSON object.
+4. Restart or reconnect the client and inspect its MCP status.
+   Codex and Claude Code provide `/mcp` in their terminal UIs.
+5. Inspect the client's MCP logs if startup still fails. A GUI
+   client may have different PATH and environment settings from
+   your terminal.
+
+A server started manually in a terminal is a separate process;
+your client does not attach to it. A stdio server waiting without
+a prompt is normal. Stop that manual process with Ctrl+C and
+let the client launch its own server.
+
+## Only some tools appear
+
+Check `CANVAS_ROLE`, `ALLOWED_WRITE_TOOLS`, and any `--role`
+argument in the client's server entry. The CLI role overrides
+the configured role. `creator` deliberately excludes rosters,
+submissions, grading, and other student-record operations.
+
+The getting-started configuration uses
+`ALLOWED_WRITE_TOOLS=none`; write tools are absent until you
+[enable selected actions](../docs/getting-started.md#enable-changes-when-ready).
+Student writes and TypeScript execution have separate opt-ins.
+A client or hosted operator can also restrict tools. A tool's
+absence is not a reason to bypass those restrictions.
+
+The built-in accessibility scanner is available in `creator`,
+`educator`, and `all`, including when
+`ACCESSIBILITY_CHECKERS=none`. That setting removes the three
+UDOIT/UFIXIT tools, which require the institutional add-on.
+
+## An edit is unconfirmed or a confirmation token fails
+
+An **unconfirmed** result means success could not be verified;
+the save may already have happened. Read the item in Canvas
+before trying again. Canvas can sanitize or rewrite HTML,
+causing exact readback verification to differ from your request.
+
+A stale timestamp or body-hash guard means the content differs
+from the earlier snapshot. Read it again, reconcile the edits,
+and submit a new request. These checks are not atomic locks.
+
+Confirmation tokens are single-use, expire, and bind the
+previewed arguments and target. If a token no longer matches,
+request a new preview and review it before confirming.
+See [safer content edits](../tools/README.md#safer-content-edits).
+
+## The assistant shows the wrong or incomplete course data
+
+Use a Canvas course ID or the exact course code from
+`list_courses`. Archived courses and objects outside your
+account's permissions may not be available. Narrow the request
+to one course, assignment, or date range. Ask the assistant to
+report pagination, sampling, or unavailable fields rather than
+inferring that missing data means there is none.
+
+Some lookups are cached. Restart the connection or allow the
+cache to expire if recently changed course metadata is stale.
+For large grading jobs, use the ordinary bulk grading tools
+with reviewed grades. Custom TypeScript execution is an
+optional privileged feature, not a setup repair.
+
+## Student names look like Student_xxxxxxxx
+
+`ENABLE_DATA_ANONYMIZATION=true` replaces supported identity
+fields with anonymous IDs before returning them to your client.
+This is expected. Review your institution's privacy requirements
+before changing it; anonymization alone does not establish
+compliance or remove all identifying free text.
+
+## An upgrade seems to have no effect
+
+Reinstall from the selected fork checkout, then restart or
+reconnect the client. A running process keeps the code it loaded.
+Check that the client's absolute command path points at the
+installation you updated. A normal `uv tool install .` copies
+the package; later source edits do not update that copy.
+See [upgrade and rollback](../docs/getting-started.md#upgrade-or-return-to-an-earlier-version).
+
+## Getting more help
+
+Record the fork commit (`git rev-parse HEAD`), Python version,
+client name, OS, command path, and exact error. Review and redact
+logs before sharing them: remove tokens, signed URLs, student
+records, and other private data. `--config` omits the token but
+can still show your institution's URL.
+
+For this fork, use the
+[fork issue tracker](https://github.com/BartMassey-upstream/canvas-mcp/issues).
+Confirm whether the problem also occurs upstream before
+reporting a fork-specific behavior to the upstream project.

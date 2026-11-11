@@ -44,7 +44,7 @@
             "name": "Vishal Sachdev"
         },
         "url": "https://canvas-mcp.illinihunt.org/",
-        "downloadUrl": "https://github.com/vishalsachdev/canvas-mcp",
+        "downloadUrl": "https://github.com/BartMassey-upstream/canvas-mcp",
         "softwareVersion": "1.13.0",
         "license": "https://opensource.org/licenses/MIT",
         "keywords": ["Canvas LMS", "MCP", "Model Context Protocol", "AI Education", "LMS Integration", "Claude", "ChatGPT", "Cursor", "Data Anonymization"]
@@ -1675,7 +1675,7 @@
                 <li><a href="#install">Install</a></li>
             </ul>
             <div class="nav-cta">
-                <a href="https://github.com/vishalsachdev/canvas-mcp" class="btn btn-secondary">
+                <a href="https://github.com/BartMassey-upstream/canvas-mcp" class="btn btn-secondary">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                     GitHub
                 </a>
@@ -1706,7 +1706,7 @@
                     <a href="#install" class="btn btn-primary">
                         <span>🚀 Quick Start</span>
                     </a>
-                    <a href="https://github.com/vishalsachdev/canvas-mcp" class="btn btn-secondary">
+                    <a href="https://github.com/BartMassey-upstream/canvas-mcp" class="btn btn-secondary">
                         View on GitHub
                     </a>
                 </div>
@@ -1901,72 +1901,16 @@
     <section class="installation" id="install">
         <div class="container">
             <div class="section-header">
-                <div class="section-label">// Get Started</div>
-                <h2 class="section-title">Get Started</h2>
-                <p class="section-desc">Install Canvas MCP locally so the server and credentials stay in your environment. Tool results are still sent to your configured AI client under that client's data policies.</p>
-            </div>
-
-            <!-- Local Installation -->
-            <div class="install-steps">
-                <div class="install-step animate-on-scroll">
-                    <div class="step-number">0</div>
-                    <div class="step-content">
-                        <h3>Claude Desktop? Skip the terminal</h3>
-                        <p>Download <code>canvas-mcp.mcpb</code> from the <a href="https://github.com/vishalsachdev/canvas-mcp/releases/latest">latest release</a> and double-click it. It prompts for your Canvas URL and token and runs the server locally. Every other client follows steps 1 to 4 below. Either way, install the server before adding the <a href="#skills">agent skills</a>: the skills call these tools and do nothing on their own.</p>
-                    </div>
-                </div>
-                <div class="install-step animate-on-scroll">
-                    <div class="step-number">1</div>
-                    <div class="step-content">
-                        <h3>Clone & Install Dependencies</h3>
-                        <p>Clone the repository and set up a Python virtual environment with all dependencies.</p>
-                        <div class="step-code">
-git clone https://github.com/vishalsachdev/canvas-mcp.git<br>
-cd canvas-mcp<br>
-python3 -m venv .venv && . .venv/bin/activate<br>
-pip install -e .
-                        </div>
-                    </div>
-                </div>
-                <div class="install-step animate-on-scroll">
-                    <div class="step-number">2</div>
-                    <div class="step-content">
-                        <h3>Configure Environment</h3>
-                        <p>Create <code>env</code> and <code>token</code> in the native config directory: XDG config on Linux, Application Support on macOS, or APPDATA on Windows.</p>
-                        <div class="step-code">
-env: CANVAS_API_URL and general settings<br>
-token: raw Canvas token only<br>
-chmod 600 &lt;config-directory&gt;/env &lt;config-directory&gt;/token # Linux/macOS
-                        </div>
-                    </div>
-                </div>
-                <div class="install-step animate-on-scroll">
-                    <div class="step-number">3</div>
-                    <div class="step-content">
-                        <h3>Connect Your MCP Client</h3>
-                        <p>Add the server to your client's MCP config. Most clients read this exact entry and differ only in where the file lives; some use their own schema (Zed nests it under <code>context_servers</code>). <a href="#clients">See supported clients</a> or the <a href="https://github.com/vishalsachdev/canvas-mcp#3-mcp-client-configuration">per-client config blocks and file locations</a> for Claude Desktop, Cursor, Zed, Windsurf, Continue, and others.</p>
-                        <div class="step-code">
-{<br>
-&nbsp;&nbsp;"mcpServers": {<br>
-&nbsp;&nbsp;&nbsp;&nbsp;"canvas-api": {<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"command": "/path/to/canvas-mcp/.venv/bin/canvas-mcp-server"<br>
-&nbsp;&nbsp;&nbsp;&nbsp;}<br>
-&nbsp;&nbsp;}<br>
-}
-                        </div>
-                    </div>
-                </div>
-                <div class="install-step animate-on-scroll">
-                    <div class="step-number">4</div>
-                    <div class="step-content">
-                        <h3>Verify & Start Using</h3>
-                        <p>Test your connection and start interacting with Canvas through your AI assistant.</p>
-                        <div class="step-code">
-canvas-mcp-server --test<br>
-# Then restart your MCP client and start chatting!
-                        </div>
-                    </div>
-                </div>
+                <div class="section-label">Get Started</div>
+                <h2 class="section-title">Connect your assistant to Canvas</h2>
+                <p class="section-desc">This is Bart's Canvas MCP fork.
+                Start with the guide for MCP newcomers, covering Linux,
+                macOS, Windows, and a first read-only request.</p>
+                <p><a href="https://github.com/BartMassey-upstream/canvas-mcp/blob/main/docs/getting-started.md" class="btn btn-primary">Getting started</a></p>
+                <p>The published upstream package and desktop extension
+                follow upstream releases and may lack this fork's changes.
+                The guide installs this repository and explains how to
+                connect your client to the local server.</p>
             </div>
         </div>
     </section>
@@ -2006,7 +1950,7 @@ canvas-mcp-server --test<br>
                     <h3>🏛️ Deploying for your whole institution?</h3>
                     <p>A production-tested Azure deployment guide — campus SSO via Entra ID, per-user Canvas tokens, a FERPA three-tier data model, and copyable CI/CD and config templates — lives in the repository.</p>
                 </div>
-                <a class="callout-link" href="https://github.com/vishalsachdev/canvas-mcp/tree/main/deploy/azure" target="_blank" rel="noopener">Institutional Deployment Guide →</a>
+                <a class="callout-link" href="https://github.com/BartMassey-upstream/canvas-mcp/tree/main/deploy/azure" target="_blank" rel="noopener">Institutional Deployment Guide →</a>
             </div>
         </div>
     </section>
@@ -2062,7 +2006,7 @@ canvas-mcp-server --test<br>
                         <span>40+ more</span>
                     </div>
                 </div>
-                <div class="skills-install-code">npx skills add vishalsachdev/canvas-mcp</div>
+                <p><a href="https://github.com/BartMassey-upstream/canvas-mcp/blob/main/docs/getting-started.md#optional-workflow-skills">Install a skill from this fork after connecting the server</a></p>
             </div>
             <div class="skills-grid">
                 <div class="skill-card student animate-on-scroll">
@@ -2133,7 +2077,7 @@ canvas-mcp-server --test<br>
             <div class="skill-cta animate-on-scroll">
                 <h3>Want a Custom Skill?</h3>
                 <p>Have a repetitive Canvas workflow you'd like automated? Submit an issue describing your use case!</p>
-                <a href="https://github.com/vishalsachdev/canvas-mcp/issues/new?labels=skill-request&title=[Skill%20Request]%20&body=**Describe%20the%20workflow%20you%20want%20automated:**%0A%0A**Steps%20you%20currently%20take%20manually:**%0A1.%20%0A2.%20%0A3.%20%0A%0A**How%20often%20do%20you%20do%20this?**%0A%0A**Any%20other%20context:**" class="btn btn-primary">
+                <a href="https://github.com/BartMassey-upstream/canvas-mcp/issues/new?labels=skill-request&title=[Skill%20Request]%20&body=**Describe%20the%20workflow%20you%20want%20automated:**%0A%0A**Steps%20you%20currently%20take%20manually:**%0A1.%20%0A2.%20%0A3.%20%0A%0A**How%20often%20do%20you%20do%20this?**%0A%0A**Any%20other%20context:**" class="btn btn-primary">
                     <span>Request a Skill</span>
                 </a>
             </div>
@@ -2231,7 +2175,7 @@ canvas-mcp-server --test<br>
                     <a href="#install" class="btn btn-primary">
                         <span>🚀 Get Started Now</span>
                     </a>
-                    <a href="https://github.com/vishalsachdev/canvas-mcp" class="btn btn-secondary">
+                    <a href="https://github.com/BartMassey-upstream/canvas-mcp" class="btn btn-secondary">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                         Star on GitHub
                     </a>
@@ -2250,10 +2194,10 @@ canvas-mcp-server --test<br>
                         Canvas MCP
                     </a>
                     <div class="footer-links">
-                        <a href="https://github.com/vishalsachdev/canvas-mcp">GitHub</a>
+                        <a href="https://github.com/BartMassey-upstream/canvas-mcp">GitHub</a>
                         <a href="student-guide.html">Student Guide</a>
                         <a href="educator-guide.html">Educator Guide</a>
-                        <a href="https://github.com/vishalsachdev/canvas-mcp/blob/main/LICENSE">MIT License</a>
+                        <a href="https://github.com/BartMassey-upstream/canvas-mcp/blob/main/LICENSE">MIT License</a>
                     </div>
                 </div>
                 <div class="footer-right">

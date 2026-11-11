@@ -4,14 +4,16 @@ This guide shows the most common tasks educators use Canvas MCP for.
 
 ## Setup
 
-1. Install Canvas MCP following the [README](../README.md#installation)
-2. Put your Canvas URL in the platform config directory's `env`, and the raw
-   token in its sibling `token` (`0600` on POSIX; private ACL on Windows)
-3. **For FERPA-conscious data handling**, add:
-   ```
-   ENABLE_DATA_ANONYMIZATION=true
-   ```
-4. Restart your MCP client (e.g., Claude Desktop, Cursor, Zed, etc.)
+Follow [Getting started](../docs/getting-started.md), including
+client configuration and the first read-only request. Set
+`CANVAS_ROLE=educator` in your per-user `env` file.
+Use `creator` instead for course building without student
+records. For student data, review your institution's AI policy
+and consider `ENABLE_DATA_ANONYMIZATION=true`.
+
+The guide starts with writes disabled. Read requests below work
+in that setup; for actions that change Canvas, first
+[enable the relevant tools](../docs/getting-started.md#enable-changes-when-ready).
 
 ## Common Tasks
 
@@ -43,7 +45,8 @@ Send a reminder to students who haven't submitted the midterm project
 Your AI assistant will:
 - Identify students with missing submissions
 - Draft a message
-- Send it through Canvas
+- Show the preview and wait for your approval
+- Send through Canvas only after you confirm
 
 ### Analyze Participation
 
@@ -55,13 +58,17 @@ Get quick insights into discussion participation.
 
 ### Bulk Operations
 
-For large classes, use the code execution API:
+For many submissions, ask for a proposed grading batch first:
 
 ```
-Grade all 90 Jupyter notebook submissions for Assignment 2 by checking if they run without errors
+Prepare grades for these submissions using the assignment rubric.
+Show me the proposed grades and comments before saving anything.
 ```
 
-This uses local bulk processing so every submission does not have to be loaded into the model's context.
+After you review and approve the grades, the ordinary
+`bulk_grade_submissions` tool can apply them. Custom TypeScript
+execution is optional and disabled by default; it bypasses the
+usual confirmation and content-fencing guarantees.
 
 ### Check Assignment Statistics
 
@@ -128,10 +135,9 @@ Missing submissions:
 
 **For small operations (< 10 students):** Just ask naturally
 
-**For bulk operations (> 30 students):** Mention you want to use code execution:
-```
-Use the bulk grading code API to grade all submissions for Assignment 6
-```
+**For bulk operations:** Review a batch of proposed grades, then
+ask the assistant to apply the approved batch with the ordinary
+bulk grading tool.
 
 ## Common Pitfalls
 
@@ -151,11 +157,11 @@ Use the bulk grading code API to grade all submissions for Assignment 6
 - Some institutions restrict educator access - contact your Canvas admin
 
 **"Bulk operations are slow"**
-- Use the code execution API for large batches
-- Mention "use bulk grading" in your request to your AI assistant
+- Narrow the request to one assignment and a reviewed batch
+- Ask for ordinary bulk grading after approving the grades
 
 **"Anonymization isn't working"**
 - Verify `ENABLE_DATA_ANONYMIZATION=true` in the per-user `env` file
 - Restart your MCP client after changing settings
 
-Need help? Check the [Educator Guide](https://canvas-mcp.illinihunt.org/educator-guide.html) or [open an issue](https://github.com/vishalsachdev/canvas-mcp/issues).
+Need help? Check the [troubleshooting guide](common_issues.md) or [open an issue](https://github.com/BartMassey-upstream/canvas-mcp/issues).
